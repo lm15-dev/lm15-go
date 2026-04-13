@@ -49,6 +49,7 @@ func isContextMsg(msg string) bool {
 }
 
 var anthropicBuiltinMap = map[string]string{
+	"web_search":     "web_search_20250305",
 	"code_execution": "code_execution_20250522",
 }
 

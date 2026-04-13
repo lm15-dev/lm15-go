@@ -109,14 +109,19 @@ func (a *GeminiAdapter) partPayload(p lm15.Part) map[string]any {
 				return map[string]any{"fileData": map[string]any{"mimeType": mime, "fileUri": p.Source.FileID}}
 			}
 		}
+	case lm15.PartToolCall:
+		fc := map[string]any{"name": p.Name, "args": p.Input}
+		if p.ID != "" {
+			fc["id"] = p.ID
+		}
+		return map[string]any{"functionCall": fc}
 	case lm15.PartToolResult:
 		text := partsToText(p.Content)
-		return map[string]any{
-			"functionResponse": map[string]any{
-				"name":     orDefault(p.Name, "tool"),
-				"response": map[string]any{"result": map[string]any{"text": text}},
-			},
+		fr := map[string]any{"name": orDefault(p.Name, "tool"), "response": map[string]any{"result": text}}
+		if p.ID != "" {
+			fr["id"] = p.ID
 		}
+		return map[string]any{"functionResponse": fr}
 	}
 	return map[string]any{"text": p.Text}
 }

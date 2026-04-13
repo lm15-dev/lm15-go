@@ -96,12 +96,21 @@ func (a *AnthropicAdapter) partPayload(p lm15.Part) map[string]any {
 		if p.Source != nil {
 			return map[string]any{"type": "document", "source": dsToAnthropicSource(*p.Source)}
 		}
-	case lm15.PartToolResult:
+	case lm15.PartToolCall:
 		return map[string]any{
-			"type": "tool_result", "tool_use_id": p.ID,
-			"is_error": p.IsError != nil && *p.IsError,
-			"content":  []map[string]any{{"type": "text", "text": partsToText(p.Content)}},
+			"type": "tool_use", "id": p.ID,
+			"name": p.Name, "input": p.Input,
 		}
+	case lm15.PartToolResult:
+		out := map[string]any{"type": "tool_result", "tool_use_id": p.ID}
+		text := partsToText(p.Content)
+		if text != "" {
+			out["content"] = text
+		}
+		if p.IsError != nil && *p.IsError {
+			out["is_error"] = true
+		}
+		return out
 	}
 	return map[string]any{"type": "text", "text": p.Text}
 }
@@ -124,7 +133,11 @@ func (a *AnthropicAdapter) buildPayload(request lm15.LMRequest, stream bool) map
 		for _, p := range m.Parts {
 			content = append(content, a.partPayload(p))
 		}
-		messages = append(messages, map[string]any{"role": string(m.Role), "content": content})
+		role := string(m.Role)
+		if role == "tool" {
+			role = "user"
+		}
+		messages = append(messages, map[string]any{"role": role, "content": content})
 	}
 
 	maxTokens := 1024

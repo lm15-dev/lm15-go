@@ -45,15 +45,53 @@ func (a *OpenAIAdapter) headers() map[string]string {
 	}
 }
 
-func (a *OpenAIAdapter) payload(request lm15.LMRequest, stream bool) map[string]any {
-	messages := make([]map[string]any, len(request.Messages))
-	for i, m := range request.Messages {
-		messages[i] = messageToOpenAIInput(m)
+func buildOpenAIInput(messages []lm15.Message) []map[string]any {
+	var items []map[string]any
+	for _, msg := range messages {
+		if msg.Role == lm15.RoleTool {
+			for _, part := range msg.Parts {
+				if part.Type == lm15.PartToolResult && part.ID != "" {
+					text := partsToText(part.Content)
+					items = append(items, map[string]any{
+						"type":    "function_call_output",
+						"call_id": part.ID,
+						"output":  text,
+					})
+				}
+			}
+			continue
+		}
+		var contentParts []map[string]any
+		for _, part := range msg.Parts {
+			if part.Type != lm15.PartToolCall && part.Type != lm15.PartToolResult {
+				contentParts = append(contentParts, partToOpenAIInput(part))
+			}
+		}
+		if len(contentParts) > 0 {
+			items = append(items, map[string]any{"role": string(msg.Role), "content": contentParts})
+		}
+		for _, part := range msg.Parts {
+			if part.Type == lm15.PartToolCall && part.ID != "" && part.Name != "" {
+				args, _ := json.Marshal(part.Input)
+				if args == nil {
+					args = []byte("{}")
+				}
+				items = append(items, map[string]any{
+					"type":      "function_call",
+					"call_id":   part.ID,
+					"name":      part.Name,
+					"arguments": string(args),
+				})
+			}
+		}
 	}
+	return items
+}
 
+func (a *OpenAIAdapter) payload(request lm15.LMRequest, stream bool) map[string]any {
 	p := map[string]any{
 		"model":  request.Model,
-		"input":  messages,
+		"input":  buildOpenAIInput(request.Messages),
 		"stream": stream,
 	}
 
@@ -479,7 +517,11 @@ func partToOpenAIInput(p lm15.Part) map[string]any {
 	case lm15.PartImage:
 		if p.Source != nil {
 			if p.Source.Type == "url" {
-				return map[string]any{"type": "input_image", "image_url": p.Source.URL}
+				out := map[string]any{"type": "input_image", "image_url": p.Source.URL}
+				if p.Source.Detail != "" {
+					out["detail"] = p.Source.Detail
+				}
+				return out
 			}
 			if p.Source.Type == "base64" {
 				return map[string]any{"type": "input_image", "image_url": fmt.Sprintf("data:%s;base64,%s", p.Source.MediaType, p.Source.Data)}

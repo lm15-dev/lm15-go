@@ -238,6 +238,91 @@ func ToolResultMessage(results map[string]string) Message {
 	return Message{Role: RoleTool, Parts: parts}
 }
 
+// ── Canonical JSON serialization ───────────────────────────────────
+
+// PartFromDict creates a Part from a canonical JSON map.
+func PartFromDict(d map[string]any) Part {
+	pt := toString(d["type"])
+	switch PartType(pt) {
+	case PartText:
+		return Part{Type: PartText, Text: toString(d["text"])}
+	case PartThinking:
+		p := Part{Type: PartThinking, Text: toString(d["text"]), Summary: toString(d["summary"])}
+		if v, ok := d["redacted"].(bool); ok {
+			p.Redacted = &v
+		}
+		return p
+	case PartRefusal:
+		return Part{Type: PartRefusal, Text: toString(d["text"])}
+	case PartCitation:
+		return Part{Type: PartCitation, Text: toString(d["text"]), URL: toString(d["url"]), Title: toString(d["title"])}
+	case PartImage, PartAudio, PartVideo, PartDocument:
+		var source *DataSource
+		if src, ok := d["source"].(map[string]any); ok {
+			source = &DataSource{
+				Type: toString(src["type"]), URL: toString(src["url"]),
+				Data: toString(src["data"]), MediaType: toString(src["media_type"]),
+				FileID: toString(src["file_id"]), Detail: toString(src["detail"]),
+			}
+		}
+		return Part{Type: PartType(pt), Source: source}
+	case PartToolCall:
+		input, _ := d["arguments"].(map[string]any)
+		return Part{Type: PartToolCall, ID: toString(d["id"]), Name: toString(d["name"]), Input: input}
+	case PartToolResult:
+		var content []Part
+		switch c := d["content"].(type) {
+		case string:
+			if c != "" {
+				content = []Part{TextPart(c)}
+			}
+		case []any:
+			for _, item := range c {
+				if m, ok := item.(map[string]any); ok {
+					content = append(content, PartFromDict(m))
+				}
+			}
+		}
+		return Part{Type: PartToolResult, ID: toString(d["id"]), Name: toString(d["name"]), Content: content}
+	}
+	return Part{Type: PartText, Text: toString(d["text"])}
+}
+
+// MessageFromDict creates a Message from a canonical JSON map.
+func MessageFromDict(d map[string]any) Message {
+	role := Role(toString(d["role"]))
+	var parts []Part
+	if ps, ok := d["parts"].([]any); ok {
+		for _, item := range ps {
+			if m, ok := item.(map[string]any); ok {
+				parts = append(parts, PartFromDict(m))
+			}
+		}
+	}
+	return Message{Role: role, Parts: parts, Name: toString(d["name"])}
+}
+
+// MessagesFromJSON converts a JSON array of canonical message dicts to Messages.
+func MessagesFromJSON(data []any) []Message {
+	var msgs []Message
+	for _, item := range data {
+		if m, ok := item.(map[string]any); ok {
+			msgs = append(msgs, MessageFromDict(m))
+		}
+	}
+	return msgs
+}
+
+func toString(v any) string {
+	if v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return fmt.Sprintf("%v", v)
+}
+
 // ── Request / Response ─────────────────────────────────────────────
 
 // LMRequest is the normalized request sent to any provider.

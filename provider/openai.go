@@ -1,9 +1,11 @@
 package provider
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	lm15 "github.com/lm15-dev/lm15-go"
 )
@@ -318,6 +320,108 @@ func (a *OpenAIAdapter) Embeddings(request lm15.EmbeddingRequest) (lm15.Embeddin
 		vectors = append(vectors, vec)
 	}
 	return lm15.EmbeddingResponse{Model: request.Model, Vectors: vectors, Provider: data}, nil
+}
+
+func (a *OpenAIAdapter) FileUpload(request lm15.FileUploadRequest) (lm15.FileUploadResponse, error) {
+	boundary := fmt.Sprintf("lm15-%d", time.Now().UnixNano())
+	var body []byte
+	body = append(body, []byte(fmt.Sprintf("--%s\r\nContent-Disposition: form-data; name=\"purpose\"\r\n\r\nassistants\r\n", boundary))...)
+	body = append(body, []byte(fmt.Sprintf("--%s\r\nContent-Disposition: form-data; name=\"file\"; filename=\"%s\"\r\nContent-Type: %s\r\n\r\n", boundary, request.Filename, request.MediaType))...)
+	body = append(body, request.BytesData...)
+	body = append(body, []byte(fmt.Sprintf("\r\n--%s--\r\n", boundary))...)
+
+	req := lm15.HTTPRequest{
+		Method: "POST", URL: a.BaseURL + "/files",
+		Headers: map[string]string{
+			"Authorization": "Bearer " + a.APIKey,
+			"Content-Type":  "multipart/form-data; boundary=" + boundary,
+		},
+		Body: body, Timeout: durationMs(120_000),
+	}
+	resp, err := a.Tport.Request(req)
+	if err != nil {
+		return lm15.FileUploadResponse{}, err
+	}
+	if resp.Status >= 400 {
+		return lm15.FileUploadResponse{}, a.NormalizeError(resp.Status, resp.Text())
+	}
+	var data map[string]any
+	json.Unmarshal(resp.Body, &data)
+	return lm15.FileUploadResponse{ID: toString(data["id"]), Provider: data}, nil
+}
+
+func (a *OpenAIAdapter) ImageGenerate(request lm15.ImageGenerationRequest) (lm15.ImageGenerationResponse, error) {
+	payload := map[string]any{"model": request.Model, "prompt": request.Prompt}
+	if request.Size != "" {
+		payload["size"] = request.Size
+	}
+	if request.Provider != nil {
+		for k, v := range request.Provider {
+			payload[k] = v
+		}
+	}
+	body, _ := json.Marshal(payload)
+	req := lm15.HTTPRequest{
+		Method: "POST", URL: a.BaseURL + "/images/generations",
+		Headers: a.headers(), Body: body, Timeout: durationMs(120_000),
+	}
+	resp, err := a.Tport.Request(req)
+	if err != nil {
+		return lm15.ImageGenerationResponse{}, err
+	}
+	if resp.Status >= 400 {
+		return lm15.ImageGenerationResponse{}, a.NormalizeError(resp.Status, resp.Text())
+	}
+	var data map[string]any
+	json.Unmarshal(resp.Body, &data)
+	var images []lm15.DataSource
+	for _, d := range toSlice(data["data"]) {
+		m, _ := d.(map[string]any)
+		if m == nil {
+			continue
+		}
+		if b64, ok := m["b64_json"].(string); ok && b64 != "" {
+			images = append(images, lm15.DataSource{Type: "base64", MediaType: "image/png", Data: b64})
+		} else if url, ok := m["url"].(string); ok && url != "" {
+			images = append(images, lm15.DataSource{Type: "url", URL: url, MediaType: "image/png"})
+		}
+	}
+	return lm15.ImageGenerationResponse{Images: images, Provider: data}, nil
+}
+
+func (a *OpenAIAdapter) AudioGenerate(request lm15.AudioGenerationRequest) (lm15.AudioGenerationResponse, error) {
+	voice := request.Voice
+	if voice == "" {
+		voice = "alloy"
+	}
+	format := request.Format
+	if format == "" {
+		format = "wav"
+	}
+	payload := map[string]any{"model": request.Model, "input": request.Prompt, "voice": voice, "format": format}
+	if request.Provider != nil {
+		for k, v := range request.Provider {
+			payload[k] = v
+		}
+	}
+	body, _ := json.Marshal(payload)
+	req := lm15.HTTPRequest{
+		Method: "POST", URL: a.BaseURL + "/audio/speech",
+		Headers: a.headers(), Body: body, Timeout: durationMs(120_000),
+	}
+	resp, err := a.Tport.Request(req)
+	if err != nil {
+		return lm15.AudioGenerationResponse{}, err
+	}
+	if resp.Status >= 400 {
+		return lm15.AudioGenerationResponse{}, a.NormalizeError(resp.Status, resp.Text())
+	}
+	ctype := "audio/wav"
+	if ct, ok := resp.Headers["Content-Type"]; ok {
+		ctype = ct
+	}
+	b64 := base64.StdEncoding.EncodeToString(resp.Body)
+	return lm15.AudioGenerationResponse{Audio: lm15.DataSource{Type: "base64", MediaType: ctype, Data: b64}, Provider: map[string]any{"content_type": ctype}}, nil
 }
 
 // ── Helpers ────────────────────────────────────────────────────────

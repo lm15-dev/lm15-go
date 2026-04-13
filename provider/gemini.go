@@ -56,6 +56,23 @@ func isContextLengthMsg(msg string) bool {
 		strings.Contains(m, "too long") || strings.Contains(m, "context length")
 }
 
+var geminiBuiltinMap = map[string]string{
+	"web_search":     "googleSearch",
+	"code_execution": "codeExecution",
+}
+
+func builtinToGemini(t lm15.Tool) map[string]any {
+	wireKey := t.Name
+	if mapped, ok := geminiBuiltinMap[t.Name]; ok {
+		wireKey = mapped
+	}
+	cfg := map[string]any{}
+	for k, v := range t.BuiltinConfig {
+		cfg[k] = v
+	}
+	return map[string]any{wireKey: cfg}
+}
+
 var geminiErrorMap = map[string]string{
 	"INVALID_ARGUMENT":    "invalid_request",
 	"FAILED_PRECONDITION": "billing",
@@ -162,18 +179,23 @@ func (a *GeminiAdapter) buildPayload(request lm15.LMRequest) map[string]any {
 
 	if len(request.Tools) > 0 {
 		var decls []map[string]any
+		var toolsWire []map[string]any
 		for _, t := range request.Tools {
-			if t.Type != "function" {
-				continue
+			if t.Type == "function" {
+				params := t.Parameters
+				if params == nil {
+					params = map[string]any{"type": "OBJECT", "properties": map[string]any{}}
+				}
+				decls = append(decls, map[string]any{"name": t.Name, "description": t.Description, "parameters": params})
+			} else if t.Type == "builtin" {
+				toolsWire = append(toolsWire, builtinToGemini(t))
 			}
-			params := t.Parameters
-			if params == nil {
-				params = map[string]any{"type": "OBJECT", "properties": map[string]any{}}
-			}
-			decls = append(decls, map[string]any{"name": t.Name, "description": t.Description, "parameters": params})
 		}
 		if len(decls) > 0 {
-			payload["tools"] = []map[string]any{{"functionDeclarations": decls}}
+			toolsWire = append([]map[string]any{{"functionDeclarations": decls}}, toolsWire...)
+		}
+		if len(toolsWire) > 0 {
+			payload["tools"] = toolsWire
 		}
 	}
 

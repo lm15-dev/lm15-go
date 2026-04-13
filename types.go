@@ -170,11 +170,12 @@ func DocumentURL(url string) Part {
 
 // Tool defines a function or builtin tool the model can call.
 type Tool struct {
-	Type        string         `json:"type"`                  // "function" or "builtin"
-	Name        string         `json:"name"`
-	Description string         `json:"description,omitempty"`
-	Parameters  map[string]any `json:"parameters,omitempty"`
-	Fn          func(map[string]any) (any, error) `json:"-"` // auto-execute function
+	Type          string         `json:"type"`                    // "function" or "builtin"
+	Name          string         `json:"name"`
+	Description   string         `json:"description,omitempty"`
+	Parameters    map[string]any `json:"parameters,omitempty"`
+	BuiltinConfig map[string]any `json:"builtin_config,omitempty"` // provider-specific config for builtin tools
+	Fn            func(map[string]any) (any, error) `json:"-"`  // auto-execute function
 }
 
 // FunctionTool creates a function tool definition.

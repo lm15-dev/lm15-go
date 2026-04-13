@@ -48,6 +48,22 @@ func isContextMsg(msg string) bool {
 		strings.Contains(m, "context window") || strings.Contains(m, "context length")
 }
 
+var anthropicBuiltinMap = map[string]string{
+	"code_execution": "code_execution_20250522",
+}
+
+func builtinToAnthropic(t lm15.Tool) map[string]any {
+	wireType := t.Name
+	if mapped, ok := anthropicBuiltinMap[t.Name]; ok {
+		wireType = mapped
+	}
+	out := map[string]any{"type": wireType, "name": t.Name}
+	for k, v := range t.BuiltinConfig {
+		out[k] = v
+	}
+	return out
+}
+
 var anthropicErrorMap = map[string]string{
 	"authentication_error":  "auth",
 	"permission_error":      "auth",
@@ -159,14 +175,15 @@ func (a *AnthropicAdapter) buildPayload(request lm15.LMRequest, stream bool) map
 	if len(request.Tools) > 0 {
 		var tools []map[string]any
 		for _, t := range request.Tools {
-			if t.Type != "function" {
-				continue
+			if t.Type == "function" {
+				params := t.Parameters
+				if params == nil {
+					params = map[string]any{"type": "object", "properties": map[string]any{}}
+				}
+				tools = append(tools, map[string]any{"name": t.Name, "description": t.Description, "input_schema": params})
+			} else if t.Type == "builtin" {
+				tools = append(tools, builtinToAnthropic(t))
 			}
-			params := t.Parameters
-			if params == nil {
-				params = map[string]any{"type": "object", "properties": map[string]any{}}
-			}
-			tools = append(tools, map[string]any{"name": t.Name, "description": t.Description, "input_schema": params})
 		}
 		if len(tools) > 0 {
 			payload["tools"] = tools

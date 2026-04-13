@@ -88,6 +88,25 @@ func buildOpenAIInput(messages []lm15.Message) []map[string]any {
 	return items
 }
 
+var openAIBuiltinMap = map[string]string{
+	"web_search":     "web_search_preview",
+	"code_execution": "code_interpreter",
+	"file_search":    "file_search",
+	"computer_use":   "computer_use_preview",
+}
+
+func builtinToOpenAI(t lm15.Tool) map[string]any {
+	wireType := t.Name
+	if mapped, ok := openAIBuiltinMap[t.Name]; ok {
+		wireType = mapped
+	}
+	out := map[string]any{"type": wireType}
+	for k, v := range t.BuiltinConfig {
+		out[k] = v
+	}
+	return out
+}
+
 func (a *OpenAIAdapter) payload(request lm15.LMRequest, stream bool) map[string]any {
 	p := map[string]any{
 		"model":  request.Model,
@@ -107,19 +126,20 @@ func (a *OpenAIAdapter) payload(request lm15.LMRequest, stream bool) map[string]
 	if len(request.Tools) > 0 {
 		var tools []map[string]any
 		for _, t := range request.Tools {
-			if t.Type != "function" {
-				continue
+			if t.Type == "function" {
+				params := t.Parameters
+				if params == nil {
+					params = map[string]any{"type": "object", "properties": map[string]any{}}
+				}
+				tools = append(tools, map[string]any{
+					"type":        "function",
+					"name":        t.Name,
+					"description": t.Description,
+					"parameters":  params,
+				})
+			} else if t.Type == "builtin" {
+				tools = append(tools, builtinToOpenAI(t))
 			}
-			params := t.Parameters
-			if params == nil {
-				params = map[string]any{"type": "object", "properties": map[string]any{}}
-			}
-			tools = append(tools, map[string]any{
-				"type":        "function",
-				"name":        t.Name,
-				"description": t.Description,
-				"parameters":  params,
-			})
 		}
 		if len(tools) > 0 {
 			p["tools"] = tools

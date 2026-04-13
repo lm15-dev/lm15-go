@@ -92,6 +92,57 @@ func (r *Result) ToolCalls() []Part {
 	return resp.ToolCalls()
 }
 
+// Image blocks and returns the first image part, or nil.
+func (r *Result) Image() *Part {
+	resp, err := r.Response()
+	if err != nil {
+		return nil
+	}
+	return resp.Image()
+}
+
+// Audio blocks and returns the first audio part, or nil.
+func (r *Result) Audio() *Part {
+	resp, err := r.Response()
+	if err != nil {
+		return nil
+	}
+	return resp.Audio()
+}
+
+// Citations blocks and returns all citation parts.
+func (r *Result) Citations() []Part {
+	resp, err := r.Response()
+	if err != nil {
+		return nil
+	}
+	var citations []Part
+	for _, p := range resp.Message.Parts {
+		if p.Type == PartCitation {
+			citations = append(citations, p)
+		}
+	}
+	return citations
+}
+
+// FinishReason blocks and returns the finish reason.
+func (r *Result) FinishReason() FinishReason {
+	resp, err := r.Response()
+	if err != nil {
+		return FinishError
+	}
+	return resp.FinishReason
+}
+
+// Usage blocks and returns the usage.
+func (r *Result) Usage() Usage {
+	resp, err := r.Response()
+	if err != nil {
+		return Usage{}
+	}
+	return resp.Usage
+}
+
 // Err returns the error, if any. Must be called after Response/Text/Stream.
 func (r *Result) Err() error {
 	r.mu.Lock()

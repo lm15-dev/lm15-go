@@ -45,6 +45,12 @@ type BaseAdapter struct {
 
 func (a *BaseAdapter) ProviderName() string { return a.Provider }
 
+// GetTransport returns the underlying transport.
+func (a *BaseAdapter) GetTransport() Transport { return a.Tport }
+
+// Base returns the BaseAdapter (for client.go).
+func (a *BaseAdapter) Base() *BaseAdapter { return a }
+
 // Complete executes a non-streaming request.
 func (a *BaseAdapter) Complete(adapter Adapter, request LMRequest) (LMResponse, error) {
 	req := adapter.BuildRequest(request, false)

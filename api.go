@@ -199,6 +199,122 @@ func Call(model string, prompt string, opts *CallOpts) *Result {
 	})
 }
 
+// ModelObj creates a reusable, stateful model object.
+//
+//	gpt := lm15.ModelObj("gpt-4.1-mini", &lm15.ModelObjOpts{System: "You are terse."})
+//	resp := gpt.Call("Hello.", nil)
+//	fmt.Println(resp.Text())
+func ModelObj(modelName string, opts *ModelObjOpts) *Model {
+	if opts == nil {
+		opts = &ModelObjOpts{}
+	}
+	lm := getClient(opts.APIKey, opts.Provider, opts.Env)
+
+	return NewModel(ModelOpts{
+		LM:            lm,
+		Model:         modelName,
+		System:        opts.System,
+		Tools:         opts.Tools,
+		OnToolCall:    opts.OnToolCall,
+		Provider:      opts.Provider,
+		Retries:       opts.Retries,
+		Cache:         opts.Cache,
+		PromptCaching: opts.PromptCaching,
+		Temperature:   opts.Temperature,
+		MaxTokens:     opts.MaxTokens,
+		MaxToolRounds: opts.MaxToolRounds,
+	})
+}
+
+// ModelObjOpts configures ModelObj.
+type ModelObjOpts struct {
+	System        string
+	Tools         []Tool
+	OnToolCall    func(ToolCallInfo) interface{}
+	Provider      string
+	Retries       int
+	Cache         bool
+	PromptCaching bool
+	Temperature   *float64
+	MaxTokens     *int
+	MaxToolRounds int
+	APIKey        interface{}
+	Env           string
+}
+
+// Prepare builds an LMRequest without sending it.
+func Prepare(model, prompt string, opts *CallOpts) LMRequest {
+	if opts == nil {
+		opts = &CallOpts{}
+	}
+	m := ModelObj(model, &ModelObjOpts{
+		Provider:      opts.Provider,
+		PromptCaching: opts.PromptCaching,
+		System:        opts.System,
+		APIKey:        opts.APIKey,
+		Env:           opts.Env,
+	})
+	return m.Prepare(prompt, opts)
+}
+
+// Send sends a pre-built LMRequest. Returns a Result.
+func Send(request LMRequest, opts *SendOpts) *Result {
+	if opts == nil {
+		opts = &SendOpts{}
+	}
+	provider := opts.Provider
+	if provider == "" {
+		provider, _ = ResolveProvider(request.Model)
+	}
+	lm := getClient(opts.APIKey, provider, opts.Env)
+
+	callableRegistry := make(map[string]func(map[string]any) (any, error))
+	for _, t := range request.Tools {
+		if t.Type == "function" && t.Fn != nil {
+			callableRegistry[t.Name] = t.Fn
+		}
+	}
+
+	return NewResult(ResultOpts{
+		Request: request,
+		StartStream: func(req LMRequest) (<-chan StreamEvent, error) {
+			return lm.Stream(req, provider)
+		},
+		CallableRegistry: callableRegistry,
+	})
+}
+
+// SendOpts configures Send.
+type SendOpts struct {
+	Provider string
+	APIKey   interface{}
+	Env      string
+}
+
+// Upload uploads a file and returns a Part referencing it.
+func Upload(modelName, filePath string, opts *UploadOpts) (Part, error) {
+	if opts == nil {
+		opts = &UploadOpts{}
+	}
+	provider := opts.Provider
+	if provider == "" {
+		provider, _ = ResolveProvider(modelName)
+	}
+	m := ModelObj(modelName, &ModelObjOpts{
+		Provider: provider,
+		APIKey:   opts.APIKey,
+		Env:      opts.Env,
+	})
+	return m.Upload(filePath)
+}
+
+// UploadOpts configures Upload.
+type UploadOpts struct {
+	Provider string
+	APIKey   interface{}
+	Env      string
+}
+
 // Providers returns {provider: [env_var_names]} for all core adapters.
 func Providers() map[string][]string {
 	return ProviderEnvKeys()

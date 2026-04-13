@@ -134,6 +134,26 @@ resp.JSON(&data)
 fmt.Printf("%s is %d\n", data.Name, data.Age)
 ```
 
+### Cost tracking
+
+```go
+err := lm15.ConfigureWithOptions(lm15.ConfigureOpts{TrackCosts: true})
+if err != nil {
+    panic(err)
+}
+
+result := lm15.Call("gpt-4.1-mini", "Explain TCP.", nil)
+fmt.Printf("cost: %+v\n", result.Cost())
+
+m := lm15.ModelObj("claude-sonnet-4", nil)
+m.Call("What is TCP?", nil).Text()
+m.Call("What is UDP?", nil).Text()
+fmt.Printf("total cost: %+v\n", m.TotalCost())
+```
+
+You can also estimate manually with `EstimateCost()`, install pricing with
+`EnableCostTracking()`, or inject your own catalog with `SetCostIndex()`.
+
 ## Architecture
 
 ```

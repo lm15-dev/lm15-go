@@ -143,6 +143,19 @@ func (r *Result) Usage() Usage {
 	return resp.Usage
 }
 
+// Cost blocks and returns the estimated cost, or nil if cost tracking is not enabled.
+func (r *Result) Cost() *CostBreakdown {
+	resp, err := r.Response()
+	if err != nil {
+		return nil
+	}
+	cost, ok := LookupCost(resp.Model, resp.Usage)
+	if !ok {
+		return nil
+	}
+	return cost
+}
+
 // Err returns the error, if any. Must be called after Response/Text/Stream.
 func (r *Result) Err() error {
 	r.mu.Lock()
@@ -294,16 +307,16 @@ func (r *Result) executeTools(toolCalls []Part) []executedTool {
 // ── RoundState ─────────────────────────────────────────────────────
 
 type roundState struct {
-	request      LMRequest
-	startedID    string
-	startedModel string
-	finishReason FinishReason
-	usage        *Usage
-	textParts    []string
+	request       LMRequest
+	startedID     string
+	startedModel  string
+	finishReason  FinishReason
+	usage         *Usage
+	textParts     []string
 	thinkingParts []string
-	audioChunks  []string
-	toolCallRaw  map[int]string
-	toolCallMeta map[int]map[string]any
+	audioChunks   []string
+	toolCallRaw   map[int]string
+	toolCallMeta  map[int]map[string]any
 }
 
 func newRoundState(request LMRequest) *roundState {

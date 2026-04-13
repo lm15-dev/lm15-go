@@ -18,18 +18,31 @@ var (
 
 // Configure sets module-level defaults so you don't repeat them on every call.
 func Configure(env string, apiKey interface{}) {
+	_ = ConfigureWithOptions(ConfigureOpts{Env: env, APIKey: apiKey})
+}
+
+// ConfigureWithOptions sets module-level defaults and optional cost tracking.
+func ConfigureWithOptions(opts ConfigureOpts) error {
 	defaultsMu.Lock()
-	defer defaultsMu.Unlock()
 	defaults = make(map[string]interface{})
+	defaultsMu.Unlock()
+
 	clientCacheMu.Lock()
 	clientCache = make(map[string]*UniversalLM)
 	clientCacheMu.Unlock()
-	if env != "" {
-		defaults["env"] = env
+
+	if opts.Env != "" {
+		defaultsMu.Lock()
+		defaults["env"] = opts.Env
+		defaultsMu.Unlock()
 	}
-	if apiKey != nil {
-		defaults["apiKey"] = apiKey
+	if opts.APIKey != nil {
+		defaultsMu.Lock()
+		defaults["apiKey"] = opts.APIKey
+		defaultsMu.Unlock()
 	}
+
+	return configureCostTracking(opts)
 }
 
 // RegisterCoreAdapters sets the adapter factories used by Call/Model/etc.

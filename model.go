@@ -60,6 +60,28 @@ func (m *Model) ClearHistory() {
 	m.pendingToolCalls = nil
 }
 
+// TotalCost returns the cumulative estimated cost across all history, or nil if cost tracking is not enabled.
+func (m *Model) TotalCost() *CostBreakdown {
+	if len(m.history) == 0 {
+		zero := zeroCostBreakdown()
+		return &zero
+	}
+
+	var costs []CostBreakdown
+	for _, entry := range m.history {
+		cost, ok := LookupCost(entry.Response.Model, entry.Response.Usage)
+		if !ok {
+			continue
+		}
+		costs = append(costs, *cost)
+	}
+	if len(costs) == 0 {
+		return nil
+	}
+	total := SumCosts(costs)
+	return &total
+}
+
 // Copy creates a copy of the model with optional overrides.
 func (m *Model) Copy(overrides *ModelOpts) *Model {
 	o := m.opts

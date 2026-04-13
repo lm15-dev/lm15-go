@@ -446,11 +446,19 @@ func parseOpenAIUsage(data map[string]any) lm15.Usage {
 			i := toInt(v)
 			usage.ReasoningTokens = &i
 		}
+		if v, ok := uOut["audio_tokens"]; ok {
+			i := toInt(v)
+			usage.OutputAudioTokens = &i
+		}
 	}
 	if uIn != nil {
 		if v, ok := uIn["cached_tokens"]; ok {
 			i := toInt(v)
 			usage.CacheReadTokens = &i
+		}
+		if v, ok := uIn["audio_tokens"]; ok {
+			i := toInt(v)
+			usage.InputAudioTokens = &i
 		}
 	}
 	return usage

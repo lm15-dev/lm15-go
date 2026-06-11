@@ -38,3 +38,7 @@ cd ../lm15-contract
 
 The harness drives `bin/lm15-vet` (see `harness/shims.json`) inside a
 no-network sandbox; build the binary first.
+
+## Dependency budget
+
+Zero third-party dependencies — standard library only, by policy.

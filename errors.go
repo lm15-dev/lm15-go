@@ -131,3 +131,16 @@ func ErrorForCode(code, message string) LM15Error {
 		return ProviderError{meta}
 	}
 }
+
+// Unwrap methods expose the class hierarchy to errors.As/errors.Is: each
+// subclass unwraps to its embedded parent class.
+func (e NotConfiguredError) Unwrap() error      { return e.ConfigurationError }
+func (e UnsupportedFeatureError) Unwrap() error { return e.CapabilityError }
+func (e AuthError) Unwrap() error               { return e.ProviderError }
+func (e BillingError) Unwrap() error            { return e.ProviderError }
+func (e RateLimitError) Unwrap() error          { return e.ProviderError }
+func (e InvalidRequestError) Unwrap() error     { return e.ProviderError }
+func (e ContextLengthError) Unwrap() error      { return e.InvalidRequestError }
+func (e UnsupportedModelError) Unwrap() error   { return e.InvalidRequestError }
+func (e TimeoutError) Unwrap() error            { return e.ProviderError }
+func (e ServerError) Unwrap() error             { return e.ProviderError }

@@ -28,7 +28,7 @@ func handle(msg jmap) jmap {
 	case "capabilities":
 		return jmap{"id": id, "ok": true, "result": jmap{
 			"language":     "go",
-			"ops":          []string{"capabilities", "serde_roundtrip", "validate", "surface_dump"},
+			"ops":          []string{"capabilities", "serde_roundtrip", "validate", "surface_dump", "normalize_error"},
 			"impl_version": lm15.ImplVersion,
 		}}
 	case "serde_roundtrip", "validate":
@@ -47,7 +47,21 @@ func handle(msg jmap) jmap {
 		return jmap{"id": id, "ok": true, "result": jmap{"value": out}}
 	case "surface_dump":
 		return jmap{"id": id, "ok": true, "result": lm15.SurfaceDump()}
-	case "build_request", "parse_response", "replay_stream", "normalize_error":
+	case "normalize_error":
+		provider, _ := msg["provider"].(string)
+		bodyText, _ := msg["body_text"].(string)
+		status := 0
+		if n, ok := msg["status"].(json.Number); ok {
+			if i, err := n.Int64(); err == nil {
+				status = int(i)
+			}
+		}
+		lmErr, err := lm15.NormalizeError(provider, status, bodyText)
+		if err != nil {
+			return errReply(id, lm15.ErrTypeName(err), err.Error())
+		}
+		return jmap{"id": id, "ok": true, "result": lm15.NormalizedErrorMap(lmErr)}
+	case "build_request", "parse_response", "replay_stream":
 		return errReply(id, "Unimplemented", fmt.Sprintf("op not implemented yet: %s", op))
 	}
 	return errReply(id, "ValueError", fmt.Sprintf("unknown op: %s", op))

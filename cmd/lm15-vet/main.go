@@ -28,7 +28,7 @@ func handle(msg jmap) jmap {
 	case "capabilities":
 		return jmap{"id": id, "ok": true, "result": jmap{
 			"language":     "go",
-			"ops":          []string{"capabilities", "serde_roundtrip", "validate", "surface_dump", "normalize_error", "build_request", "parse_response"},
+			"ops":          []string{"capabilities", "serde_roundtrip", "validate", "surface_dump", "normalize_error", "build_request", "parse_response", "replay_stream"},
 			"impl_version": lm15.ImplVersion,
 		}}
 	case "serde_roundtrip", "validate":
@@ -94,7 +94,17 @@ func handle(msg jmap) jmap {
 		}
 		return jmap{"id": id, "ok": true, "result": out}
 	case "replay_stream":
-		return errReply(id, "Unimplemented", fmt.Sprintf("op not implemented yet: %s", op))
+		provider, _ := msg["provider"].(string)
+		canonical, ok := msg["canonical_request"].(jmap)
+		if !ok {
+			return errReply(id, "TypeError", "canonical_request must be a JSON object")
+		}
+		bodyB64, _ := msg["body_b64"].(string)
+		out, err := lm15.ReplayStreamMap(provider, canonical, bodyB64)
+		if err != nil {
+			return errReply(id, lm15.ErrTypeName(err), err.Error())
+		}
+		return jmap{"id": id, "ok": true, "result": out}
 	}
 	return errReply(id, "ValueError", fmt.Sprintf("unknown op: %s", op))
 }

@@ -1,4 +1,1 @@
-.env
-*.exe
-*.test
-*.out
+bin/

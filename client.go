@@ -251,30 +251,57 @@ func (c *providerClient) Stream(ctx context.Context, req Request) iter.Seq2[Stre
 			return
 		}
 
-		// Incremental SSE scan + MAP-3 coalescing: adapters may emit one
-		// end event per provider terminal frame; absorb them all and emit
-		// the single merged end event when the body finishes.
+		// Incremental SSE scan + MAP-3/MAP-4 coalescing: adapters may emit
+		// one end event per provider terminal frame; absorb them all and
+		// emit the single merged end event when the body finishes. A
+		// leading StreamStartEvent is synthesized (with the request's
+		// model) for dialects without a start frame; duplicate starts are
+		// dropped; error events never force a start (MAP-4).
 		var (
 			eventName  *string
 			dataLines  []string
 			eventBytes int
+			started    bool
 			sawEnd     bool
 			endEvent   StreamEndEvent
 			stopped    bool
 		)
+		synthStart := func() StreamStartEvent {
+			var m *string
+			if req.Model != "" {
+				model := req.Model
+				m = &model
+			}
+			return StreamStartEvent{Model: m}
+		}
 		emit := func(ev StreamEvent) bool {
-			if end, ok := ev.(StreamEndEvent); ok {
+			switch e := ev.(type) {
+			case StreamStartEvent:
+				if started {
+					return true
+				}
+				started = true
+				return yield(e, nil)
+			case StreamEndEvent:
 				sawEnd = true
-				if end.FinishReason != nil {
-					endEvent.FinishReason = end.FinishReason
+				if e.FinishReason != nil {
+					endEvent.FinishReason = e.FinishReason
 				}
-				if end.Usage != nil {
-					endEvent.Usage = end.Usage
+				if e.Usage != nil {
+					endEvent.Usage = e.Usage
 				}
-				if end.ProviderData != nil {
-					endEvent.ProviderData = end.ProviderData
+				if e.ProviderData != nil {
+					endEvent.ProviderData = e.ProviderData
 				}
 				return true
+			case StreamDeltaEvent:
+				if !started {
+					started = true
+					if !yield(synthStart(), nil) {
+						return false
+					}
+				}
+				return yield(e, nil)
 			}
 			return yield(ev, nil)
 		}
@@ -338,6 +365,11 @@ func (c *providerClient) Stream(ctx context.Context, req Request) iter.Seq2[Stre
 			return
 		}
 		if sawEnd {
+			if !started {
+				if !yield(synthStart(), nil) {
+					return
+				}
+			}
 			yield(endEvent, nil)
 		}
 	}

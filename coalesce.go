@@ -9,40 +9,70 @@ import (
 	"strings"
 )
 
-// ─── MAP-3 coalescer ─────────────────────────────────────────────────
+// ─── MAP-3/MAP-4 coalescer ───────────────────────────────────────────
 
-// CoalesceStream enforces MAP-3 (docs/mapping-rules.md): a stream yields
-// exactly one StreamEndEvent, as the final event. Adapters are stateless
-// and may emit one end event per provider terminal frame (finish_reason
-// chunk, post-finish usage-only chunk, [DONE], message_delta +
-// message_stop). This pass absorbs every end event's fields — a later
-// non-nil field replaces the accumulated value, a nil field never erases
-// one — and appends the single merged end event. If no end event was
-// seen, none is fabricated.
-func CoalesceStream(events []StreamEvent) []StreamEvent {
+// CoalesceStream enforces MAP-3 and MAP-4 (docs/mapping-rules.md).
+//
+// MAP-3: a stream yields exactly one StreamEndEvent, as the final event.
+// Adapters are stateless and may emit one end event per provider terminal
+// frame (finish_reason chunk, post-finish usage-only chunk, [DONE],
+// message_delta + message_stop). This pass absorbs every end event's
+// fields — a later non-nil field replaces the accumulated value, a nil
+// field never erases one — and appends the single merged end event. If no
+// end event was seen, none is fabricated.
+//
+// MAP-4: a stream that yields any delta or end event yields exactly one
+// leading StreamStartEvent. A provider start passes through; duplicates
+// after the first are dropped; dialects without a start frame get a
+// synthesized start carrying the request's model. Error events never
+// force a start.
+func CoalesceStream(events []StreamEvent, model string) []StreamEvent {
 	out := make([]StreamEvent, 0, len(events))
+	started := false
 	sawEnd := false
 	var finish *string
 	var usage *Usage
 	var providerData jmap
+	synthStart := func() StreamStartEvent {
+		var m *string
+		if model != "" {
+			m = &model
+		}
+		return StreamStartEvent{Model: m}
+	}
 	for _, event := range events {
-		end, ok := event.(StreamEndEvent)
-		if !ok {
+		switch e := event.(type) {
+		case StreamStartEvent:
+			if started {
+				continue
+			}
+			started = true
+			out = append(out, e)
+		case StreamEndEvent:
+			sawEnd = true
+			if e.FinishReason != nil {
+				finish = e.FinishReason
+			}
+			if e.Usage != nil {
+				usage = e.Usage
+			}
+			if e.ProviderData != nil {
+				providerData = e.ProviderData
+			}
+		case StreamDeltaEvent:
+			if !started {
+				started = true
+				out = append(out, synthStart())
+			}
+			out = append(out, e)
+		default:
 			out = append(out, event)
-			continue
-		}
-		sawEnd = true
-		if end.FinishReason != nil {
-			finish = end.FinishReason
-		}
-		if end.Usage != nil {
-			usage = end.Usage
-		}
-		if end.ProviderData != nil {
-			providerData = end.ProviderData
 		}
 	}
 	if sawEnd {
+		if !started {
+			out = append(out, synthStart())
+		}
 		out = append(out, StreamEndEvent{FinishReason: finish, Usage: usage, ProviderData: providerData})
 	}
 	return out
@@ -415,9 +445,11 @@ func ReplayStream(provider string, req Request, body []byte) ([]StreamEvent, Res
 		}
 		events = append(events, mapped...)
 	}
-	// MAP-3: the canonical trace is the post-coalesce trace — exactly one
-	// merged StreamEndEvent, final.
-	events = CoalesceStream(events)
+	// MAP-3/MAP-4: the canonical trace is the post-coalesce trace —
+	// exactly one merged StreamEndEvent (final) and exactly one leading
+	// StreamStartEvent (synthesized with the request's model when the
+	// dialect has no start frame).
+	events = CoalesceStream(events, req.Model)
 	return events, MaterializeResponse(events, req), nil
 }
 

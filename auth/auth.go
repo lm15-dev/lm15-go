@@ -50,19 +50,20 @@ type providerSpec struct {
 
 // The table mirrors the reference implementation's router knowledge.
 var providers = map[string]providerSpec{
-	"openai":       {envKeys: []string{"OPENAI_API_KEY"}},
-	"openai-chat":  {envKeys: []string{"OPENAI_API_KEY"}},
-	"anthropic":    {envKeys: []string{"ANTHROPIC_API_KEY"}},
-	"gemini":       {envKeys: []string{"GEMINI_API_KEY", "GOOGLE_API_KEY"}},
-	"groq":         {envKeys: []string{"GROQ_API_KEY"}},
-	"openrouter":   {envKeys: []string{"OPENROUTER_API_KEY"}},
-	"deepseek":     {envKeys: []string{"DEEPSEEK_API_KEY"}},
-	"zai":          {envKeys: []string{"ZAI_API_KEY"}},
-	"ollama":       {defaultKey: "ollama"},
-	"vllm":         {defaultKey: "EMPTY"},
-	"sglang":       {defaultKey: "EMPTY"},
-	"claude-code":  {oauthFile: "claude-code"},
-	"openai-codex": {oauthFile: "openai-codex"},
+	"openai":             {envKeys: []string{"OPENAI_API_KEY"}},
+	"openai-chat":        {envKeys: []string{"OPENAI_API_KEY"}},
+	"anthropic":          {envKeys: []string{"ANTHROPIC_API_KEY"}},
+	"gemini":             {envKeys: []string{"GEMINI_API_KEY", "GOOGLE_API_KEY"}},
+	"groq":               {envKeys: []string{"GROQ_API_KEY"}},
+	"openrouter":         {envKeys: []string{"OPENROUTER_API_KEY"}},
+	"deepseek":           {envKeys: []string{"DEEPSEEK_API_KEY"}},
+	"zai":                {envKeys: []string{"ZAI_API_KEY"}},
+	"deepseek-anthropic": {envKeys: []string{"DEEPSEEK_API_KEY"}},
+	"ollama":             {defaultKey: "ollama"},
+	"vllm":               {defaultKey: "EMPTY"},
+	"sglang":             {defaultKey: "EMPTY"},
+	"claude-code":        {oauthFile: "claude-code"},
+	"openai-codex":       {oauthFile: "openai-codex"},
 }
 
 // StepState classifies one rung of the chain (AUTH-7).

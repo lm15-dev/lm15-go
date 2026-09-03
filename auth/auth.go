@@ -57,6 +57,7 @@ var providers = map[string]providerSpec{
 	"groq":         {envKeys: []string{"GROQ_API_KEY"}},
 	"openrouter":   {envKeys: []string{"OPENROUTER_API_KEY"}},
 	"deepseek":     {envKeys: []string{"DEEPSEEK_API_KEY"}},
+	"zai":          {envKeys: []string{"ZAI_API_KEY"}},
 	"ollama":       {defaultKey: "ollama"},
 	"vllm":         {defaultKey: "EMPTY"},
 	"sglang":       {defaultKey: "EMPTY"},

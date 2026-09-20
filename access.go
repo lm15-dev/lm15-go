@@ -230,6 +230,20 @@ var (
 	azureAuthoritySetting = HostSetting{Name: "authority_host", Env: []string{"AZURE_AUTHORITY_HOST"}, Default: "https://login.microsoftonline.com"}
 	azureScopeSetting     = HostSetting{Name: "scope", Default: "https://ai.azure.com/.default"}
 	vertexBase            = "https://{location_host}/v1/projects/{project}/locations/{location}"
+
+	// Endpoint overrides (AUTH-10, amended 2026-09-19): the vendor's own
+	// variables naming a full URL root for a door, consulted by the router
+	// after an explicit base_urls entry and before the {resource} /
+	// {region} template. AWS: AWS_ENDPOINT_URL_<SERVICE_ID> then the
+	// generic AWS_ENDPOINT_URL (the service id is the SigV4 service name
+	// upper-cased with - → _, the SDK's rule). Azure OpenAI:
+	// AZURE_OPENAI_ENDPOINT. Foundry Claude: ANTHROPIC_FOUNDRY_BASE_URL.
+	// Vertex: no vendor variable is cited; base_urls only.
+	awsEndpoint          = []string{"AWS_ENDPOINT_URL_BEDROCK_RUNTIME", "AWS_ENDPOINT_URL"}
+	awsMantleEndpoint    = []string{"AWS_ENDPOINT_URL_BEDROCK_MANTLE", "AWS_ENDPOINT_URL"}
+	awsAnthropicEndpoint = []string{"AWS_ENDPOINT_URL_AWS_EXTERNAL_ANTHROPIC", "AWS_ENDPOINT_URL"}
+	azureOpenAIEndpoint  = []string{"AZURE_OPENAI_ENDPOINT"}
+	azureFoundryEndpoint = []string{"ANTHROPIC_FOUNDRY_BASE_URL"}
 )
 
 // AwsAnthropic is Claude Platform on AWS.
@@ -246,6 +260,7 @@ var AwsAnthropic = AccessPolicy{
 		Settings:        []HostSetting{awsRegionSetting, awsWorkspace},
 		RequiredHeaders: [][2]string{{"anthropic-workspace-id", "workspace"}},
 		SigV4Service:    "aws-external-anthropic",
+		EndpointEnv:     awsAnthropicEndpoint,
 	},
 }
 
@@ -262,6 +277,7 @@ var BedrockAnthropic = AccessPolicy{
 		BaseURL:      "https://bedrock-mantle.{region}.api.aws/anthropic/v1",
 		Settings:     []HostSetting{awsRegionSetting},
 		SigV4Service: "bedrock-mantle",
+		EndpointEnv:  awsMantleEndpoint,
 	},
 }
 
@@ -278,6 +294,7 @@ var BedrockChat = AccessPolicy{
 		BaseURL:      "https://bedrock-runtime.{region}.amazonaws.com/openai/v1",
 		Settings:     []HostSetting{awsRegionSetting},
 		SigV4Service: "bedrock",
+		EndpointEnv:  awsEndpoint,
 	},
 }
 
@@ -294,6 +311,7 @@ var BedrockMantleChat = AccessPolicy{
 		BaseURL:      "https://bedrock-mantle.{region}.api.aws/v1",
 		Settings:     []HostSetting{awsRegionSetting},
 		SigV4Service: "bedrock-mantle",
+		EndpointEnv:  awsMantleEndpoint,
 	},
 }
 
@@ -308,8 +326,9 @@ var Azure = AccessPolicy{
 	AuthScheme:       []string{"api-key", "bearer"},
 	Backend:          "azure-openai",
 	Host: &HostSpec{
-		BaseURL:  "https://{resource}.openai.azure.com/openai/v1",
-		Settings: []HostSetting{azureOpenAIRes, azureAuthoritySetting, azureScopeSetting},
+		BaseURL:     "https://{resource}.openai.azure.com/openai/v1",
+		Settings:    []HostSetting{azureOpenAIRes, azureAuthoritySetting, azureScopeSetting},
+		EndpointEnv: azureOpenAIEndpoint,
 	},
 }
 
@@ -323,8 +342,9 @@ var AzureChat = AccessPolicy{
 	AuthScheme:       []string{"api-key", "bearer"},
 	Backend:          "azure-openai",
 	Host: &HostSpec{
-		BaseURL:  "https://{resource}.openai.azure.com/openai/v1",
-		Settings: []HostSetting{azureOpenAIRes, azureAuthoritySetting, azureScopeSetting},
+		BaseURL:     "https://{resource}.openai.azure.com/openai/v1",
+		Settings:    []HostSetting{azureOpenAIRes, azureAuthoritySetting, azureScopeSetting},
+		EndpointEnv: azureOpenAIEndpoint,
 	},
 }
 
@@ -338,8 +358,9 @@ var AzureAnthropic = AccessPolicy{
 	AuthScheme:       []string{"x-api-key", "bearer"},
 	Backend:          "azure-foundry",
 	Host: &HostSpec{
-		BaseURL:  "https://{resource}.services.ai.azure.com/anthropic/v1",
-		Settings: []HostSetting{azureFoundryRes, azureAuthoritySetting, azureScopeSetting},
+		BaseURL:     "https://{resource}.services.ai.azure.com/anthropic/v1",
+		Settings:    []HostSetting{azureFoundryRes, azureAuthoritySetting, azureScopeSetting},
+		EndpointEnv: azureFoundryEndpoint,
 	},
 }
 
@@ -467,15 +488,15 @@ func AuthHeaderFor(policy AccessPolicy, credential Credential, apiKeyHeader stri
 		return "", "", false, nil
 	}
 	if (scheme == "api-key" || scheme == "x-api-key") && inVocab("bearer", policy.EffectiveAuthScheme()) && looksLikeJWT(raw) {
+		// AUTH-2, amended 2026-09-19: a JWS compact JWT is never an API key
+		// on any door lm15 has; it is an Entra/OAuth access token a
+		// token-provider callable handed over as a string. Sent as a key it
+		// is a bare 401 (live 2026-09-04); it travels as bearer — the only
+		// reading under which the request can succeed. The BearerToken wrap
+		// stays accepted and is the form when nothing should be read from a
+		// token's shape.
 		if _, isKey := credential.(APIKey); isKey {
-			header := "api-key"
-			if scheme == "x-api-key" {
-				header = "x-api-key"
-			}
-			e := NotConfiguredErrorf(policy.Provider, policy.EnvKeys, "api_key=lambda: BearerToken(provider())",
-				"%s: the credential is a JWT (a bearer token), but a plain string travels as an API key here (`%s` header); wrap it: lm15.credentials.BearerToken(token)",
-				policy.Provider, header)
-			return "", "", false, e
+			scheme = "bearer"
 		}
 	}
 	switch scheme {
@@ -495,13 +516,62 @@ func AuthHeaderFor(policy AccessPolicy, credential Credential, apiKeyHeader stri
 type LoadedCredential struct {
 	Provider  CredentialProvider
 	AccountID string
-	Source    string // "explicit" or "stored"
+	Source    string // "explicit", "stored" or "named"
+	// Origin is the AUTH-1 provenance label: honest about what lm15 can
+	// see (a caller's provider is not introspected). Never the value.
+	Origin string
+}
+
+// originLabel is the provenance label for a credential the adapter was
+// handed (AUTH-1 provenance).
+func originLabel(provider CredentialProvider, source string) string {
+	if provider == nil {
+		return "no credential"
+	}
+	if source == "stored" {
+		return "the stored local login (credentials file)"
+	}
+	if _, static := provider.(StaticCredential); static {
+		return "an explicit api_key (value never shown)"
+	}
+	return "an application-supplied callable (identity not inspected by lm15)"
 }
 
 // LoadCredential resolves the credential an adapter sends under policy: an
 // explicit credential wins (AUTH-1); a stored-login policy loads its file;
 // a key policy with nothing is a typed not-configured error.
 func LoadCredential(policy AccessPolicy, explicit CredentialProvider, credentialsPath string) (LoadedCredential, error) {
+	return LoadCredentialNamed(policy, explicit, credentialsPath, "")
+}
+
+// LoadCredentialNamed is LoadCredential with a named credential (AUTH-1,
+// 2026-09-19): one identity on a cloud door, read from this process's
+// environment, never the chain. It cannot be combined with an explicit
+// credential: two answers to "who am I" is a configuration error.
+func LoadCredentialNamed(policy AccessPolicy, explicit CredentialProvider, credentialsPath string, named string) (LoadedCredential, error) {
+	if named != "" {
+		if !policy.CloudChain() {
+			return LoadedCredential{}, NotConfiguredErrorf(policy.Provider, nil, "", "%s: credential=%q names a cloud identity, and this door is not a cloud door; pass api_key= instead", policy.Provider, named)
+		}
+		if explicit != nil {
+			return LoadedCredential{}, NotConfiguredErrorf(policy.Provider, nil, "", "%s: both api_key= and credential=%q were given; a door has one identity — pass the credential value, or name the identity, not both", policy.Provider, named)
+		}
+		ctx := OnlineChainContext(nil)
+		provider, err := NamedCredentialProviderFor(policy, ctx, named)
+		if err != nil {
+			return LoadedCredential{}, err
+		}
+		return LoadedCredential{Provider: provider, Source: "named"}, nil
+	}
+	loaded, err := loadCredential(policy, explicit, credentialsPath)
+	if err != nil {
+		return loaded, err
+	}
+	loaded.Origin = originLabel(loaded.Provider, loaded.Source)
+	return loaded, nil
+}
+
+func loadCredential(policy AccessPolicy, explicit CredentialProvider, credentialsPath string) (LoadedCredential, error) {
 	if explicit != nil {
 		return LoadedCredential{Provider: explicit, Source: "explicit"}, nil
 	}

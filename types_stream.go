@@ -10,11 +10,16 @@ type Delta interface {
 	sealedDelta()
 }
 
-// TextDelta is a text fragment (with the fragment's own logprobs when streamed).
+// TextDelta is a text fragment (with the fragment's own logprobs when
+// streamed). LogprobsIncomplete (wire logprobs_complete=false) means local
+// text editing removed scores that cannot describe the retained text (a
+// stop inside a token); scores always describe original, whole provider
+// tokens. Materialization ANDs the flag across text events.
 type TextDelta struct {
-	Text      string
-	PartIndex int
-	Logprobs  []TokenLogprob
+	Text               string
+	PartIndex          int
+	Logprobs           []TokenLogprob
+	LogprobsIncomplete bool
 }
 
 // ThinkingDelta is a reasoning fragment.
@@ -169,11 +174,14 @@ func (d ContinuationDelta) ToState() ContinuationState {
 
 // ─── Stream events ───────────────────────────────────────────────────
 
-// ErrorDetail is structured error information.
+// ErrorDetail is structured error information. HTTPResponse is the bounded
+// handshake diagnostics of an in-stream error (2026-09-19); empty means no
+// HTTP evidence, not success.
 type ErrorDetail struct {
 	Code         string
 	Message      string
 	ProviderCode string
+	HTTPResponse HTTPResponseDetail
 }
 
 // Validate checks the code vocabulary.
@@ -181,7 +189,7 @@ func (e ErrorDetail) Validate() error {
 	if !inVocab(e.Code, ErrorCodes) {
 		return valueErrorf("unsupported error code: %s", e.Code)
 	}
-	return nil
+	return e.HTTPResponse.Validate()
 }
 
 // StreamEvent is one of StreamStartEvent, StreamDeltaEvent, StreamEndEvent,
@@ -192,10 +200,13 @@ type StreamEvent interface {
 	sealedStreamEvent()
 }
 
-// StreamStartEvent opens a stream (exactly one, MAP-4).
+// StreamStartEvent opens a stream (exactly one, MAP-4). Adaptations (MAP-13)
+// is what the wire got that differs from what was asked, known before the
+// first byte and so carried by the first event.
 type StreamStartEvent struct {
-	ID    string
-	Model string
+	ID          string
+	Model       string
+	Adaptations []Adaptation
 }
 
 // StreamDeltaEvent carries a typed delta.
@@ -221,7 +232,7 @@ func (StreamDeltaEvent) sealedStreamEvent() {}
 func (StreamEndEvent) sealedStreamEvent()   {}
 func (StreamErrorEvent) sealedStreamEvent() {}
 
-func (StreamStartEvent) Validate() error { return nil }
+func (e StreamStartEvent) Validate() error { return validateAdaptations(e.Adaptations) }
 
 func (e StreamDeltaEvent) Validate() error {
 	if e.Delta == nil {

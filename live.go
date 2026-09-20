@@ -33,8 +33,13 @@ type LiveSession interface {
 	EndAudio(ctx context.Context) error
 	Recv(ctx context.Context) (LiveServerEvent, error)
 	// Turn reads until the turn's boundary (turn_end / interrupted / error)
-	// or a tool_call the caller must answer (LIVE-1).
+	// or a tool_call the caller must answer (LIVE-1), under the default
+	// collection budget (DefaultTurnMaxBytes, DefaultTurnMaxEvents).
 	Turn(ctx context.Context) (*Turn, error)
+	// TurnView opens a bounded collector over the next turn; zero limits
+	// take the defaults. Raw Recv iteration is the deliberate
+	// no-collection alternative.
+	TurnView(limits TurnLimits) (*TurnView, error)
 	Close() error
 }
 
@@ -126,18 +131,15 @@ func (s *webSocketLiveSession) Recv(ctx context.Context) (LiveServerEvent, error
 }
 
 func (s *webSocketLiveSession) Turn(ctx context.Context) (*Turn, error) {
-	var events []LiveServerEvent
-	for {
-		ev, err := s.Recv(ctx)
-		if err != nil {
-			return nil, err
-		}
-		events = append(events, ev)
-		switch ev.Type() {
-		case "turn_end", "interrupted", "error", "tool_call":
-			return MaterializeTurn(events), nil
-		}
+	view, err := s.TurnView(TurnLimits{})
+	if err != nil {
+		return nil, err
 	}
+	return view.Result(ctx)
+}
+
+func (s *webSocketLiveSession) TurnView(limits TurnLimits) (*TurnView, error) {
+	return NewTurnView(s, limits)
 }
 
 func (s *webSocketLiveSession) Close() error {

@@ -4,7 +4,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/lm15-dev/lm15-go/internal/sse"
 )
@@ -25,9 +24,7 @@ const anthropicDefaultBaseURL = "https://api.anthropic.com/v1"
 var anthropicBuiltinMap = map[string]string{"web_search": "web_search_20250305", "code_execution": "code_execution_20250522"}
 var anthropicProviderExecutedBlocks = map[string]bool{"server_tool_use": true, "web_search_tool_result": true, "code_execution_tool_result": true}
 
-const (
-	anthropicDefaultVisibleTokens = 1024
-)
+const ()
 
 var adaptiveClassMarkers = []string{"sonnet-5", "opus-5", "sonnet-4-6", "opus-4-6", "opus-4-7", "opus-4-8", "fable", "mythos", "haiku-5"}
 
@@ -209,6 +206,8 @@ func (l *AnthropicLM) toolResultContent(p Part) (JSONObject, error) {
 	switch x := p.(type) {
 	case TextPart:
 		return JSONObject{"type": "text", "text": x.Text}, nil
+	case DataPart:
+		return JSONObject{"type": "text", "text": DataPartText(x)}, nil
 	case ImagePart:
 		src, err := anthropicSource(x.Media)
 		if err != nil {
@@ -223,7 +222,7 @@ func (l *AnthropicLM) toolResultContent(p Part) (JSONObject, error) {
 		return JSONObject{"type": "document", "source": src}, nil
 	}
 	if IsMediaPart(p) {
-		return nil, UnsupportedFeatureErrorf(l.provider, "%s: a %s part cannot reach a tool_result block (text, image and document only; MAP-10)", l.provider, p.Type())
+		return nil, UnsupportedFeature(l.provider, "messages[*].tool_result.content["+p.Type()+"]", "%s: a %s part cannot reach a tool_result block (text, image and document only; MAP-10)", l.provider, p.Type())
 	}
 	text, err := partsToText([]Part{p}, l.provider, "")
 	if err != nil {
@@ -236,6 +235,9 @@ func (l *AnthropicLM) part(p Part) (JSONObject, error) {
 	switch x := p.(type) {
 	case TextPart:
 		return JSONObject{"type": "text", "text": x.Text}, nil
+	case DataPart:
+		// 2026-09-19 D3: a data part on a text wire is its compact JSON.
+		return JSONObject{"type": "text", "text": DataPartText(x)}, nil
 	case ImagePart:
 		src, err := anthropicSource(x.Media)
 		if err != nil {
@@ -314,27 +316,46 @@ func (l *AnthropicLM) message(msg Message) (JSONObject, error) {
 	return JSONObject{"role": role, "content": parts}, nil
 }
 
-func (l *AnthropicLM) toolChoicePayload(req *Request) (JSONObject, error) {
+// allowedSubset is the names of a proper-subset allowlist, else nil. MAP-13:
+// the Messages API cannot restrict to a subset, so the adapter sends ONLY
+// those tools — that is what "may only call these" means — and records it
+// as client_side.
+func (l *AnthropicLM) allowedSubset(req *Request) []string {
+	tc := req.Config.ToolChoice
+	if tc == nil || tc.EffectiveMode() == "none" || len(tc.Allowed) == 0 {
+		return nil
+	}
+	if len(tc.Allowed) == 1 && tc.EffectiveMode() == "required" {
+		return nil
+	}
+	if sameNameSet(tc.Allowed, req.Tools) {
+		return nil
+	}
+	return tc.Allowed
+}
+
+func (l *AnthropicLM) toolChoicePayload(req *Request) JSONObject {
 	tc := req.Config.ToolChoice
 	if tc == nil {
-		return nil, nil
+		return nil
 	}
 	payload := JSONObject{}
 	switch {
 	case tc.EffectiveMode() == "none":
 		payload["type"] = "none"
 	case len(tc.Allowed) > 0:
+		// {"type": "tool", "name": ...} forces client tools AND server tools
+		// (live 2026-09-01 with web_search). Every declared tool, or
+		// (MAP-13) a proper subset the payload has already narrowed the
+		// tools list to: either way the wire form is any/auto over the
+		// tools sent.
 		if len(tc.Allowed) == 1 && tc.EffectiveMode() == "required" {
 			payload["type"] = "tool"
 			payload["name"] = tc.Allowed[0]
-		} else if sameNameSet(tc.Allowed, req.Tools) {
-			if tc.EffectiveMode() == "required" {
-				payload["type"] = "any"
-			} else {
-				payload["type"] = "auto"
-			}
+		} else if tc.EffectiveMode() == "required" {
+			payload["type"] = "any"
 		} else {
-			return nil, UnsupportedFeatureErrorf(l.provider, "anthropic: tool_choice.allowed subsets are not supported — the Messages API can force one named tool or allow all declared tools, but cannot restrict to a subset. Send only the allowed tools in Request.tools instead")
+			payload["type"] = "auto"
 		}
 	case tc.EffectiveMode() == "required":
 		payload["type"] = "any"
@@ -344,7 +365,7 @@ func (l *AnthropicLM) toolChoicePayload(req *Request) (JSONObject, error) {
 	if tc.Parallel != nil && !*tc.Parallel && payload["type"] != "none" {
 		payload["disable_parallel_tool_use"] = true
 	}
-	return payload, nil
+	return payload
 }
 
 func sameNameSet(allowed []string, tools []Tool) bool {
@@ -367,14 +388,39 @@ func sameNameSet(allowed []string, tools []Tool) bool {
 	return true
 }
 
+// anthropicResponseFormat: the Messages API has no any-JSON mode, so
+// json_object refuses (MAP-13 rule 4(c) until a live receipt shows an open
+// schema is accepted); strict is satisfied, name is a label with no slot.
 func anthropicResponseFormat(provider string, f JSONObject) (JSONObject, error) {
 	if f["type"] == "json_object" {
-		return nil, UnsupportedFeatureErrorf(provider, "anthropic: response_format json_object is not supported — the Messages API has no any-JSON mode; give a json_schema (objects need additionalProperties: false)")
+		return nil, UnsupportedFeature(provider, "config.response_format", "anthropic: response_format json_object is not supported — the Messages API has no any-JSON mode; give a json_schema (objects need additionalProperties: false)")
 	}
 	return JSONObject{"format": JSONObject{"type": "json_schema", "schema": f["schema"]}}, nil
 }
 
-func (l *AnthropicLM) payload(req *Request, stream bool) (JSONObject, error) {
+// Output ceilings by model class, for the max_tokens the Messages API
+// requires and the caller did not set (MAP-13 defaulted, decision
+// 2026-09-14 §4.8). The 3.x classes have documented lower ceilings and a
+// value above them is a 400; everything else gets 16384 — loud and
+// actionable if a model's ceiling is lower, never a silent truncation.
+var anthropicDefaultMaxTokensByClass = [][2]any{
+	{"claude-3-haiku", 4096}, {"claude-3-opus", 4096}, {"claude-3-sonnet", 4096},
+	{"claude-3-5-", 8192}, {"claude-3.5-", 8192},
+}
+
+const anthropicDefaultMaxTokens = 16384
+
+func anthropicDefaultMaxTokensFor(model string) int {
+	lowered := strings.ToLower(model)
+	for _, row := range anthropicDefaultMaxTokensByClass {
+		if strings.Contains(lowered, row[0].(string)) {
+			return row[1].(int)
+		}
+	}
+	return anthropicDefaultMaxTokens
+}
+
+func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSONObject, error) {
 	compat := l.resolved
 	cfg := req.Config
 	if compat.ModelPrefixes != nil {
@@ -403,10 +449,15 @@ func (l *AnthropicLM) payload(req *Request, stream bool) (JSONObject, error) {
 	}
 	if useCache {
 		if cacheCfg.Key != "" {
-			return nil, UnsupportedFeatureErrorf(l.provider, "anthropic: cache.key is not supported — the Messages API has no cache affinity key (OpenAI's prompt_cache_key); marks on blocks are the mechanism (prefix / prefix_until_index)")
+			// MAP-13: a best-effort routing hint by definition; no home here.
+			if err := scope.dropped("config.cache.key", "the Messages API has no cache affinity key (OpenAI's prompt_cache_key); marks on blocks are its mechanism and were placed", cacheCfg.Key); err != nil {
+				return nil, err
+			}
 		}
 		if cacheCfg.Resource != "" {
-			return nil, UnsupportedFeatureErrorf(l.provider, "anthropic: cache.resource is not supported — the Messages API has no stored-cache tier; it caches by marks on blocks")
+			// MAP-13 rule 4(b): the program references a stored object that
+			// does not exist on this provider.
+			return nil, UnsupportedFeature(l.provider, "config.cache.resource", "anthropic: cache.resource is not supported — the Messages API has no stored-cache tier; it caches by marks on blocks")
 		}
 		idx := -1
 		if cacheCfg.PrefixUntilIndex != nil {
@@ -438,24 +489,49 @@ func (l *AnthropicLM) payload(req *Request, stream bool) (JSONObject, error) {
 	effortOnly := compat.ThinkingFormat == "effort"
 	adaptive := reasoning != nil && !reasoning.IsOff() && (deepseekThinking || alwaysAdaptive || effortOnly || AnthropicAdaptiveClass(req.Model))
 	if reasoning != nil && !reasoning.IsOff() {
-		if compat.ReasoningEfforts != nil && !inVocab(reasoning.Effort, compat.ReasoningEfforts) {
-			return nil, UnsupportedFeatureErrorf(l.provider, "%s: reasoning.effort=%q has no level on this server (it accepts %s) and would be accepted silently", l.provider, reasoning.Effort, strings.Join(compat.ReasoningEfforts, ", "))
+		r := *reasoning
+		reasoning = &r
+		if compat.ReasoningEfforts != nil && !inVocab(r.Effort, compat.ReasoningEfforts) {
+			// MAP-13: an effort word with no level here is clamped to the
+			// nearest declared level (the dial is ordinal); the server would
+			// have accepted the word silently (Moonshot, live 2026-09-03).
+			nearest, err := nearestEffort(r.Effort, compat.ReasoningEfforts)
+			if err != nil {
+				return nil, err
+			}
+			if err := scope.clamped("config.reasoning.effort", "this server has no "+strconv.Quote(r.Effort)+" level (it accepts "+strings.Join(compat.ReasoningEfforts, ", ")+") and would have accepted the word silently", r.Effort, nearest); err != nil {
+				return nil, err
+			}
+			r.Effort = nearest
 		}
-		if reasoning.Summary == "concise" || reasoning.Summary == "detailed" {
-			return nil, UnsupportedFeatureErrorf(l.provider, "anthropic: reasoning.summary=%q is an OpenAI detail level; the Messages API returns thinking blocks whenever thinking runs (use 'auto' or None)", reasoning.Summary)
+		if r.Summary == "concise" || r.Summary == "detailed" {
+			// MAP-13: a visibility level the wire lacks; thinking blocks are
+			// returned whenever thinking runs, which is "auto".
+			if err := scope.substituted("config.reasoning.summary", "the Messages API has no summary detail levels; it returns thinking blocks whenever thinking runs, which is 'auto'", r.Summary, "auto"); err != nil {
+				return nil, err
+			}
+			r.Summary = "auto"
 		}
 		if adaptive {
-			if reasoning.ThinkingBudget != nil {
-				why := "this model class takes thinking.type 'adaptive' with output_config.effort; budget_tokens is rejected by the API (live 2026-09-02)"
+			if r.ThinkingBudget != nil {
+				// MAP-13: effort carries the intent (MAP-7 rule 5); the
+				// budget has no honoured field on this class.
+				why := req.Model + " takes thinking.type 'adaptive' with output_config.effort; budget_tokens is rejected by the API (live 2026-09-02)"
 				if deepseekThinking {
-					why = "this server ignores budget_tokens (a silent no-op); effort is the dial"
+					why = "this server ignores budget_tokens; effort is the dial"
 				} else if alwaysAdaptive {
-					why = "this server accepts budget_tokens without translating it (a silent no-op); effort is the dial (protocols--messages.md)"
+					why = "this server accepts budget_tokens without translating it; effort is the dial (protocols--messages.md)"
 				}
-				return nil, UnsupportedFeatureErrorf(l.provider, "%s: reasoning.thinking_budget is not supported on %s — %s", l.provider, req.Model, why)
+				if err := scope.dropped("config.reasoning.thinking_budget", why, *r.ThinkingBudget); err != nil {
+					return nil, err
+				}
+				r.ThinkingBudget = nil
 			}
-			if reasoning.Effort == "minimal" && !(deepseekThinking || alwaysAdaptive || effortOnly) {
-				return nil, UnsupportedFeatureErrorf(l.provider, "anthropic: reasoning.effort='minimal' has no level on this model class (output_config.effort is low|medium|high|xhigh|max); 'low' is the floor")
+			if r.Effort == "minimal" && !(deepseekThinking || alwaysAdaptive || effortOnly) {
+				if err := scope.clamped("config.reasoning.effort", "this model class has no 'minimal' level (output_config.effort is low|medium|high|xhigh|max); 'low' is the floor", "minimal", "low"); err != nil {
+					return nil, err
+				}
+				r.Effort = "low"
 			}
 		}
 	}
@@ -468,9 +544,17 @@ func (l *AnthropicLM) payload(req *Request, stream bool) (JSONObject, error) {
 			thinkingBudget = &b
 		}
 	}
-	maxTokens := anthropicDefaultVisibleTokens
+	// Manual class: max_tokens includes thinking, so the wire ceiling is the
+	// budget plus the visible cap. The Messages API requires the field: when
+	// the caller set none, the class default is used and recorded (MAP-13).
+	var maxTokens int
 	if cfg.MaxTokens != nil {
 		maxTokens = *cfg.MaxTokens
+	} else {
+		maxTokens = anthropicDefaultMaxTokensFor(req.Model)
+		if err := scope.defaulted("config.max_tokens", "the Messages API requires max_tokens and none was set; the class default was used", maxTokens); err != nil {
+			return nil, err
+		}
 	}
 	if thinkingBudget != nil {
 		maxTokens += *thinkingBudget
@@ -491,20 +575,51 @@ func (l *AnthropicLM) payload(req *Request, stream bool) (JSONObject, error) {
 			payload["system"] = text
 		}
 	}
-	if compat.SamplingParams == "reject" {
-		for name, set := range map[string]bool{"temperature": cfg.Temperature != nil, "top_p": cfg.TopP != nil, "top_k": cfg.TopK != nil} {
-			if set {
-				return nil, UnsupportedFeatureErrorf(l.provider, "%s: config.%s is silently ignored by this server (the model's sampling is fixed); omit it", l.provider, name)
+	samplingFixed := compat.SamplingParams == "reject"
+	if samplingFixed {
+		// The server documents none of these and swallows them silently
+		// (Moonshot, live 2026-09-03). MAP-13: omit and record.
+		for _, knob := range []struct {
+			name string
+			set  bool
+			val  any
+		}{{"temperature", cfg.Temperature != nil, deref(cfg.Temperature)}, {"top_p", cfg.TopP != nil, deref(cfg.TopP)}, {"top_k", cfg.TopK != nil, deref(cfg.TopK)}} {
+			if knob.set {
+				if err := scope.dropped("config."+knob.name, "this server ignores sampling parameters (the model's sampling is fixed)", knob.val); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
-	if cfg.Temperature != nil {
-		payload["temperature"] = jsonFloat(*cfg.Temperature)
+	for _, knob := range []struct {
+		name string
+		set  bool
+		val  any
+	}{{"seed", cfg.Seed != nil, deref(cfg.Seed)}, {"frequency_penalty", cfg.FrequencyPenalty != nil, deref(cfg.FrequencyPenalty)}, {"presence_penalty", cfg.PresencePenalty != nil, deref(cfg.PresencePenalty)}} {
+		if knob.set {
+			// MAP-13: a sampling hint with no field on the Messages API.
+			if err := scope.dropped("config."+knob.name, "the Messages API has no "+knob.name+" field", knob.val); err != nil {
+				return nil, err
+			}
+		}
 	}
-	if cfg.TopP != nil {
+	if cfg.Temperature != nil && !samplingFixed {
+		temperature := *cfg.Temperature
+		if temperature > 1.0 {
+			// MAP-13: the canonical range is 0–2; this wire's ceiling is 1.0
+			// and both scales default to 1.0, so "hotter than allowed"
+			// becomes the hottest. Never rescaled.
+			if err := scope.clamped("config.temperature", "the Messages API accepts temperature in [0, 1]; the canonical range is [0, 2]", jsonFloat(temperature), jsonFloat(1.0)); err != nil {
+				return nil, err
+			}
+			temperature = 1.0
+		}
+		payload["temperature"] = jsonFloat(temperature)
+	}
+	if cfg.TopP != nil && !samplingFixed {
 		payload["top_p"] = jsonFloat(*cfg.TopP)
 	}
-	if cfg.TopK != nil {
+	if cfg.TopK != nil && !samplingFixed {
 		payload["top_k"] = *cfg.TopK
 	}
 	if len(cfg.Stop) > 0 {
@@ -512,7 +627,13 @@ func (l *AnthropicLM) payload(req *Request, stream bool) (JSONObject, error) {
 	}
 	if len(req.Tools) > 0 {
 		var tools []any
+		var sent []any
+		allowed := l.allowedSubset(req)
 		for _, t := range req.Tools {
+			if allowed != nil && !inVocab(t.ToolName(), allowed) {
+				continue
+			}
+			sent = append(sent, t.ToolName())
 			switch x := t.(type) {
 			case FunctionTool:
 				tools = append(tools, JSONObject{"name": x.Name, "description": nilIfEmpty(x.Description), "input_schema": x.EffectiveParameters()})
@@ -528,15 +649,21 @@ func (l *AnthropicLM) payload(req *Request, stream bool) (JSONObject, error) {
 				tools = append(tools, out)
 			}
 		}
+		if allowed != nil {
+			if err := scope.clientSide("config.tool_choice.allowed", "the Messages API cannot restrict to a subset of the declared tools; only the allowed tools were sent, which is what the allowlist means", toAnyList(allowed, func(s string) any { return s }), sent); err != nil {
+				return nil, err
+			}
+		}
 		payload["tools"] = tools
 	}
-	toolChoice, err := l.toolChoicePayload(req)
-	if err != nil {
-		return nil, err
-	}
-	if toolChoice != nil {
+	if toolChoice := l.toolChoicePayload(req); toolChoice != nil {
 		if compat.ParallelToolCalls == "reject" && cfg.ToolChoice.Parallel != nil {
-			return nil, UnsupportedFeatureErrorf(l.provider, "%s: tool_choice.parallel is silently ignored by this server (disable_parallel_tool_use is not applied); omit it", l.provider)
+			// disable_parallel_tool_use is documented as ignored
+			// (guide--anthropic-api.md). MAP-13: omit it and say so.
+			if err := scope.dropped("config.tool_choice.parallel", "this server accepts disable_parallel_tool_use and does not apply it (guide--anthropic-api.md); the model may return several calls", *cfg.ToolChoice.Parallel); err != nil {
+				return nil, err
+			}
+			delete(toolChoice, "disable_parallel_tool_use")
 		}
 		payload["tool_choice"] = toolChoice
 	}
@@ -564,18 +691,35 @@ func (l *AnthropicLM) payload(req *Request, stream bool) (JSONObject, error) {
 	}
 	if len(cfg.ResponseFormat) > 0 {
 		if compat.StructuredOutput == "reject" {
-			return nil, UnsupportedFeatureErrorf(l.provider, "%s: response_format is silently ignored by this server (output_config.format is accepted and not applied); describe the shape in the prompt", l.provider)
+			// The server accepts output_config.format and ignores the schema
+			// (DeepSeek, live 2026-09-03). MAP-13: omit and record.
+			if err := scope.dropped("config.response_format", "this server accepts output_config.format and does not apply it; describe the shape in the prompt", cfg.ResponseFormat); err != nil {
+				return nil, err
+			}
+		} else {
+			// MAP-14 §2: a judgment property carrying type+anyOf has its type
+			// moved into every branch (the wire 400s otherwise, receipted
+			// 2026-09-17); probabilities cannot be measured here.
+			if err := noteUnmeasurableProbabilities(scope, req, l.provider); err != nil {
+				return nil, err
+			}
+			format := cfg.ResponseFormat
+			if found := RequestJudgments(req); len(found) > 0 {
+				if schema, ok := format["schema"].(map[string]any); ok {
+					format = copyObject(format)
+					format["schema"] = anthropicSchema(schema, found)
+				}
+			}
+			oc, err := anthropicResponseFormat(l.provider, format)
+			if err != nil {
+				return nil, err
+			}
+			merged := copyObject(wireObj(payload["output_config"]))
+			for k, v := range oc {
+				merged[k] = v
+			}
+			payload["output_config"] = merged
 		}
-		oc, err := anthropicResponseFormat(l.provider, cfg.ResponseFormat)
-		if err != nil {
-			return nil, err
-		}
-		existing := wireObj(payload["output_config"])
-		merged := copyObject(existing)
-		for k, v := range oc {
-			merged[k] = v
-		}
-		payload["output_config"] = merged
 	}
 	if cfg.ServiceTier != "" {
 		payload["service_tier"] = cfg.ServiceTier
@@ -583,11 +727,23 @@ func (l *AnthropicLM) payload(req *Request, stream bool) (JSONObject, error) {
 	if cfg.UserID != "" {
 		payload["metadata"] = JSONObject{"user_id": cfg.UserID}
 	}
-	if cfg.Store != nil {
-		return nil, UnsupportedFeatureErrorf(l.provider, "anthropic: config.store is not supported — the Messages API has no response-storage opt-out field (OpenAI and Gemini carry it)")
+	if cfg.Store != nil && !*cfg.Store {
+		// MAP-13 "satisfied": the Messages API keeps no retrievable
+		// stored-response object, so an opt-out holds by construction.
+		if err := scope.satisfied("config.store", "the Messages API has no stored-response object to opt out of; nothing retrievable is kept", false); err != nil {
+			return nil, err
+		}
+	} else if cfg.Store != nil {
+		if err := scope.dropped("config.store", "the Messages API has no stored-response object to opt into (OpenAI and Gemini carry `store`)", true); err != nil {
+			return nil, err
+		}
 	}
 	if cfg.Logprobs != nil {
-		return nil, UnsupportedFeatureErrorf(l.provider, "anthropic: config.logprobs is not supported — the Messages API does not expose token log probabilities (OpenAI and Gemini carry them)")
+		// MAP-13 (decision 2026-09-14 §4.1): Response.logprobs is optional;
+		// the program sees absence, not a later crash.
+		if err := scope.dropped("config.logprobs", "the Messages API does not expose token log probabilities (OpenAI and Gemini carry them); Response.logprobs will be absent", *cfg.Logprobs); err != nil {
+			return nil, err
+		}
 	}
 	for k, v := range cfg.Extensions {
 		if k != "prompt_caching" {
@@ -608,16 +764,12 @@ func (l *AnthropicLM) payload(req *Request, stream bool) (JSONObject, error) {
 	return payload, nil
 }
 
-func (l *AnthropicLM) buildRequest(req *Request, stream bool) (*TransportRequest, error) {
-	payload, err := l.payload(req, stream)
+func (l *AnthropicLM) buildRequest(req *Request, stream bool, scope *adaptScope) (*TransportRequest, error) {
+	payload, err := l.payload(req, stream, scope)
 	if err != nil {
 		return nil, err
 	}
-	timeout := 60 * time.Second
-	if stream {
-		timeout = 120 * time.Second
-	}
-	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/messages", headers: l.headers(req), payload: payload, endpoint: "messages", stream: stream, model: req.Model, readTimeout: timeout})
+	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/messages", headers: l.headers(req), payload: payload, endpoint: "messages", stream: stream, model: req.Model, scope: scope})
 }
 
 // ─── Response parsing ────────────────────────────────────────────────
@@ -666,7 +818,7 @@ func citationFromAnthropic(c JSONObject) (CitationPart, bool) {
 }
 
 func (l *AnthropicLM) parseResponse(req *Request, resp *HTTPResponse) (*Response, error) {
-	data, err := resp.JSON()
+	data, err := l.jsonBody(resp)
 	if err != nil {
 		return nil, err
 	}
@@ -730,7 +882,7 @@ func (l *AnthropicLM) parseResponse(req *Request, resp *HTTPResponse) (*Response
 	return &Response{
 		ID:           wireStr(data["id"]),
 		Model:        model,
-		Message:      Message{Role: RoleAssistant, Parts: parts},
+		Message:      Message{Role: RoleAssistant, Parts: ReplaceTextWithData(parts, RequestJudgments(req))},
 		FinishReason: anthropicFinish(wireStr(data["stop_reason"]), hasToolCall(parts)),
 		Usage:        anthropicUsage(wireObj(data["usage"])),
 		ProviderData: attachUnmapped(data, unmapped),
@@ -853,7 +1005,7 @@ func (l *AnthropicLM) parseStreamEvents(req *Request, ev sse.Event) ([]StreamEve
 // ─── Models ──────────────────────────────────────────────────────────
 
 func (l *AnthropicLM) modelsRequest() (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/models", params: map[string]string{"limit": "1000"}, headers: l.headers(nil), readTimeout: 30 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/models", params: map[string]string{"limit": "1000"}, headers: l.headers(nil)})
 }
 
 func (l *AnthropicLM) modelsFromBody(body string) ([]ModelInfo, error) {
@@ -882,7 +1034,7 @@ func (l *AnthropicLM) fileUploadRequest(req *FileUploadRequest) (*TransportReque
 			headers[i][1] = ct
 		}
 	}
-	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/files", headers: headers, body: body, readTimeout: 300 * time.Second})
+	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/files", headers: headers, body: body})
 }
 
 func (l *AnthropicLM) fileInfo(data JSONObject) (FileInfo, error) {
@@ -918,7 +1070,7 @@ func (l *AnthropicLM) fileInfoFromBody(body string) (FileInfo, error) {
 }
 
 func (l *AnthropicLM) fileGetRequest(fileID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/files/" + pathID(fileID, false), headers: l.headers(nil), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/files/" + pathID(fileID, false), headers: l.headers(nil)})
 }
 
 func (l *AnthropicLM) fileListRequest(limit int, cursor string) (*TransportRequest, error) {
@@ -926,7 +1078,7 @@ func (l *AnthropicLM) fileListRequest(limit int, cursor string) (*TransportReque
 	if cursor != "" {
 		params["page"] = cursor
 	}
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/files", params: params, headers: l.headers(nil), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/files", params: params, headers: l.headers(nil)})
 }
 
 func (l *AnthropicLM) filePageFromListBody(body string) (FilePage, error) {
@@ -948,11 +1100,11 @@ func (l *AnthropicLM) filePageFromListBody(body string) (FilePage, error) {
 }
 
 func (l *AnthropicLM) fileDeleteRequest(fileID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "DELETE", url: strings.TrimRight(l.baseURL, "/") + "/files/" + pathID(fileID, false), headers: l.headers(nil), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "DELETE", url: strings.TrimRight(l.baseURL, "/") + "/files/" + pathID(fileID, false), headers: l.headers(nil)})
 }
 
 func (l *AnthropicLM) fileDownloadRequest(fileID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/files/" + pathID(fileID, false) + "/content", headers: l.headers(nil), readTimeout: 300 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/files/" + pathID(fileID, false) + "/content", headers: l.headers(nil)})
 }
 
 // ─── Batch ───────────────────────────────────────────────────────────
@@ -977,13 +1129,17 @@ func anthropicBatchStatus(data JSONObject) string {
 	return BatchQueued
 }
 
-func (l *AnthropicLM) batchSubmitRequest(req *BatchRequest, _ JSONObject) (*TransportRequest, error) {
+func (l *AnthropicLM) batchSubmitRequest(req *BatchRequest, _ JSONObject, scope *adaptScope) (*TransportRequest, error) {
 	if req.Label != "" {
-		return nil, UnsupportedFeatureErrorf(l.provider, "anthropic: batch labels are not supported — the Message Batches create body has no metadata field (verified live 2026-08-31); submit without a label and correlate by id")
+		// MAP-13: a convenience with no metadata field on the create body
+		// (verified live 2026-08-31); correlate by id.
+		if err := scope.dropped("label", "the Message Batches create body has no metadata field (verified live 2026-08-31); correlate by id", req.Label); err != nil {
+			return nil, err
+		}
 	}
 	var requests []any
 	for i, nested := range req.Requests {
-		params, err := l.payload(nested, false)
+		params, err := l.payload(nested, false, scope)
 		if err != nil {
 			return nil, err
 		}
@@ -993,7 +1149,7 @@ func (l *AnthropicLM) batchSubmitRequest(req *BatchRequest, _ JSONObject) (*Tran
 	for k, v := range req.Extensions {
 		payload[k] = v
 	}
-	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/messages/batches", headers: l.headers(nil), payload: payload, readTimeout: 120 * time.Second})
+	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/messages/batches", headers: l.headers(nil), payload: payload, scope: scope})
 }
 
 func (l *AnthropicLM) batchJobInfo(data JSONObject) (BatchJobInfo, error) {
@@ -1013,11 +1169,11 @@ func (l *AnthropicLM) batchJobFromBody(body string) (BatchJobInfo, error) {
 }
 
 func (l *AnthropicLM) batchStatusRequest(batchID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/messages/batches/" + pathID(batchID, false), headers: l.headers(nil), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/messages/batches/" + pathID(batchID, false), headers: l.headers(nil)})
 }
 
 func (l *AnthropicLM) batchCancelRequest(batchID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/messages/batches/" + pathID(batchID, false) + "/cancel", headers: l.headers(nil), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/messages/batches/" + pathID(batchID, false) + "/cancel", headers: l.headers(nil)})
 }
 
 func (l *AnthropicLM) batchResultFetches(statusBody JSONObject) ([]*TransportRequest, error) {
@@ -1025,7 +1181,7 @@ func (l *AnthropicLM) batchResultFetches(statusBody JSONObject) ([]*TransportReq
 	if url == "" {
 		return nil, l.providerError(KindProvider, "anthropic: ended batch carries no results_url", 0, "", "")
 	}
-	req, err := l.emit(emitSpec{method: "GET", url: url, headers: l.headers(nil), readTimeout: 300 * time.Second})
+	req, err := l.emit(emitSpec{method: "GET", url: url, headers: l.headers(nil)})
 	if err != nil {
 		return nil, err
 	}
@@ -1089,7 +1245,7 @@ func (l *AnthropicLM) batchEntries(_ JSONObject, fetched []string) ([]BatchEntry
 }
 
 func (l *AnthropicLM) batchListRequest(limit int) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/messages/batches", params: map[string]string{"limit": strconv.Itoa(limit)}, headers: l.headers(nil), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/messages/batches", params: map[string]string{"limit": strconv.Itoa(limit)}, headers: l.headers(nil)})
 }
 
 func (l *AnthropicLM) batchJobsFromListBody(body string) ([]BatchJobInfo, error) {

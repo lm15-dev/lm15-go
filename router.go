@@ -3,7 +3,9 @@ package lm15
 import (
 	"context"
 	"fmt"
+	"io"
 	"iter"
+	"net/http"
 	"os"
 	"sort"
 	"strings"
@@ -34,6 +36,7 @@ var DefaultRules = []RouteRule{
 	{"sora-", "openai", "OpenAI Sora video generation"},
 	{"veo-", "gemini", "Google Veo video generation"},
 	{"chat-latest", "openai", "OpenAI rolling chat alias (live /models listing 2026-09-01)"},
+	{"jev-", "typesafe", "TypeSafe Jev (live /v1/models listing 2026-09-17: jev-latest, jev-preview; versioned ids jev-1.13.0 accepted)"},
 }
 
 // Resolution is the complete answer to "how did you route this string".
@@ -47,6 +50,13 @@ type Resolution struct {
 	EnvKey    string
 	ModelInfo *ModelInfo
 	Compat    string
+	// Declared: the provider comes from RouterConfig.Providers, not the
+	// receipted registry.
+	Declared bool
+	// CredentialPolicy is the provider's AUTH-1 policy.
+	CredentialPolicy string
+	// PlaceholderKey is a keyless local server's default key.
+	PlaceholderKey string
 }
 
 // Describe renders a one-paragraph explanation.
@@ -69,9 +79,15 @@ func (r Resolution) Describe() string {
 	if r.Compat != "" {
 		parts = append(parts, fmt.Sprintf("compat preset %q", r.Compat))
 	}
+	if r.Declared {
+		parts = append(parts, "declared by RouterConfig.Providers — no lm15 receipts")
+	}
 	parts = append(parts, fmt.Sprintf("wire model %q", r.Model))
-	def, _ := Providers[r.Provider]
-	policy := providerCredentialPolicy(r.Provider)
+	def := ProviderDefinition{PlaceholderKey: r.PlaceholderKey}
+	policy := r.CredentialPolicy
+	if policy == "" {
+		policy = "key"
+	}
 	switch {
 	case policy == "oauth-unless-explicit":
 		chain := "key from explicit api_keys, else the stored subscription OAuth credential"
@@ -94,14 +110,167 @@ func (r Resolution) Describe() string {
 func (r Resolution) String() string { return r.Describe() }
 
 // RouterConfig is everything the router consults. All explicit.
+//
+// BaseURLs: a provider string → the address to send to: a proxy in front
+// of OpenAI, a vLLM server on another port. On a cloud door (azure,
+// bedrock, vertex) the entry is the endpoint root — what the console
+// shows, a private endpoint, a gateway — and the door appends its own
+// path (/openai/v1, /anthropic/v1) unless the URL already ends with it;
+// the door's auth scheme, error mapping and doctor stay attached. Without
+// an entry the vendor's own variable is read (AZURE_OPENAI_ENDPOINT,
+// ANTHROPIC_FOUNDRY_BASE_URL, AWS_ENDPOINT_URL_BEDROCK_RUNTIME /
+// AWS_ENDPOINT_URL), then the URL is built from Settings. With an
+// endpoint, resource is not needed; region still is on AWS (it signs).
+//
+// Credentials maps a cloud provider string → one named identity:
+// "platform" (the machine's own), "workload" (the federated Kubernetes
+// kind), "environment" (a service principal or static keys from env
+// variables), "cli" (az / aws / gcloud sign-in). That rung only is used
+// and the cloud's chain is not walked (AUTH-1, amended 2026-09-19). An
+// APIKeys entry and a Credentials entry for one provider is refused.
+//
+// Providers declares providers the registry does not list
+// (DeclareChatProvider). They route like registry entries in every router
+// built with this config and answer Resolution.Declared.
+//
+// Timeouts and MaxConnections shape the one transport the router builds
+// and shares across its LMs; defaults are the provider SDKs' (connect
+// 10 s, read/write/pool 600 s, 100 connections). Transport replaces that
+// transport with one you built; it cannot be combined with the two knobs.
+//
+// Adaptations is the MAP-13 policy every LM the router builds runs under:
+// "note" (default), "silent", "refuse".
 type RouterConfig struct {
-	Registry  *ModelRegistry
-	Rules     []RouteRule       // nil = DefaultRules
-	Env       map[string]string // nil = the process environment
-	APIKeys   map[string]CredentialLike
-	BaseURLs  map[string]string
-	Settings  map[string]map[string]string
-	Transport Transport
+	Registry       *ModelRegistry
+	Rules          []RouteRule       // nil = DefaultRules
+	Env            map[string]string // nil = the process environment
+	APIKeys        map[string]CredentialLike
+	BaseURLs       map[string]string
+	Settings       map[string]map[string]string
+	Credentials    map[string]string
+	Transport      Transport
+	Timeouts       *Timeouts
+	MaxConnections int
+	Adaptations    string
+	Providers      []ProviderDefinition
+}
+
+// definitions is the provider table this config routes with: the registry
+// plus the declared providers.
+func (c RouterConfig) definitions() map[string]ProviderDefinition {
+	if len(c.Providers) == 0 {
+		return Providers
+	}
+	out := make(map[string]ProviderDefinition, len(Providers)+len(c.Providers))
+	for k, v := range Providers {
+		out[k] = v
+	}
+	for _, d := range c.Providers {
+		out[d.ID] = d
+	}
+	return out
+}
+
+// providerID maps a canonical input spelling to the provider it names: a
+// declared alias resolves to its provider; anything else is itself.
+func (c RouterConfig) providerID(name string) string {
+	for _, d := range c.Providers {
+		if inVocab(name, d.Aliases) {
+			return d.ID
+		}
+	}
+	return name
+}
+
+func (c RouterConfig) lookup(provider string) (ProviderDefinition, bool) {
+	d, ok := c.definitions()[provider]
+	return d, ok
+}
+
+func (c RouterConfig) routable(provider string) bool {
+	_, ok := c.lookup(provider)
+	return ok
+}
+
+func (c RouterConfig) providerIDs() []string {
+	defs := c.definitions()
+	out := make([]string, 0, len(defs))
+	for id := range defs {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func (c RouterConfig) envKeysOf(provider string) []string {
+	if d, ok := c.lookup(provider); ok {
+		return d.Access.EnvKeys
+	}
+	return nil
+}
+
+// checkDeclared validates RouterConfig.Providers: definitions only, each
+// spelling naming one door that nothing built in already names.
+func checkDeclared(providers []ProviderDefinition) error {
+	taken := map[string]string{}
+	for _, d := range providers {
+		if !d.Declared {
+			return typeErrorf("RouterConfig.Providers: %q is not a declared provider; declare one with DeclareChatProvider", d.ID)
+		}
+		for _, spelling := range d.Spellings() {
+			builtIn := ""
+			if existing, ok := Providers[spelling]; ok {
+				builtIn = existing.ID
+			} else if p, ok := LitellmProviderPrefixes[spelling]; ok {
+				builtIn = p
+			}
+			if builtIn != "" {
+				return NotConfiguredErrorf("", nil, "", "RouterConfig.Providers: %q already names lm15's %q door; a declared provider takes a new id and aliases", spelling, builtIn)
+			}
+			if other, dup := taken[spelling]; dup {
+				return NotConfiguredErrorf("", nil, "", "RouterConfig.Providers: %q is spelled by both %q and %q", spelling, other, d.ID)
+			}
+			taken[spelling] = d.ID
+		}
+	}
+	return nil
+}
+
+// Validate checks the config's own consistency (the provider-keyed maps
+// are checked by NewRouterWithConfig).
+func (c RouterConfig) Validate() error {
+	if c.Adaptations != "" {
+		if err := checkAdaptationPolicy(c.Adaptations); err != nil {
+			return err
+		}
+	}
+	if err := checkDeclared(c.Providers); err != nil {
+		return err
+	}
+	for key, name := range c.Credentials {
+		if !inVocab(name, NamedCredentials) {
+			return NotConfiguredErrorf("", nil, "", "RouterConfig.Credentials{%q: %q}: not a named credential; one of %s. A credential VALUE (a key, a token, a provider) goes in APIKeys.", key, name, strings.Join(NamedCredentials, ", "))
+		}
+	}
+	if c.Timeouts != nil {
+		if err := c.Timeouts.Validate(); err != nil {
+			return err
+		}
+	}
+	if err := checkMaxConnections(c.MaxConnections); err != nil {
+		return err
+	}
+	if c.Transport != nil && (c.Timeouts != nil || c.MaxConnections != 0) {
+		return NotConfiguredErrorf("", nil, "", "RouterConfig.Transport cannot be combined with Timeouts or MaxConnections: they configure the transport lm15 would build, and would silently not apply to the one you passed. Configure that transport directly (NewHTTPTransportWith).")
+	}
+	return nil
+}
+
+func (c RouterConfig) adaptations() string {
+	if c.Adaptations == "" {
+		return AdaptationsNote
+	}
+	return c.Adaptations
 }
 
 func (c RouterConfig) rules() []RouteRule {
@@ -134,13 +303,10 @@ func adapterName(dialect string) string {
 		return "AnthropicLM"
 	case DialectGemini:
 		return "GeminiLM"
+	case DialectTypeSafe:
+		return "TypeSafeLM"
 	}
 	return dialect
-}
-
-func routable(provider string) bool {
-	_, ok := Providers[provider]
-	return ok
 }
 
 func knownProviders() string { return strings.Join(ProviderIDs(), ", ") }
@@ -160,27 +326,32 @@ func ambiguousModel(model, message string, providers []string) *Error {
 
 // checkProviderKeyed refuses RouterConfig entries keyed by a non-provider.
 func checkProviderKeyed(config RouterConfig) error {
-	known := ProviderIDs()
+	known := config.providerIDs()
 	check := func(field string, keys []string) error {
 		seen := map[string]bool{}
 		for _, key := range keys {
-			provider := CanonicalProvider(key)
-			if field == "api_keys" && seen[provider] {
-				return NotConfiguredErrorf("", nil, "", "RouterConfig(api_keys=...): duplicate spellings for %q; use one entry", provider)
+			provider := config.providerID(CanonicalProvider(key))
+			if (field == "api_keys" || field == "credentials") && seen[provider] {
+				return NotConfiguredErrorf("", nil, "", "RouterConfig(%s=...): duplicate spellings for %q; use one entry", field, provider)
 			}
 			seen[provider] = true
-			if routable(provider) {
+			if config.routable(provider) {
+				if field == "credentials" {
+					if err := checkNamedCredential(config, provider, config.Credentials[key]); err != nil {
+						return err
+					}
+				}
 				continue
 			}
 			hint := ""
 			if close := closestMatch(provider, known, 0.6); close != "" {
 				hint = fmt.Sprintf(" Did you mean %q?", close)
 			}
-			return NotConfiguredErrorf("", nil, "", "RouterConfig(%s=...): %q is not a provider lm15 routes to.%s router.resolve(model).provider (or resolve_openai_chat) names the one a model string uses; known: %s", field, key, hint, knownProviders())
+			return NotConfiguredErrorf("", nil, "", "RouterConfig(%s=...): %q is not a provider lm15 routes to.%s router.resolve(model).provider (or resolve_openai_chat) names the one a model string uses; known: %s", field, key, hint, strings.Join(known, ", "))
 		}
 		return nil
 	}
-	var apiKeys, baseURLs, settings []string
+	var apiKeys, baseURLs, settings, credentials []string
 	for k := range config.APIKeys {
 		apiKeys = append(apiKeys, k)
 	}
@@ -190,16 +361,71 @@ func checkProviderKeyed(config RouterConfig) error {
 	for k := range config.Settings {
 		settings = append(settings, k)
 	}
+	for k := range config.Credentials {
+		credentials = append(credentials, k)
+	}
 	sort.Strings(apiKeys)
 	sort.Strings(baseURLs)
 	sort.Strings(settings)
+	sort.Strings(credentials)
 	if err := check("api_keys", apiKeys); err != nil {
 		return err
 	}
 	if err := check("base_urls", baseURLs); err != nil {
 		return err
 	}
-	return check("settings", settings)
+	if err := check("settings", settings); err != nil {
+		return err
+	}
+	return check("credentials", credentials)
+}
+
+// checkNamedCredential: a Credentials entry names an identity on a cloud
+// door only, and never alongside an APIKeys entry for the same provider.
+func checkNamedCredential(config RouterConfig, provider, name string) error {
+	def, ok := config.lookup(provider)
+	if !ok || !def.Access.CloudChain() {
+		return NotConfiguredErrorf("", nil, "", "RouterConfig.Credentials{%q: %q}: %q is not a cloud door; named credentials (platform, workload, environment, cli) exist on the azure, bedrock and vertex doors. Pass this provider's credential in APIKeys.", provider, name, provider)
+	}
+	source, err := apiKeysSource(config, provider)
+	if err != nil {
+		return err
+	}
+	if source != "" {
+		return NotConfiguredErrorf("", nil, "", "RouterConfig: both APIKeys and Credentials name %q; a door has one identity — pass the credential value (APIKeys) or name the identity (Credentials), not both.", provider)
+	}
+	return nil
+}
+
+// credentialsEntry is the named credential for a provider (AUTH-1),
+// matching either spelling.
+func credentialsEntry(config RouterConfig, provider string) string {
+	for key, value := range config.Credentials {
+		if config.providerID(CanonicalProvider(key)) == provider {
+			return value
+		}
+	}
+	return ""
+}
+
+// baseURLEntry is the BaseURLs entry for a provider, matching either spelling.
+func baseURLEntry(config RouterConfig, provider string) string {
+	for key, value := range config.BaseURLs {
+		if config.providerID(CanonicalProvider(key)) == provider {
+			return value
+		}
+	}
+	return ""
+}
+
+// hostedEndpoint is the endpoint root for a cloud door: the explicit
+// BaseURLs entry, else the vendor's own variable (AUTH-10, amended
+// 2026-09-19).
+func hostedEndpoint(config RouterConfig, provider string, def ProviderDefinition) string {
+	if explicit := baseURLEntry(config, provider); explicit != "" {
+		return explicit
+	}
+	return EndpointFromEnv(def.Access.Host, config.env())
 }
 
 // closestMatch is a difflib.get_close_matches stand-in (ratio ≥ cutoff).
@@ -252,16 +478,16 @@ func apiKeysSource(config RouterConfig, provider string) (string, error) {
 	sort.Strings(keys)
 	var candidates []string
 	for _, k := range keys {
-		if CanonicalProvider(k) == provider {
+		if config.providerID(CanonicalProvider(k)) == provider {
 			candidates = append(candidates, k)
 		}
 	}
-	if len(candidates) == 0 && routable(provider) {
-		envKeys := providerEnvKeys(provider)
+	if len(candidates) == 0 && config.routable(provider) {
+		envKeys := config.envKeysOf(provider)
 		if len(envKeys) > 0 {
 			for _, k := range keys {
-				canon := CanonicalProvider(k)
-				if routable(canon) && sameStrings(providerEnvKeys(canon), envKeys) {
+				canon := config.providerID(CanonicalProvider(k))
+				if config.routable(canon) && sameStrings(config.envKeysOf(canon), envKeys) {
 					candidates = append(candidates, k)
 				}
 			}
@@ -308,7 +534,7 @@ func envKeyFor(provider string, config RouterConfig) (string, error) {
 	if source != "" {
 		return "", nil
 	}
-	envKeys := providerEnvKeys(provider)
+	envKeys := config.envKeysOf(provider)
 	if len(envKeys) == 0 {
 		return "", nil
 	}
@@ -322,12 +548,13 @@ func envKeyFor(provider string, config RouterConfig) (string, error) {
 }
 
 func resolution(requested, wireModel, provider, source string, config RouterConfig, rule *RouteRule, info *ModelInfo) (Resolution, error) {
-	def := Providers[provider]
+	def, _ := config.lookup(provider)
 	envKey, err := envKeyFor(provider, config)
 	if err != nil {
 		return Resolution{}, err
 	}
-	res := Resolution{Requested: requested, Model: wireModel, Provider: provider, Adapter: adapterName(def.Dialect), Source: source, Rule: rule, EnvKey: envKey, ModelInfo: info}
+	res := Resolution{Requested: requested, Model: wireModel, Provider: provider, Adapter: adapterName(def.Dialect), Source: source, Rule: rule, EnvKey: envKey, ModelInfo: info,
+		Declared: def.Declared, CredentialPolicy: def.CredentialPolicy(), PlaceholderKey: def.PlaceholderKey}
 	if def.Bound() {
 		res.Compat = def.Compat
 	}
@@ -340,8 +567,8 @@ func Resolve(model string, config RouterConfig) (Resolution, error) {
 		return Resolution{}, unknownModel(model, "model must be a non-empty string")
 	}
 	if head, rest, ok := strings.Cut(model, ":"); ok {
-		provider := CanonicalProvider(head)
-		if routable(provider) && rest != "" {
+		provider := config.providerID(CanonicalProvider(head))
+		if config.routable(provider) && rest != "" {
 			return resolution(model, rest, provider, "prefix", config, nil, nil)
 		}
 	}
@@ -386,9 +613,9 @@ func Resolve(model string, config RouterConfig) (Resolution, error) {
 				return Resolution{}, ambiguousModel(model, fmt.Sprintf("model %q matches multiple catalog entries (%s) under provider %q. Fix: request a canonical id directly.", model, strings.Join(ids, ", "), narrowed[0].Provider), providers)
 			}
 			info := narrowed[0]
-			provider := CanonicalProvider(info.Provider)
-			if !routable(provider) {
-				return Resolution{}, unknownModel(model, fmt.Sprintf("model %q resolved in the catalog to provider %q, but lm15 has no adapter or compat preset for it. Known providers: %s. Construct a provider LM directly (e.g. OpenAIChatLM with a custom base_url) for OpenAI-compatible servers.", model, info.Provider, knownProviders()))
+			provider := config.providerID(CanonicalProvider(info.Provider))
+			if !config.routable(provider) {
+				return Resolution{}, unknownModel(model, fmt.Sprintf("model %q resolved in the catalog to provider %q, but lm15 has no adapter or compat preset for it. Known providers: %s. Construct a provider LM directly (e.g. OpenAIChatLM with a custom base_url) for OpenAI-compatible servers.", model, info.Provider, strings.Join(config.providerIDs(), ", ")))
 			}
 			wire := model
 			if inVocab(model, info.Aliases) {
@@ -401,20 +628,20 @@ func Resolve(model string, config RouterConfig) (Resolution, error) {
 	for i := range config.rules() {
 		rule := config.rules()[i]
 		if strings.HasPrefix(model, rule.Prefix) {
-			provider := CanonicalProvider(rule.Provider)
-			if !routable(provider) {
-				return Resolution{}, unknownModel(model, fmt.Sprintf("rule %+v names provider %q, which has no adapter. Known providers: %s.", rule, rule.Provider, knownProviders()))
+			provider := config.providerID(CanonicalProvider(rule.Provider))
+			if !config.routable(provider) {
+				return Resolution{}, unknownModel(model, fmt.Sprintf("rule %+v names provider %q, which has no adapter. Known providers: %s.", rule, rule.Provider, strings.Join(config.providerIDs(), ", ")))
 			}
 			return resolution(model, model, provider, "rule", config, &rule, nil)
 		}
 	}
 	var hints []string
 	if head, rest, ok := strings.Cut(model, ":"); ok {
-		if close := closestMatch(CanonicalProvider(head), ProviderIDs(), 0.75); close != "" {
+		if close := closestMatch(CanonicalProvider(head), config.providerIDs(), 0.75); close != "" {
 			hints = append(hints, fmt.Sprintf("Did you mean %q?", close+":"+rest))
 		}
 	}
-	hints = append(hints, fmt.Sprintf("Use an explicit provider prefix — \"provider:%s\" with provider one of: %s.", model, knownProviders()))
+	hints = append(hints, fmt.Sprintf("Use an explicit provider prefix — \"provider:%s\" with provider one of: %s.", model, strings.Join(config.providerIDs(), ", ")))
 	catalog := "no catalog supplied"
 	if config.Registry != nil {
 		catalog = "no catalog match"
@@ -425,24 +652,31 @@ func Resolve(model string, config RouterConfig) (Resolution, error) {
 }
 
 // buildLM constructs the provider LM for a resolution (AUTH-1 chain).
-func buildLM(res Resolution, config RouterConfig) (LM, error) {
-	def := Providers[res.Provider]
+func buildLM(res Resolution, config RouterConfig, transport Transport) (LM, error) {
+	def, _ := config.lookup(res.Provider)
 	var opts []Option
-	if config.Transport != nil {
+	if transport != nil {
+		opts = append(opts, WithTransport(transport))
+	} else if config.Transport != nil {
 		opts = append(opts, WithTransport(config.Transport))
 	}
-	for key, u := range config.BaseURLs {
-		if CanonicalProvider(key) == res.Provider {
-			if def.Hosted() {
-				return nil, NotConfiguredErrorf("", nil, "", "RouterConfig(base_urls={%q: ...}): a cloud door's URL is built from its host settings (resource, region), not given whole; set them in RouterConfig(settings={%q: {...}}) instead.", res.Provider, res.Provider)
-			}
-			opts = append(opts, WithBaseURL(u))
-		}
+	if config.adaptations() != AdaptationsNote {
+		opts = append(opts, WithAdaptations(config.adaptations()))
+	}
+	baseURL := baseURLEntry(config, res.Provider)
+	if def.Hosted() {
+		baseURL = hostedEndpoint(config, res.Provider, def)
+	}
+	if baseURL != "" {
+		opts = append(opts, WithBaseURL(baseURL))
 	}
 	policy := def.CredentialPolicy()
 	if def.Bound() {
 		opts = append(opts, WithAccess(def.Access))
-		if def.Compat != "" {
+		switch {
+		case def.CompatValue != nil:
+			opts = append(opts, WithOpenAIChatCompat(*def.CompatValue))
+		case def.Compat != "":
 			opts = append(opts, WithCompatPreset(def.Compat))
 		}
 	}
@@ -458,25 +692,32 @@ func buildLM(res Resolution, config RouterConfig) (LM, error) {
 		apiKey = config.APIKeys[source]
 	}
 	env := config.env()
+	origin := ""
 	if def.Hosted() {
 		ctx := OnlineChainContext(env)
 		var given map[string]string
 		for key, s := range config.Settings {
-			if CanonicalProvider(key) == res.Provider {
+			if config.providerID(CanonicalProvider(key)) == res.Provider {
 				given = s
 			}
 		}
-		settings, err := resolveSettings(def.Access.Host, given, env, res.Provider, ProfileSettings(def.Access, ctx))
+		settings, err := resolveSettingsWithEndpoint(def.Access.Host, given, env, res.Provider, ProfileSettings(def.Access, ctx), baseURL)
 		if err != nil {
 			return nil, err
 		}
 		ctx.Settings = settings
+		named := credentialsEntry(config, res.Provider)
 		if apiKey == nil && def.Access.CloudChain() {
-			apiKey = CredentialProviderFor(def.Access, ctx)
+			provider, err := NamedCredentialProviderFor(def.Access, ctx, named)
+			if err != nil {
+				return nil, err
+			}
+			apiKey = provider
 		} else if apiKey == nil {
 			for _, k := range def.Access.EnvKeys {
 				if v := env[k]; v != "" {
 					apiKey = v
+					origin = "env $" + k + " (value never shown)"
 					break
 				}
 			}
@@ -484,7 +725,7 @@ func buildLM(res Resolution, config RouterConfig) (LM, error) {
 		if apiKey == nil {
 			return nil, missingCredential(res.Provider, def.Access.EnvKeys, "credential")
 		}
-		return construct(def, append(opts, WithAPIKey(apiKey), WithSettings(settings)))
+		return constructWithOrigin(def, append(opts, WithAPIKey(apiKey), WithSettings(settings)), origin)
 	}
 	if apiKey == nil && policy == "oauth-unless-explicit" && HasStoredCredential(def.Access) {
 		return construct(def, opts)
@@ -493,12 +734,14 @@ func buildLM(res Resolution, config RouterConfig) (LM, error) {
 		for _, k := range def.Access.EnvKeys {
 			if v := env[k]; v != "" {
 				apiKey = v
+				origin = "env $" + k + " (value never shown)"
 				break
 			}
 		}
 	}
 	if apiKey == nil && def.PlaceholderKey != "" {
 		apiKey = def.PlaceholderKey
+		origin = "the local server's placeholder key"
 	}
 	if apiKey == nil && policy == "oauth-unless-explicit" {
 		return construct(def, opts) // the constructor raises the typed login-hint error
@@ -506,7 +749,90 @@ func buildLM(res Resolution, config RouterConfig) (LM, error) {
 	if apiKey == nil {
 		return nil, missingCredential(res.Provider, def.Access.EnvKeys, "API key")
 	}
-	return construct(def, append(opts, WithAPIKey(apiKey)))
+	return constructWithOrigin(def, append(opts, WithAPIKey(apiKey)), origin)
+}
+
+// PlanningKey is the placeholder credential a planning LM carries.
+const PlanningKey = "lm15-planning"
+
+// buildPlanningLM is a throwaway LM for Plan: the build's bytes are
+// discarded, so it carries a placeholder credential under every policy —
+// no stored login is read or refreshed, no cloud chain is walked, no
+// environment key is needed — and placeholder host settings where a cloud
+// door would otherwise refuse to render its URL. Never cached. Everything
+// else (compat preset, access policy, base URL, adaptations policy) is the
+// real route's, so the plan is the call's.
+func buildPlanningLM(res Resolution, config RouterConfig, transport Transport) (LM, error) {
+	def, _ := config.lookup(res.Provider)
+	opts := []Option{WithAPIKey(PlanningKey), WithAdaptations(config.adaptations())}
+	if transport != nil {
+		opts = append(opts, WithTransport(transport))
+	} else if config.Transport != nil {
+		opts = append(opts, WithTransport(config.Transport))
+	}
+	baseURL := baseURLEntry(config, res.Provider)
+	if def.Hosted() {
+		baseURL = hostedEndpoint(config, res.Provider, def)
+	}
+	if baseURL != "" {
+		opts = append(opts, WithBaseURL(baseURL))
+	}
+	if def.ID == "openai-codex" {
+		opts = append(opts, WithAccountID(PlanningKey))
+	}
+	if def.Bound() {
+		opts = append(opts, WithAccess(def.Access))
+		switch {
+		case def.CompatValue != nil:
+			opts = append(opts, WithOpenAIChatCompat(*def.CompatValue))
+		case def.Compat != "":
+			opts = append(opts, WithCompatPreset(def.Compat))
+		}
+	}
+	if def.Hosted() {
+		env := config.env()
+		var given map[string]string
+		for key, s := range config.Settings {
+			if config.providerID(CanonicalProvider(key)) == res.Provider {
+				given = s
+			}
+		}
+		settings, err := resolveSettingsWithEndpoint(def.Access.Host, given, env, res.Provider, nil, baseURL)
+		if err != nil {
+			if !IsKind(err, KindNotConfigured) {
+				return nil, err
+			}
+			placeholders := map[string]string{}
+			for _, setting := range def.Access.Host.Settings {
+				value := given[setting.Name]
+				if value == "" {
+					value = setting.Default
+				}
+				if value == "" {
+					value = "planning"
+				}
+				placeholders[setting.Name] = value
+			}
+			if settings, err = resolveSettings(def.Access.Host, placeholders, nil, res.Provider, nil); err != nil {
+				return nil, err
+			}
+		}
+		opts = append(opts, WithSettings(settings))
+	}
+	return construct(def, opts)
+}
+
+func constructWithOrigin(def ProviderDefinition, opts []Option, origin string) (LM, error) {
+	lm, err := construct(def, opts)
+	if err != nil {
+		return nil, err
+	}
+	if origin != "" {
+		if stamper, ok := lm.(interface{ SetCredentialOrigin(string) }); ok {
+			stamper.SetCredentialOrigin(origin)
+		}
+	}
+	return lm, nil
 }
 
 func missingCredential(provider string, envKeys []string, what string) *Error {
@@ -533,6 +859,8 @@ func construct(def ProviderDefinition, opts []Option) (LM, error) {
 		return NewAnthropicLM(opts...)
 	case DialectGemini:
 		return NewGeminiLM(opts...)
+	case DialectTypeSafe:
+		return NewTypeSafeLM(opts...)
 	}
 	return nil, valueErrorf("unknown dialect %q", def.Dialect)
 }
@@ -545,27 +873,66 @@ func routedRequest(req *Request, res Resolution) *Request {
 }
 
 // LMRouter routes model strings to provider LMs; one LM per provider,
-// built lazily, reused.
+// built lazily, reused, and the one transport those LMs share (the
+// router's pool is one pool; Close releases every socket).
 type LMRouter struct {
-	Config RouterConfig
-	mu     sync.Mutex
-	lms    map[string]LM
+	Config    RouterConfig
+	mu        sync.Mutex
+	lms       map[string]LM
+	transport Transport
 }
 
 // NewRouter creates a router over the process environment.
 func NewRouter() *LMRouter { return &LMRouter{lms: map[string]LM{}} }
 
 // NewRouterWithConfig creates a router; the config's provider-keyed maps
-// are checked for typos.
+// are checked for typos and the config for consistency.
 func NewRouterWithConfig(config RouterConfig) (*LMRouter, error) {
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
 	if err := checkProviderKeyed(config); err != nil {
 		return nil, err
 	}
-	return &LMRouter{Config: config, lms: map[string]LM{}}, nil
+	return &LMRouter{Config: config, lms: map[string]LM{}, transport: config.Transport}, nil
 }
 
 // Resolve is the offline lookup (also the explain method).
 func (r *LMRouter) Resolve(model string) (Resolution, error) { return Resolve(model, r.Config) }
+
+// sharedTransport is the transport every LM of this router uses: the
+// configured one, else one HTTPTransport built from Timeouts /
+// MaxConnections on first use and shared.
+func (r *LMRouter) sharedTransport() Transport {
+	if r.transport == nil {
+		timeouts := DefaultTimeouts()
+		if r.Config.Timeouts != nil {
+			timeouts = *r.Config.Timeouts
+		}
+		r.transport = NewHTTPTransportWith(timeouts, r.Config.MaxConnections)
+	}
+	return r.transport
+}
+
+// Close closes every connection this router holds. Idempotent; the router
+// may be used again afterwards (a fresh transport is built).
+func (r *LMRouter) Close() error {
+	r.mu.Lock()
+	transport := r.transport
+	r.transport = nil
+	r.lms = map[string]LM{}
+	r.mu.Unlock()
+	if t, ok := transport.(*HTTPTransport); ok && t.Client != nil {
+		if inner, ok := t.Client.Transport.(*http.Transport); ok {
+			inner.CloseIdleConnections()
+		}
+		return nil
+	}
+	if closer, ok := transport.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
+}
 
 // LM resolves, then constructs or reuses the provider LM.
 func (r *LMRouter) LM(model string) (LM, error) {
@@ -581,12 +948,33 @@ func (r *LMRouter) LM(model string) (LM, error) {
 	if lm, ok := r.lms[res.Provider]; ok {
 		return lm, nil
 	}
-	lm, err := buildLM(res, r.Config)
+	lm, err := buildLM(res, r.Config, r.sharedTransport())
 	if err != nil {
 		return nil, err
 	}
 	r.lms[res.Provider] = lm
 	return lm, nil
+}
+
+// Plan is the MAP-13 pre-flight: what this request WOULD adapt on its
+// route, no network and no credential (like Resolve); it returns what the
+// call would return. A route with no key gets a throwaway planning LM
+// (not cached): the build's bytes are discarded, so no key is needed.
+func (r *LMRouter) Plan(req *Request) ([]Adaptation, error) {
+	res, err := r.Resolve(req.Model)
+	if err != nil {
+		return nil, err
+	}
+	r.mu.Lock()
+	lm, cached := r.lms[res.Provider]
+	transport := r.sharedTransport()
+	r.mu.Unlock()
+	if !cached {
+		if lm, err = buildPlanningLM(res, r.Config, transport); err != nil {
+			return nil, err
+		}
+	}
+	return lm.Plan(routedRequest(req, res))
 }
 
 // Complete performs one call through the routed LM.
@@ -640,26 +1028,45 @@ var LitellmProviderPrefixes = map[string]string{
 var clientKeywords = map[string]string{
 	"api_key":  "LMRouter(RouterConfig(api_keys={provider: key})) or the environment",
 	"api_base": "LMRouter(RouterConfig(base_urls={provider: url}))", "base_url": "LMRouter(RouterConfig(base_urls={provider: url}))",
-	"timeout": "RouterConfig(transport=...)", "num_retries": "your own retry loop over lm15.RETRYABLE_ERRORS (lm15 never retries)",
+	"timeout": "RouterConfig(Timeouts: Timeouts{Read: ...})", "num_retries": "your own retry loop over lm15.RETRYABLE_ERRORS (lm15 never retries)",
 	"max_retries": "your own retry loop over lm15.RETRYABLE_ERRORS (lm15 never retries)", "headers": "RouterConfig(transport=...)",
 	"extra_headers": "RouterConfig(transport=...)", "extra_body": "config.extensions on the Request (build it with request_from_openai_chat and edit)",
 	"extra_query": "RouterConfig(transport=...)", "cache": "your own cache keyed on the Request (lm15 has no response cache)",
 	"caching": "your own cache keyed on the Request (lm15 has no response cache)", "mock_response": "lm15.testing.FakeLM",
-	"drop_params": "nothing: lm15 refuses what it cannot carry instead of dropping it", "custom_llm_provider": "the model string's prefix",
+	"drop_params":         "RouterConfig(Adaptations: \"silent\"): lm15 adapts what a wire cannot carry and records it on the response (MAP-13); 'silent' keeps no record, 'refuse' raises instead",
+	"custom_llm_provider": "the model string's prefix",
 }
 
 // OpenAIChatModelString reads a model string written for the OpenAI SDK or
 // litellm into lm15's form.
 func OpenAIChatModelString(model string) (string, error) {
+	return OpenAIChatModelStringWith(model, nil)
+}
+
+// OpenAIChatModelStringWith is OpenAIChatModelString that also reads a
+// declared provider's id and aliases (RouterConfig.Providers) as a prefix.
+func OpenAIChatModelStringWith(model string, providers []ProviderDefinition) (string, error) {
 	if strings.Contains(model, ":") {
 		return model, nil
 	}
 	if head, rest, ok := strings.Cut(model, "/"); ok && rest != "" {
 		provider, known := LitellmProviderPrefixes[head]
 		if !known {
+			canonical := CanonicalProvider(head)
+			for _, d := range providers {
+				if inVocab(canonical, d.Spellings()) {
+					provider, known = d.ID, true
+					break
+				}
+			}
+		}
+		if !known {
 			keys := make([]string, 0, len(LitellmProviderPrefixes))
 			for k := range LitellmProviderPrefixes {
 				keys = append(keys, k)
+			}
+			for _, d := range providers {
+				keys = append(keys, d.Spellings()...)
 			}
 			sort.Strings(keys)
 			return "", unknownModel(model, fmt.Sprintf("could not read %q as a litellm model string: %q is not a provider prefix lm15 has a door for (known: %s); write it as lm15's provider:model instead", model, head, strings.Join(keys, ", ")))
@@ -672,7 +1079,7 @@ func OpenAIChatModelString(model string) (string, error) {
 // ResolveOpenAIChat is Resolve for the OpenAI-shaped door: a bare OpenAI
 // name takes the Chat Completions door.
 func (r *LMRouter) ResolveOpenAIChat(model string) (Resolution, error) {
-	lmModel, err := OpenAIChatModelString(model)
+	lmModel, err := OpenAIChatModelStringWith(model, r.Config.Providers)
 	if err != nil {
 		return Resolution{}, err
 	}
@@ -707,7 +1114,7 @@ func (r *LMRouter) RequestFromOpenAIChat(model string, messages []any, kwargs JS
 		return nil, nil, err
 	}
 	var req *Request
-	if lmDef, ok := Providers[res.Provider]; ok && lmDef.Dialect == DialectOpenAIChat {
+	if lmDef, ok := r.Config.lookup(res.Provider); ok && lmDef.Dialect == DialectOpenAIChat {
 		req, err = lm.RequestFromOpenAIChat(body)
 	} else {
 		req, err = RequestFromOpenAIChat(body, "")

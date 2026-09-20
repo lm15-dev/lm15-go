@@ -49,9 +49,10 @@ func SurfaceDump() JSONObject {
 func canonicalTypes() []any {
 	return []any{
 		ContinuationState{}, TextPart{}, ImagePart{}, AudioPart{}, VideoPart{}, DocumentPart{}, BinaryPart{},
-		ToolCallPart{}, ToolResultPart{}, ThinkingPart{}, RefusalPart{}, CitationPart{}, Message{},
+		ToolCallPart{}, ToolResultPart{}, ThinkingPart{}, RefusalPart{}, CitationPart{}, DataPart{}, Message{},
 		TextDelta{}, ThinkingDelta{}, AudioDelta{}, ImageDelta{}, ToolCallDelta{}, CitationDelta{}, ContinuationDelta{},
-		ErrorDetail{}, StreamStartEvent{}, StreamDeltaEvent{}, StreamEndEvent{}, StreamErrorEvent{},
+		ErrorDetail{}, HTTPResponseDetail{}, StreamStartEvent{}, StreamDeltaEvent{}, StreamEndEvent{}, StreamErrorEvent{},
+		Adaptation{}, CredentialSource{},
 		FunctionTool{}, BuiltinTool{}, Reasoning{}, CacheConfig{}, ToolChoice{}, Config{}, Request{},
 		TopLogprob{}, TokenLogprob{}, Usage{}, Response{}, FileUploadRequest{}, FileInfo{}, FilePage{},
 		CacheInfo{}, CachePage{}, CachedPrefix{}, BatchRequest{}, BatchJobInfo{}, BatchEntry{},
@@ -80,7 +81,7 @@ func flattenFields(rt reflect.Type) []string {
 	return out
 }
 
-var initialisms = map[string]string{"ID": "id", "URL": "url", "TopP": "top_p", "TopK": "top_k", "APIFamily": "api_family", "UserID": "user_id", "FileID": "file_id", "TokenID": "token_id", "SizeBytes": "size_bytes", "IsError": "is_error"}
+var initialisms = map[string]string{"ID": "id", "URL": "url", "TopP": "top_p", "TopK": "top_k", "APIFamily": "api_family", "UserID": "user_id", "FileID": "file_id", "TokenID": "token_id", "SizeBytes": "size_bytes", "IsError": "is_error", "HTTPResponse": "http_response", "LogprobsIncomplete": "logprobs_complete"}
 
 // snakeCase turns a Go field name into its canonical JSON key.
 func snakeCase(name string) string {

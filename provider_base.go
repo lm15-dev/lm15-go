@@ -2,6 +2,7 @@ package lm15
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"iter"
 	"strings"
@@ -23,8 +24,16 @@ type LM interface {
 	Stream(ctx context.Context, req *Request) iter.Seq2[StreamEvent, error]
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 
+	// Plan is what a call WOULD adapt (MAP-13), with no network and no
+	// credential invoked; it returns the refusal the call would return.
+	Plan(req *Request) ([]Adaptation, error)
+	// Adaptations is the MAP-13 policy this adapter runs under.
+	Adaptations() string
+
 	// Pure hooks (what the contract pins).
 	BuildRequest(req *Request, stream bool) (*TransportRequest, error)
+	// Build is BuildRequest with the MAP-13 record of the build.
+	Build(req *Request, stream bool) (*TransportRequest, []Adaptation, error)
 	ParseResponse(req *Request, resp *HTTPResponse) (*Response, error)
 	ParseStreamEvents(req *Request, event sse.Event) ([]StreamEvent, error)
 	NormalizeError(status int, body string) *Error
@@ -73,7 +82,9 @@ type LM interface {
 
 	// Ingest (MAP-12); non-chat dialects refuse.
 	RequestFromOpenAIChat(body JSONObject) (*Request, error)
-	ResponseFromOpenAIChat(body JSONObject, model string, choice *int) (*Response, error)
+	// ResponseFromOpenAIChat reads a Chat Completions body; responseFormat
+	// (optional) is the request's, so a judgment answer folds into a DataPart.
+	ResponseFromOpenAIChat(body JSONObject, model string, choice *int, responseFormat JSONObject) (*Response, error)
 
 	Close() error
 }
@@ -81,7 +92,7 @@ type LM interface {
 // dialect is the hook set a concrete adapter implements; lmCore supplies
 // refusing defaults and drives every surface through self.
 type dialect interface {
-	buildRequest(req *Request, stream bool) (*TransportRequest, error)
+	buildRequest(req *Request, stream bool, scope *adaptScope) (*TransportRequest, error)
 	parseResponse(req *Request, resp *HTTPResponse) (*Response, error)
 	parseStreamEvents(req *Request, event sse.Event) ([]StreamEvent, error)
 	normalizeError(status int, body string) *Error
@@ -99,8 +110,8 @@ type dialect interface {
 	fileDeleteRequest(fileID string) (*TransportRequest, error)
 	fileDownloadRequest(fileID string) (*TransportRequest, error)
 
-	batchUploadRequest(req *BatchRequest) (*TransportRequest, error)
-	batchSubmitRequest(req *BatchRequest, uploadBody JSONObject) (*TransportRequest, error)
+	batchUploadRequest(req *BatchRequest, scope *adaptScope) (*TransportRequest, error)
+	batchSubmitRequest(req *BatchRequest, uploadBody JSONObject, scope *adaptScope) (*TransportRequest, error)
 	batchJobFromBody(body string) (BatchJobInfo, error)
 	batchStatusRequest(batchID string) (*TransportRequest, error)
 	batchCancelRequest(batchID string) (*TransportRequest, error)
@@ -136,7 +147,7 @@ type dialect interface {
 	live(ctx context.Context, config *LiveConfig) (LiveSession, error)
 
 	requestFromOpenAIChat(body JSONObject) (*Request, error)
-	responseFromOpenAIChat(body JSONObject, model string, choice *int) (*Response, error)
+	responseFromOpenAIChat(body JSONObject, model string, choice *int, responseFormat JSONObject) (*Response, error)
 }
 
 // Option configures an adapter constructor.
@@ -161,7 +172,18 @@ type lmOptions struct {
 	claudeCodeVersion  string
 	codexOriginator    string
 	codexClientVersion string
+	adaptations        string
+	namedCredential    string
 }
+
+// WithAdaptations sets the MAP-13 policy: "note" (default: adapt and
+// record), "silent" (adapt, record nothing), "refuse" (every deviation is
+// an UnsupportedFeatureError before the wire).
+func WithAdaptations(policy string) Option { return func(o *lmOptions) { o.adaptations = policy } }
+
+// WithNamedCredential names one identity on a cloud door instead of its
+// chain (AUTH-1, 2026-09-19): "platform", "workload", "environment", "cli".
+func WithNamedCredential(name string) Option { return func(o *lmOptions) { o.namedCredential = name } }
 
 // WithAPIKey sets the credential: a string (APIKey shorthand), a Credential
 // value, a CredentialProvider, or a func returning one.
@@ -240,6 +262,12 @@ func applyOptions(opts []Option) (*lmOptions, error) {
 	if o.credentialErr != nil {
 		return nil, o.credentialErr
 	}
+	if o.adaptations == "" {
+		o.adaptations = AdaptationsNote
+	}
+	if err := checkAdaptationPolicy(o.adaptations); err != nil {
+		return nil, err
+	}
 	return o, nil
 }
 
@@ -251,9 +279,13 @@ type lmCore struct {
 	manifest         AccessPolicy
 	credential       CredentialProvider
 	credentialSource string
+	credentialOrigin string
+	namedCredential  string
+	adaptations      string
 	accountID        string
 	baseURL          string
 	defaultBaseURL   string
+	endpoint         string
 	hostSettings     map[string]string
 	clock            func() time.Time
 	transport        Transport
@@ -274,6 +306,33 @@ func (c *lmCore) BaseURL() string { return c.baseURL }
 
 // AccountID returns the account id the credential carries (Codex).
 func (c *lmCore) AccountID() string { return c.accountID }
+
+// Adaptations returns the MAP-13 policy ("note", "silent", "refuse").
+func (c *lmCore) Adaptations() string { return c.adaptations }
+
+// CredentialOrigin says where this adapter's credential comes from (AUTH-1
+// provenance): a label, never the value. For a cloud chain provider this
+// is the rung that last won, or what will be walked when no request has
+// been sent yet.
+func (c *lmCore) CredentialOrigin() string {
+	if cp, ok := c.credential.(*cachingProvider); ok {
+		if src, ok := cp.Source(); ok {
+			return src.Describe(c.now())
+		}
+		if cp.named != "" {
+			return fmt.Sprintf("named credential %q (%s; not yet resolved)", cp.named, NamedMeaningFor(c.access, cp.named))
+		}
+		return "the " + c.access.EffectiveCredentialPolicy() + " (not yet resolved)"
+	}
+	if c.credentialOrigin != "" {
+		return c.credentialOrigin
+	}
+	return originLabel(c.credential, c.credentialSource)
+}
+
+// SetCredentialOrigin names the credential's source when the constructor
+// could not know it (the router: an env variable, a placeholder key).
+func (c *lmCore) SetCredentialOrigin(label string) { c.credentialOrigin = label }
 
 // HostSettings returns the resolved host settings.
 func (c *lmCore) HostSettings() map[string]string { return c.hostSettings }
@@ -317,15 +376,21 @@ func (c *lmCore) bindAccess(self dialect, manifest AccessPolicy, o *lmOptions, d
 	}
 	c.clock = o.clock
 	c.accountID = o.accountID
+	c.adaptations = o.adaptations
+	if c.adaptations == "" {
+		c.adaptations = AdaptationsNote
+	}
 	if c.apiKeyHeader == "" {
 		c.apiKeyHeader = "x-api-key"
 	}
-	loaded, err := LoadCredential(policy, o.credential, o.credentialsPath)
+	c.namedCredential = o.namedCredential
+	loaded, err := LoadCredentialNamed(policy, o.credential, o.credentialsPath, o.namedCredential)
 	if err != nil {
 		return err
 	}
 	c.credential = loaded.Provider
 	c.credentialSource = loaded.Source
+	c.credentialOrigin = loaded.Origin
 	if loaded.AccountID != "" && c.accountID == "" {
 		c.accountID = loaded.AccountID
 	}
@@ -335,24 +400,32 @@ func (c *lmCore) bindAccess(self dialect, manifest AccessPolicy, o *lmOptions, d
 			return err
 		}
 	}
-	settings, err := resolveSettings(policy.Host, o.settings, nil, policy.Provider, nil)
+	// An explicit base URL on a cloud door is the endpoint root; the door's
+	// path is appended unless already present (AUTH-10, amended 2026-09-19).
+	endpoint := ""
+	if policy.Host != nil && o.baseURL != "" && o.baseURL != defaultBaseURL {
+		endpoint = o.baseURL
+	}
+	settings, err := resolveSettingsWithEndpoint(policy.Host, o.settings, nil, policy.Provider, nil, endpoint)
 	if err != nil {
 		return err
 	}
 	c.hostSettings = settings
+	c.endpoint = endpoint
 	if policy.Host != nil {
-		if o.baseURL == "" || c.baseURL == defaultBaseURL {
-			rendered, err := renderBaseURL(*policy.Host, settings)
-			if err != nil {
-				return err
-			}
-			c.baseURL = rendered
+		rendered, err := renderBaseURLAt(*policy.Host, settings, endpoint, policy.Provider)
+		if err != nil {
+			return err
 		}
+		c.baseURL = rendered
 	} else if policy.BaseURL != "" && c.baseURL == defaultBaseURL {
 		c.baseURL = policy.BaseURL
 	}
 	return nil
 }
+
+// Endpoint is the endpoint root a cloud door was given ("" = the template).
+func (c *lmCore) Endpoint() string { return c.endpoint }
 
 // registryCompat is the preset the bound provider names in the registry.
 func (c *lmCore) registryCompat() string {
@@ -411,14 +484,20 @@ type emitSpec struct {
 	stream      bool
 	model       string
 	readTimeout time.Duration
+	// scope is the build's MAP-13 record; under Plan the bytes are
+	// discarded, so no credential is invoked and nothing is signed.
+	scope *adaptScope
 }
 
 // emit finishes a dialect-built request through the bound host (AUTH-10)
 // and signs it. Pure apart from the credential provider call.
 func (c *lmCore) emit(spec emitSpec) (*TransportRequest, error) {
-	cred, err := c.resolveCredential(context.Background())
-	if err != nil {
-		return nil, err
+	var cred Credential
+	if !spec.scope.isPlanning() {
+		var err error
+		if cred, err = c.resolveCredential(context.Background()); err != nil {
+			return nil, err
+		}
 	}
 	headers := append([][2]string(nil), spec.headers...)
 	if cred != nil {
@@ -497,6 +576,29 @@ func (c *lmCore) send(ctx context.Context, req *TransportRequest) (*HTTPResponse
 func (c *lmCore) httpError(resp *HTTPResponse) *Error {
 	e := c.self.normalizeError(resp.Status, resp.Text())
 	attachErrorMetadata(e, resp.Headers)
+	return c.withOrigin(e)
+}
+
+// CredentialSource is the provenance of a cloud chain credential after its
+// first resolution (nil for a key, a stored login, or before any request).
+func (c *lmCore) CredentialSource() *CredentialSource { return ChainCredentialSource(c.credential) }
+
+// withOrigin names the credential's source on an AuthError (AUTH-1
+// provenance): the rung, the variable, "an explicit api_key", the stored
+// login, or the caller's callable. Every other error passes through.
+func (c *lmCore) withOrigin(e *Error) *Error {
+	if e == nil || !e.Kind.IsA(KindAuth) {
+		return e
+	}
+	return WithCredentialOrigin(e, c.CredentialOrigin())
+}
+
+// replyError is INV-054: a 2xx whose body is not JSON is a ProviderError
+// (code provider) carrying the status, the content type, the first 200
+// bytes and the request id — never a ServerError, never retried.
+func (c *lmCore) replyError(resp *HTTPResponse, cause error) *Error {
+	e := nonJSONReplyError(c.provider, resp, cause)
+	attachErrorMetadata(e, resp.Headers)
 	return e
 }
 
@@ -556,10 +658,63 @@ func (c *lmCore) withLoginHint(e *Error) *Error {
 
 // BuildRequest builds the wire request (pure apart from the credential call).
 func (c *lmCore) BuildRequest(req *Request, stream bool) (*TransportRequest, error) {
+	wire, _, err := c.Build(req, stream)
+	return wire, err
+}
+
+// Build is BuildRequest with the MAP-13 record of what the build adapted.
+func (c *lmCore) Build(req *Request, stream bool) (*TransportRequest, []Adaptation, error) {
+	if err := req.Validate(); err != nil {
+		return nil, nil, err
+	}
+	return c.build(req, stream, false)
+}
+
+// build runs one request build inside an adaptation scope: the wire
+// request and the record of what differs from what was asked. The one
+// place a scope is opened.
+func (c *lmCore) build(req *Request, stream bool, planning bool) (*TransportRequest, []Adaptation, error) {
+	scope := newAdaptScope(c.adaptations, c.provider, planning)
+	wire, err := c.self.buildRequest(req, stream, scope)
+	if err != nil {
+		return nil, nil, err
+	}
+	return wire, scope.records, nil
+}
+
+// Plan is what a call with this request WOULD adapt, with no network and
+// no credential invoked (offline, like Resolve). It returns the refusal
+// the call would return (under any policy, or every deviation under
+// "refuse") and the FULL record under every policy, "silent" included: a
+// preview that hid what it saw would be no preview.
+func (c *lmCore) Plan(req *Request) ([]Adaptation, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
-	return c.self.buildRequest(req, stream)
+	_, records, err := c.build(req, false, true)
+	return records, err
+}
+
+// visible is what the response carries: everything under "note" (and
+// "refuse", which only ever holds satisfied/defaulted), nothing under
+// "silent". Behaviour is decided from the full record, never from this.
+func (c *lmCore) visible(records []Adaptation) []Adaptation {
+	if c.adaptations == AdaptationsSilent {
+		return nil
+	}
+	return records
+}
+
+// finishResponse stamps the visible record on the response and applies the
+// client-side steps the record asks for.
+func (c *lmCore) finishResponse(req *Request, resp *Response, records []Adaptation) *Response {
+	if clientSideStop(records) {
+		resp = ApplyClientSideStop(resp, req.Config.Stop)
+	}
+	if visible := c.visible(records); len(visible) > 0 && len(resp.Adaptations) == 0 {
+		resp.Adaptations = visible
+	}
+	return resp
 }
 
 // ParseResponse parses a complete body.
@@ -580,9 +735,20 @@ func (c *lmCore) Complete(ctx context.Context, req *Request) (*Response, error) 
 	if resp, handled, err := c.self.completeOverride(ctx, req); handled {
 		return resp, err
 	}
-	wire, err := c.self.buildRequest(req, false)
+	wire, records, err := c.build(req, false, false)
 	if err != nil {
 		return nil, err
+	}
+	if clientSideStop(records) {
+		// MAP-13 (decision 2026-09-14): a stop sequence the wire cannot take
+		// is honoured by streaming under the hood and closing the
+		// connection at the cut. Whether the provider then stops
+		// generating (and billing) on a closed connection is its own
+		// behaviour, not a promise made here. The price is the usage
+		// report, which only the final frame carries: it is "not
+		// reported", never estimated. A stream that never hits the
+		// sequence completes normally, usage included.
+		return MaterializeResponse(c.Stream(ctx, req), req)
 	}
 	resp, err := c.send(ctx, wire)
 	if err != nil {
@@ -591,7 +757,14 @@ func (c *lmCore) Complete(ctx context.Context, req *Request) (*Response, error) 
 	if resp.Status >= 400 {
 		return nil, c.httpError(resp)
 	}
-	return c.self.parseResponse(req, resp)
+	parsed, err := c.self.parseResponse(req, resp)
+	if err != nil {
+		if e := AsError(err); e != nil && e.Kind.IsA(KindProvider) {
+			attachErrorMetadata(e, resp.Headers)
+		}
+		return nil, err
+	}
+	return c.finishResponse(req, parsed, records), nil
 }
 
 // Stream yields canonical events: exactly one start, deltas, exactly one
@@ -603,19 +776,29 @@ func (c *lmCore) Stream(ctx context.Context, req *Request) iter.Seq2[StreamEvent
 	if it, ok := c.self.streamOverride(ctx, req); ok {
 		return it
 	}
-	return CoalesceStream(c.streamRaw(ctx, req), req.Model)
+	wire, records, err := c.build(req, true, false)
+	if err != nil {
+		return errSeq(err)
+	}
+	events := CoalesceStreamWith(c.streamRaw(ctx, req, wire), req.Model, c.visible(records))
+	if clientSideStop(records) {
+		events = TruncateStreamAtStop(events, req.Config.Stop)
+	}
+	return events
 }
 
 func errSeq(err error) iter.Seq2[StreamEvent, error] {
 	return func(yield func(StreamEvent, error) bool) { yield(nil, err) }
 }
 
-func (c *lmCore) streamRaw(ctx context.Context, req *Request) iter.Seq2[StreamEvent, error] {
+func (c *lmCore) streamRaw(ctx context.Context, req *Request, wire *TransportRequest) iter.Seq2[StreamEvent, error] {
 	return func(yield func(StreamEvent, error) bool) {
-		wire, err := c.self.buildRequest(req, true)
-		if err != nil {
-			yield(nil, err)
-			return
+		if wire == nil {
+			var err error
+			if wire, err = c.self.buildRequest(req, true, nil); err != nil {
+				yield(nil, err)
+				return
+			}
 		}
 		resp, err := c.transport.Do(ctx, wire)
 		if err != nil {
@@ -631,9 +814,13 @@ func (c *lmCore) streamRaw(ctx context.Context, req *Request) iter.Seq2[StreamEv
 			body, _ := io.ReadAll(resp.Body)
 			e := c.self.normalizeError(resp.Status, string(body))
 			attachErrorMetadata(e, resp.Headers)
-			yield(nil, e)
+			yield(nil, c.withOrigin(e))
 			return
 		}
+		// The handshake's diagnostics ride every in-stream error event
+		// (docs/error-diagnostics.md): evidence from the HTTP reply, not
+		// proof of the quota at the later moment the error occurred.
+		handshake := httpResponseDetailOf(resp.Headers)
 		reader := sse.NewReader(resp.Body, sse.Limits{})
 		for {
 			ev, err := reader.Next()
@@ -641,17 +828,28 @@ func (c *lmCore) streamRaw(ctx context.Context, req *Request) iter.Seq2[StreamEv
 				return
 			}
 			if err != nil {
-				yield(nil, newError(KindTransport, err.Error()).WithCause(err))
+				if e := AsError(err); e != nil {
+					yield(nil, e)
+				} else {
+					yield(nil, newError(KindTransport, err.Error()).WithCause(err))
+				}
 				return
 			}
 			events, err := c.self.parseStreamEvents(req, ev)
 			if err != nil {
+				if e := AsError(err); e != nil && e.Kind.IsA(KindProvider) {
+					attachErrorMetadata(e, resp.Headers)
+				}
 				yield(nil, err)
 				return
 			}
 			for _, e := range events {
 				if e == nil {
 					continue
+				}
+				if se, ok := e.(StreamErrorEvent); ok && se.Error.HTTPResponse.IsEmpty() {
+					se.Error.HTTPResponse = handshake
+					e = se
 				}
 				if !yield(e, nil) {
 					return
@@ -771,7 +969,11 @@ func (c *lmCore) BatchSubmit(ctx context.Context, req *BatchRequest) (BatchJobIn
 		return BatchJobInfo{}, err
 	}
 	var uploadBody JSONObject
-	upload, err := c.self.batchUploadRequest(req)
+	// MAP-13: the batch builders run under the adapter's policy so "refuse"
+	// refuses here too; a batch ticket has no adaptations field
+	// (provisional surface), so under "note" the record is not kept.
+	scope := newAdaptScope(c.adaptations, c.provider, false)
+	upload, err := c.self.batchUploadRequest(req, scope)
 	if err != nil {
 		return BatchJobInfo{}, err
 	}
@@ -781,10 +983,10 @@ func (c *lmCore) BatchSubmit(ctx context.Context, req *BatchRequest) (BatchJobIn
 			return BatchJobInfo{}, err
 		}
 		if uploadBody, err = resp.JSON(); err != nil {
-			return BatchJobInfo{}, err
+			return BatchJobInfo{}, c.replyError(resp, err)
 		}
 	}
-	wire, err := c.self.batchSubmitRequest(req, uploadBody)
+	wire, err := c.self.batchSubmitRequest(req, uploadBody, scope)
 	resp, err := c.sendOK(ctx, wire, err)
 	if err != nil {
 		return BatchJobInfo{}, err
@@ -822,7 +1024,7 @@ func (c *lmCore) BatchResults(ctx context.Context, batchID string) ([]BatchEntry
 	}
 	statusBody, err := resp.JSON()
 	if err != nil {
-		return nil, err
+		return nil, c.replyError(resp, err)
 	}
 	fetches, err := c.self.batchResultFetches(statusBody)
 	if err != nil {
@@ -1147,8 +1349,8 @@ func (c *lmCore) RequestFromOpenAIChat(body JSONObject) (*Request, error) {
 }
 
 // ResponseFromOpenAIChat is MAP-12 rule 9 (chat dialect only).
-func (c *lmCore) ResponseFromOpenAIChat(body JSONObject, model string, choice *int) (*Response, error) {
-	return c.self.responseFromOpenAIChat(body, model, choice)
+func (c *lmCore) ResponseFromOpenAIChat(body JSONObject, model string, choice *int, responseFormat JSONObject) (*Response, error) {
+	return c.self.responseFromOpenAIChat(body, model, choice, responseFormat)
 }
 
 // LiveSetupFrames / LiveEncoder / LiveDecode expose the pure live codec.
@@ -1199,8 +1401,10 @@ func (c *lmCore) fileDeleteRequest(string) (*TransportRequest, error) {
 func (c *lmCore) fileDownloadRequest(string) (*TransportRequest, error) {
 	return nil, c.unsupported("files")
 }
-func (c *lmCore) batchUploadRequest(*BatchRequest) (*TransportRequest, error) { return nil, nil }
-func (c *lmCore) batchSubmitRequest(*BatchRequest, JSONObject) (*TransportRequest, error) {
+func (c *lmCore) batchUploadRequest(*BatchRequest, *adaptScope) (*TransportRequest, error) {
+	return nil, nil
+}
+func (c *lmCore) batchSubmitRequest(*BatchRequest, JSONObject, *adaptScope) (*TransportRequest, error) {
 	return nil, c.unsupported("batch")
 }
 func (c *lmCore) batchJobFromBody(string) (BatchJobInfo, error) {
@@ -1289,7 +1493,7 @@ func (c *lmCore) live(context.Context, *LiveConfig) (LiveSession, error) {
 func (c *lmCore) requestFromOpenAIChat(JSONObject) (*Request, error) {
 	return nil, valueErrorf("provider %q does not speak the Chat Completions wire; nothing to ingest", c.provider)
 }
-func (c *lmCore) responseFromOpenAIChat(JSONObject, string, *int) (*Response, error) {
+func (c *lmCore) responseFromOpenAIChat(JSONObject, string, *int, JSONObject) (*Response, error) {
 	return nil, valueErrorf("provider %q does not speak the Chat Completions wire; nothing to read", c.provider)
 }
 

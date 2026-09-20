@@ -655,7 +655,7 @@ func (e LiveClientTurnEvent) Validate() error {
 			return err
 		}
 	}
-	return nil
+	return validateInputDataParts("live input", e.Parts)
 }
 
 func (e LiveClientAudioEvent) Validate() error {
@@ -704,7 +704,7 @@ func (e LiveClientToolResultEvent) Validate() error {
 			return err
 		}
 	}
-	return nil
+	return validateInputDataParts("live tool results", e.Content)
 }
 
 func (LiveClientInterruptEvent) Validate() error { return nil }

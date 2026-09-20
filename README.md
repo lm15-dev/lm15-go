@@ -9,32 +9,55 @@ The contract commit this port is written against is in `CONTRACT_PIN`.
 
 ## Status
 
-**Implemented, not yet graded.** Every module of `playbooks/port.md` is
-written (1 types+serde, 2 errors, 3a core auth, 3b cloud chains, 4 the four
-dialects, 4b ingest, 5 response/stream assembly, 5c router, 6 models, 7
-files/batch/cache, 8 generation/video, 9 live). The vet shim answers every
-op of `harness/PROTOCOL.md`. `go build ./...` and `go vet ./...` pass on all
-four targets. **No harness direction has been run yet**; the numbers below
-are the surface, not a grade.
+**Implemented; the shared harness passes every direction except 23 cases
+that compare signed or multipart bytes** (see "Stated deviations": Go
+maps have no insertion order). Every module of `playbooks/port.md` is
+written (1 types+serde, 2 errors, 3a core auth, 3b cloud chains, 4 the
+four chat dialects plus `typesafe`, 4b ingest, 5 response/stream
+assembly, 5c router, 6 models, 7 files/batch/cache, 8 generation/video,
+9 live), and the 2026-09-14 → 2026-09-20 amendments are in: MAP-13
+adaptations and `Plan`, MAP-14 judgments and `DataPart`, the `typesafe`
+provider and the token-trie driver, client-side stop with score
+preservation (`logprobs_complete`), bounded live-turn collection
+(`collection_limit`), rate-limit diagnostics, the connection budget,
+reply faults (INV-053..055), named cloud credentials with provenance,
+endpoint overrides, and a JWT string as bearer.
+
+Harness, from `lm15-contract` (pin: `CONTRACT_PIN`):
 
 ```bash
 go build -o bin/lm15-vet ./cmd/lm15-vet     # harness/shims.json runs ./bin/lm15-vet
 cd ../lm15-contract && python3 harness/check.py --shim go --direction all
 ```
 
+Last run (2026-09-20): request 366/386 (20 fail, all SigV4 byte-order),
+response 308/308, stream 40/40, error 87/87, serde 128/128, auth 43/43,
+token 43/43, models 36/36, live 24/24, files 48/48, batch 39/41 (2
+multipart byte-order), generation 19/20 (1 multipart byte-order), video
+27/27, cache 11/11, router 22/22, ingest 168/168. The shared consumer
+vectors `consumer/live-collection-limits.json`,
+`errors/diagnostic-headers.json` and `auth/named-credentials.json` pass
+natively (`go test ./...` for the first two; the third through the vet
+shim's `explain_auth`).
+
 | Module | Where |
 |---|---|
 | canonical types, invariants, serde | `types_*.go`, `serde.go`, `vocab.go`, `json.go` |
-| errors | `errors.go` (`*lm15.Error`, `ErrorKind`, `errors.As`) |
+| adaptations (MAP-13), `Plan` | `adaptation.go`, `provider_base.go` |
+| judgments (MAP-14), `DataPart`, the schema sugar | `judgments.go`, `types_parts.go` |
+| client-side stop, score preservation | `stop.go` |
+| errors, rate-limit diagnostics | `errors.go` (`*lm15.Error`, `ErrorKind`, `errors.As`), `rate_limits.go` |
 | credentials, access policies, presets, registry | `credentials.go`, `features.go`, `access.go`, `compat.go`, `registry.go` |
 | auth stores, refresh under lock, PKCE, device code, `Login` | `auth_store.go`, `internal/fslock` |
 | doctor (`ExplainAuth`) | `doctor.go` |
-| cloud chains, hosts, SigV4, RS256 | `cloud_chains.go`, `cloud_hosts.go`, `internal/sigv4`, `internal/rs256` |
-| dialects | `provider_openai*.go`, `provider_openai_chat*.go`, `provider_anthropic.go`, `provider_gemini*.go` |
+| cloud chains, named credentials, hosts, endpoints, SigV4, RS256 | `cloud_chains.go`, `cloud_hosts.go`, `internal/sigv4`, `internal/rs256` |
+| dialects | `provider_openai*.go`, `provider_openai_chat*.go`, `provider_anthropic.go`, `provider_gemini*.go`, `provider_typesafe.go` |
+| token-trie judgments (vLLM) | `provider_openai_chat_trie.go` |
 | shared drivers (complete, stream, files, batch, cache, video, generation) | `provider_base.go`, `provider_common.go` |
 | stream assembly (MAP-3/4/9), `ResponseStream` | `result.go` |
+| transport, connection budget, content decoding | `transport.go` |
 | router | `router.go` |
-| live sessions | `live.go`, `internal/ws` |
+| live sessions, bounded turn collection | `live.go`, `live_collect.go`, `internal/ws` |
 | vet shim | `vet.go`, `cmd/lm15-vet` |
 
 ## Quick start
@@ -61,6 +84,43 @@ lm, err := lm15.NewAnthropicLM(lm15.WithAPIKey(os.Getenv("MY_KEY")))
 Tool loop: run the function, answer with `lm15.ToolMessage(call.ID, result)`,
 call `Complete` again.
 
+Adaptations (MAP-13): change the model string and the program keeps
+working; what the wire got that differs from what was asked is on the
+response, never printed.
+
+```go
+resp, _ := router.Complete(ctx, req)
+for _, a := range resp.Adaptations { fmt.Println(a.Field, a.Action, a.Reason) }
+plan, err := router.Plan(req)            // the same record, no network, no key
+lm, _ := lm15.NewAnthropicLM(lm15.WithAdaptations("refuse")) // the old strictness
+```
+
+Judgments (MAP-14): declared keys in, a distribution out.
+
+```go
+quality, _ := lm15.Score("How good is this wine?", lm15.ScoreLevel{Name: "poor"}, lm15.ScoreLevel{Name: "great"})
+style, _ := lm15.Choice("Dominant style?", lm15.Options("fruit", "oak", "mineral")...)
+format, _ := lm15.Judgments("judgments", true,
+    lm15.JudgmentProperty{Name: "quality", Schema: quality},
+    lm15.JudgmentProperty{Name: "style", Schema: style},
+    lm15.JudgmentProperty{Name: "ageing", Schema: lm15.YesNo("Will it improve with age?")})
+req := &lm15.Request{Model: "jev-latest", Messages: []lm15.Message{lm15.UserMessage(note)},
+    Config: lm15.Config{ResponseFormat: format, Probabilities: "required"}}
+resp, _ := router.Complete(ctx, req)   // typesafe, or a vLLM server that scores tokens
+fmt.Println(resp.Data(), resp.Probabilities()["style"])
+expected, _ := resp.Expected("quality")
+```
+
+Cloud identity (AUTH-1): name one identity, or read who was picked.
+
+```go
+router, _ := lm15.NewRouterWithConfig(lm15.RouterConfig{
+    Credentials: map[string]string{"azure": "platform"},        // that rung only, never the chain
+    BaseURLs:    map[string]string{"azure": "https://acct.services.ai.azure.com"}, // the door appends /openai/v1
+    Timeouts:    &lm15.Timeouts{Read: 30 * time.Minute},        // one pool, shared by every LM
+})
+```
+
 ## Stated deviations
 
 Each row names the spec line and the reason (port.md rule 8).
@@ -72,12 +132,22 @@ Each row names the spec line and the reason (port.md rule 8).
   fields are `*string`, and every required text field is a plain `string`
   whose `""` is emitted. Optional numbers and booleans are pointers
   (`lm15.I`, `lm15.F`, `lm15.B`): `0` and `false` are data.
-- **No key-order preservation inside opaque payloads.** `JSONObject` is
-  `map[string]any`; canonical JSON is compared parsed, so nothing pinned
-  changes, but where an opaque object is serialized *into a wire string*
-  (tool-call `arguments`) keys come out sorted and UTF-8 where the reference
-  emits insertion order and ASCII escapes. No contract case carries such an
-  input today; the harness compares those bodies parsed.
+- **No key-order preservation in wire bodies.** `JSONObject` is
+  `map[string]any`, so every object lm15 builds or decodes serializes with
+  sorted keys where the reference emits insertion order. Canonical JSON
+  and unsigned wire bodies are compared parsed, so nothing pinned changes
+  there; but a SigV4 signature covers the body bytes and a multipart
+  upload embeds them, so the 20 `bedrock-chat` / `bedrock-mantle-chat`
+  request cases, `openai.batch[upload]`, `azure.batch[upload]` and
+  `openai.image_edit[build]` compare unequal to the pinned bytes. The
+  servers accept any key order and the signature Go computes covers the
+  bytes Go sends, so the calls are correct on the wire; what is not
+  reproduced is the reference's byte sequence. The honest fix is an
+  ordered object type through the builders and the decoder (Rust chose
+  `preserve_order`); it is a codebase-wide refactor and has not been done.
+  Consequence inside judgments: the MAP-14 property order is read from the
+  schema's `required` list (which `Judgments` and the reference's schemas
+  fill in declaration order), else sorted by name.
 - **Numbers:** every wire document is decoded with `UseNumber`, so opaque
   payloads round-trip `1` vs `1.0` verbatim; typed floats always emit a
   fraction (Number rule). User-built Go payloads with `float64(1)` emit `1`
@@ -101,10 +171,32 @@ Each row names the spec line and the reason (port.md rule 8).
 - **RS256 JWT claims** are encoded UTF-8 (the reference escapes non-ASCII);
   the pinned vectors are ASCII.
 - **Async** is Go's own: `context.Context` everywhere, `iter.Seq2` streams.
+- **Adaptations reach builders explicitly.** The reference collects MAP-13
+  records through a context variable; here every builder takes the build's
+  `*adaptScope` and `adapt` returns the refusal under `"refuse"`.
+  `Plan` runs the build with a scope that skips credentials and signing.
+- **Timeouts** are Go durations on `lm15.Timeouts` (connect 10 s, read/
+  write/pool 600 s, 100 connections); the read timeout is an idle limit
+  reset on every byte, enforced by cancelling the request's context.
+- **Content decoding** (INV-053) inflates gzip/x-gzip (every member) and
+  deflate (zlib-wrapped by its header, else raw); `br`/`zstd` are a
+  `TransportError` naming the coding. Browser builds see fetch-decoded
+  bodies and cannot check the coding.
+- **A lone surrogate** (INV-055) is invalid UTF-8 in a Go string; the
+  canonical encoder refuses it (and any other invalid UTF-8) with a
+  `ValueError` naming the code point, instead of Go's silent U+FFFD.
+- **Bounded live collection** is `TurnView` (`session.TurnView(TurnLimits{...})`);
+  `Turn` uses the defaults. The byte charge is computed by a dedicated
+  ASCII-JSON sizer (`asciiJSONSize`) because Go's encoder does not use the
+  short `\b`/`\f` escapes or escape DEL.
+- **`Response.LogprobsIncomplete`** is the field; the wire's
+  `logprobs_complete` is its negation, so the zero value is the default.
 
 ## Not exercised, stated
 
-Nothing has been run against a live server or the harness in this phase.
-The token-refresh wire, the xAI device-code login and the cloud chains are
-copied as data from the reference and compile, and that is all that is
-claimed.
+Nothing has been run against a live server. The harness (offline, above)
+and the three native vector files are the evidence. The token-trie driver
+(`provider_openai_chat_trie.go`), the connection budget's idle read
+timeout, the content decoders and `TurnView` over a real socket are
+written to the contract and the reference, not measured against a server;
+the trie driver's harness direction is deferred contract-side as well.

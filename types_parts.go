@@ -56,7 +56,7 @@ func ContinuationData(states []ContinuationState, provider, kind string) JSONObj
 
 // ─── Parts ───────────────────────────────────────────────────────────
 
-// Part is the atom of content: a closed sum of eleven variants. Switch on
+// Part is the atom of content: a closed sum of twelve variants. Switch on
 // the concrete type, or on Type().
 type Part interface {
 	Type() string
@@ -140,6 +140,21 @@ type ToolResultPart struct {
 	Continuation []ContinuationState
 }
 
+// DataPart is structured data as content (changes/2026-09-17-judgments.md,
+// D2). In a user/system message: structured input (a provider that reads
+// JSON state takes Value as such; a text-only wire gets it as compact JSON
+// text). In an assistant message: the answer to a json_schema request that
+// declares judgments (MAP-14) — Value is the model's JSON object,
+// Probabilities a distribution per judgment over its declared keys when one
+// was measured, Method how (JudgmentMethod). Value is an opaque payload:
+// any JSON value, verbatim (INV-002); nil is the JSON null.
+type DataPart struct {
+	Value         any
+	Probabilities map[string]map[string]float64
+	Method        string
+	Continuation  []ContinuationState
+}
+
 func (TextPart) Type() string       { return PartTypeText }
 func (ThinkingPart) Type() string   { return PartTypeThinking }
 func (RefusalPart) Type() string    { return PartTypeRefusal }
@@ -151,6 +166,7 @@ func (DocumentPart) Type() string   { return PartTypeDocument }
 func (BinaryPart) Type() string     { return PartTypeBinary }
 func (ToolCallPart) Type() string   { return PartTypeToolCall }
 func (ToolResultPart) Type() string { return PartTypeToolResult }
+func (DataPart) Type() string       { return PartTypeData }
 
 func (TextPart) sealedPart()       {}
 func (ThinkingPart) sealedPart()   {}
@@ -163,6 +179,7 @@ func (DocumentPart) sealedPart()   {}
 func (BinaryPart) sealedPart()     {}
 func (ToolCallPart) sealedPart()   {}
 func (ToolResultPart) sealedPart() {}
+func (DataPart) sealedPart()       {}
 
 func (p TextPart) ContinuationStates() []ContinuationState       { return p.Continuation }
 func (p ThinkingPart) ContinuationStates() []ContinuationState   { return p.Continuation }
@@ -175,6 +192,7 @@ func (p DocumentPart) ContinuationStates() []ContinuationState   { return p.Cont
 func (p BinaryPart) ContinuationStates() []ContinuationState     { return p.Continuation }
 func (p ToolCallPart) ContinuationStates() []ContinuationState   { return p.Continuation }
 func (p ToolResultPart) ContinuationStates() []ContinuationState { return p.Continuation }
+func (p DataPart) ContinuationStates() []ContinuationState       { return p.Continuation }
 
 func (p TextPart) WithContinuation(c []ContinuationState) Part       { p.Continuation = c; return p }
 func (p ThinkingPart) WithContinuation(c []ContinuationState) Part   { p.Continuation = c; return p }
@@ -187,6 +205,7 @@ func (p DocumentPart) WithContinuation(c []ContinuationState) Part   { p.Continu
 func (p BinaryPart) WithContinuation(c []ContinuationState) Part     { p.Continuation = c; return p }
 func (p ToolCallPart) WithContinuation(c []ContinuationState) Part   { p.Continuation = c; return p }
 func (p ToolResultPart) WithContinuation(c []ContinuationState) Part { p.Continuation = c; return p }
+func (p DataPart) WithContinuation(c []ContinuationState) Part       { p.Continuation = c; return p }
 
 // Validate implements Part.
 func (p TextPart) Validate() error { return validateContinuation(p.Continuation) }
@@ -358,6 +377,60 @@ func (p ToolResultPart) Validate() error {
 	return validateContinuation(p.Continuation)
 }
 
+// Validate implements Part (INV-052: method iff probabilities; inner maps
+// non-empty, floats in [0, 1]; the sum is not validated — providers round).
+func (p DataPart) Validate() error {
+	if err := ValidateJSONValue(p.Value); err != nil {
+		return typeErrorf("DataPart.value must be a JSON-compatible value: %v", err)
+	}
+	if p.Probabilities != nil {
+		if err := validateProbabilities(p.Probabilities); err != nil {
+			return err
+		}
+	}
+	if p.Method != "" && !inVocab(p.Method, JudgmentMethods) {
+		return valueErrorf("DataPart.method must be one of %v, got %q", JudgmentMethods, p.Method)
+	}
+	if (p.Method == "") != (p.Probabilities == nil) {
+		return valueErrorf("DataPart.method is present iff DataPart.probabilities is (INV-052)")
+	}
+	return validateContinuation(p.Continuation)
+}
+
+func validateProbabilities(value map[string]map[string]float64) error {
+	if len(value) == 0 {
+		return typeErrorf("DataPart.probabilities must be a non-empty mapping of field -> {key: probability}")
+	}
+	for name, dist := range value {
+		if name == "" {
+			return typeErrorf("DataPart.probabilities keys must be non-empty strings")
+		}
+		if len(dist) == 0 {
+			return typeErrorf("DataPart.probabilities[%q] must be a non-empty mapping of key -> probability", name)
+		}
+		for key, prob := range dist {
+			if key == "" {
+				return typeErrorf("DataPart.probabilities[%q] keys must be non-empty strings", name)
+			}
+			if prob != prob || prob < 0 || prob > 1 {
+				return valueErrorf("DataPart.probabilities[%q][%q] must be in [0, 1]", name, key)
+			}
+		}
+	}
+	return nil
+}
+
+// validateInputDataParts is INV-052: a distribution is a claim about an
+// answer; input carries value alone.
+func validateInputDataParts(where string, parts []Part) error {
+	for _, p := range parts {
+		if d, ok := p.(DataPart); ok && d.Probabilities != nil {
+			return typeErrorf("%s data parts carry value only; probabilities belong to assistant messages (INV-052)", where)
+		}
+	}
+	return nil
+}
+
 func isToolResultForbidden(p Part) bool {
 	switch p.(type) {
 	case ToolCallPart, ToolResultPart, ThinkingPart, RefusalPart:
@@ -432,6 +505,14 @@ func ToolResult(id, output string) ToolResultPart {
 // ToolResultParts creates a tool result from parts.
 func ToolResultParts(id string, content ...Part) ToolResultPart {
 	return ToolResultPart{ID: id, Content: content}
+}
+
+// Data creates a data part (structured input, or a judged answer).
+func Data(value any) DataPart { return DataPart{Value: value} }
+
+// DataWithProbabilities creates a judged answer carrying its distributions.
+func DataWithProbabilities(value any, probabilities map[string]map[string]float64, method string) DataPart {
+	return DataPart{Value: value, Probabilities: probabilities, Method: method}
 }
 
 // ToolError creates an error tool result.

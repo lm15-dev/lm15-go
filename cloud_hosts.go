@@ -17,12 +17,23 @@ import (
 // (when given), then a profile lookup, then defaults; a required setting
 // with no value raises NotConfiguredError naming the variable.
 func resolveSettings(host *HostSpec, given map[string]string, env map[string]string, provider string, profile func(string) string) (map[string]string, error) {
+	return resolveSettingsWithEndpoint(host, given, env, provider, profile, "")
+}
+
+// resolveSettingsWithEndpoint is resolveSettings when the caller named an
+// endpoint root: the settings only the URL root needed are optional
+// (HostSpec.URLOnlySettings; AUTH-10, amended 2026-09-19).
+func resolveSettingsWithEndpoint(host *HostSpec, given map[string]string, env map[string]string, provider string, profile func(string) string, endpoint string) (map[string]string, error) {
 	out := map[string]string{}
 	if host == nil {
 		for k, v := range given {
 			out[k] = v
 		}
 		return out, nil
+	}
+	relaxed := map[string]bool{}
+	if endpoint != "" {
+		relaxed = host.URLOnlySettings()
 	}
 	remaining := map[string]string{}
 	for k, v := range given {
@@ -46,6 +57,9 @@ func resolveSettings(host *HostSpec, given map[string]string, env map[string]str
 			value = setting.Default
 		}
 		if value == "" {
+			if relaxed[setting.Name] {
+				continue
+			}
 			name := provider
 			if name == "" {
 				name = "host"
@@ -53,6 +67,9 @@ func resolveSettings(host *HostSpec, given map[string]string, env map[string]str
 			hint := "pass settings={'" + setting.Name + "': ...}"
 			if len(setting.Env) > 0 {
 				hint = "set " + strings.Join(setting.Env, " or ")
+			}
+			if host.URLOnlySettings()[setting.Name] && len(host.EndpointEnv) > 0 {
+				hint += ", or the endpoint: " + strings.Join(host.EndpointEnv, " or ")
 			}
 			return nil, NotConfiguredErrorf(provider, nil, hint, "%s: setting %q is required and has no default; %s", name, setting.Name, hint)
 		}
@@ -85,8 +102,84 @@ func locationHost(location string) string {
 
 var dnsLabelRe = regexp.MustCompile(`^[A-Za-z0-9-]+$`)
 
+// EndpointFromEnv is the first non-empty vendor endpoint variable this
+// door honours (AUTH-10, amended 2026-09-19).
+func EndpointFromEnv(host *HostSpec, env map[string]string) string {
+	if host == nil || env == nil {
+		return ""
+	}
+	for _, name := range host.EndpointEnv {
+		if v := strings.TrimSpace(env[name]); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// JoinEndpoint is an endpoint root (the caller's or the vendor variable's)
+// joined with the door's path. The door's path is appended unless the
+// endpoint already ends with it, or with a leading part of it: the console
+// shows an account root (https://acct.services.ai.azure.com), Microsoft's
+// own examples show …/anthropic and …/openai/v1, and all three must mean
+// the same door. Stated trade-off: a gateway whose own path happens to end
+// with a leading part of the door's path cannot be spelled; none is known.
+func JoinEndpoint(endpoint, path, provider string) (string, error) {
+	who := provider
+	if who == "" {
+		who = "host"
+	}
+	u, err := url.Parse(strings.TrimSpace(endpoint))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return "", NotConfiguredErrorf(provider, nil, "", "%s: endpoint must be an http(s) URL with a host, got %q", who, endpoint)
+	}
+	if u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+		return "", NotConfiguredErrorf(provider, nil, "", "%s: endpoint must not carry a query, fragment or userinfo", who)
+	}
+	split := func(p string) []string {
+		var out []string
+		for _, seg := range strings.Split(p, "/") {
+			if seg != "" {
+				out = append(out, seg)
+			}
+		}
+		return out
+	}
+	given, door := split(u.Path), split(path)
+	base := given
+	limit := len(given)
+	if len(door) < limit {
+		limit = len(door)
+	}
+	for k := limit; k > 0; k-- {
+		match := true
+		for i := 0; i < k; i++ {
+			if given[len(given)-k+i] != door[i] {
+				match = false
+				break
+			}
+		}
+		if match {
+			base = given[:len(given)-k]
+			break
+		}
+	}
+	joined := strings.Join(append(append([]string{}, base...), door...), "/")
+	out := u.Scheme + "://" + u.Host
+	if joined != "" {
+		out += "/" + joined
+	}
+	return out, nil
+}
+
 // renderBaseURL renders the host template over the settings.
 func renderBaseURL(host HostSpec, settings map[string]string) (string, error) {
+	return renderBaseURLAt(host, settings, "", "")
+}
+
+// renderBaseURLAt renders the base URL for the settings; with an endpoint
+// (a full URL root) the template's root is replaced and the door's path
+// rendered and appended (JoinEndpoint).
+func renderBaseURLAt(host HostSpec, settings map[string]string, endpoint, provider string) (string, error) {
 	values := map[string]string{}
 	for k, v := range settings {
 		values[k] = v
@@ -105,6 +198,9 @@ func renderBaseURL(host HostSpec, settings map[string]string) (string, error) {
 		}
 	}
 	out := host.BaseURL
+	if endpoint != "" {
+		out = host.PathTemplate()
+	}
 	for {
 		start := strings.Index(out, "{")
 		if start < 0 {
@@ -120,6 +216,9 @@ func renderBaseURL(host HostSpec, settings map[string]string) (string, error) {
 			return "", NotConfiguredErrorf("", nil, "", "host base URL needs setting %q", name)
 		}
 		out = out[:start] + v + out[start+end+1:]
+	}
+	if endpoint != "" {
+		return JoinEndpoint(endpoint, out, provider)
 	}
 	return out, nil
 }

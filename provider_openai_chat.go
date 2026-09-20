@@ -3,7 +3,6 @@ package lm15
 import (
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/lm15-dev/lm15-go/internal/sse"
 )
@@ -103,7 +102,7 @@ func (l *OpenAIChatLM) normalizeError(status int, body string) *Error {
 // ─── Models ──────────────────────────────────────────────────────────
 
 func (l *OpenAIChatLM) modelsRequest() (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/models", headers: l.headers(), readTimeout: 30 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/models", headers: l.headers()})
 }
 
 func (l *OpenAIChatLM) modelsFromBody(body string) ([]ModelInfo, error) {
@@ -150,12 +149,17 @@ func chatContentParts(msg Message, forceArray bool, provider string) (any, error
 		if t, ok := parts[0].(TextPart); ok {
 			return t.Text, nil
 		}
+		if d, ok := parts[0].(DataPart); ok {
+			return DataPartText(d), nil // a data part is text on this wire (D3): the same string form as a lone text part
+		}
 	}
 	var out []any
 	for _, p := range parts {
 		switch x := p.(type) {
 		case TextPart:
 			out = append(out, JSONObject{"type": "text", "text": x.Text})
+		case DataPart:
+			out = append(out, JSONObject{"type": "text", "text": DataPartText(x)})
 		case ImagePart:
 			block, err := chatImageBlock(x, provider)
 			if err != nil {
@@ -166,7 +170,7 @@ func chatContentParts(msg Message, forceArray bool, provider string) (any, error
 			continue
 		default:
 			if IsMediaPart(p) {
-				return nil, UnsupportedFeatureErrorf(provider, "%s: a %s part in a %s message has no slot on the Chat Completions wire (text and image_url only); the OpenAI Responses, Anthropic and Gemini dialects carry it (MAP-10)", provider, p.Type(), msg.Role)
+				return nil, UnsupportedFeature(provider, "messages[*].parts["+p.Type()+"]", "%s: a %s part in a %s message has no slot on the Chat Completions wire (text and image_url only); the OpenAI Responses, Anthropic and Gemini dialects carry it (MAP-10)", provider, p.Type(), msg.Role)
 			}
 			text, err := partsToText([]Part{p}, provider, "")
 			if err != nil {
@@ -239,7 +243,7 @@ func responseFormatToChat(f JSONObject) JSONObject {
 	return JSONObject{"type": "json_schema", "json_schema": inner}
 }
 
-func (l *OpenAIChatLM) buildMessages(req *Request, compat ResolvedOpenAIChatCompat) ([]any, error) {
+func (l *OpenAIChatLM) buildMessages(req *Request, compat ResolvedOpenAIChatCompat, breakpoint *int) ([]any, error) {
 	var messages []any
 	if req.System != nil {
 		text, err := systemText(req.System, l.provider)
@@ -252,7 +256,6 @@ func (l *OpenAIChatLM) buildMessages(req *Request, compat ResolvedOpenAIChatComp
 			messages = append(messages, JSONObject{"role": compat.InstructionRole, "content": text})
 		}
 	}
-	breakpoint := cacheBreakpointIndex(req, compat.CacheControl)
 	for msgIndex, msg := range req.Messages {
 		atBreakpoint := breakpoint != nil && *breakpoint == msgIndex
 		if atBreakpoint && (msg.Role == RoleAssistant || msg.Role == RoleTool) {
@@ -347,7 +350,7 @@ func (l *OpenAIChatLM) builtinToolPayload(tool BuiltinTool, compat ResolvedOpenA
 	if compat.BuiltinTools == "groq" {
 		wireType, ok := groqBuiltinMap[tool.Name]
 		if !ok {
-			return nil, UnsupportedFeatureErrorf(l.provider, "%s: builtin tool %q has no Groq wire mapping — supported: %v", l.provider, tool.Name, sortStrings([]string{"code_execution", "web_search"}))
+			return nil, UnsupportedFeature(l.provider, "tools["+tool.Name+"]", "%s: builtin tool %q has no Groq wire mapping — supported: %v", l.provider, tool.Name, sortStrings([]string{"code_execution", "web_search"}))
 		}
 		entry := JSONObject{"type": wireType}
 		for k, v := range tool.Config {
@@ -355,7 +358,7 @@ func (l *OpenAIChatLM) builtinToolPayload(tool BuiltinTool, compat ResolvedOpenA
 		}
 		return entry, nil
 	}
-	return nil, UnsupportedFeatureErrorf(l.provider, "%s: builtin tool %q is not supported on this server — the Chat Completions wire carries function tools only, and unproven servers may silently ignore unknown tool types. Use compat='groq' for Groq's server-executed tools, or the OpenAI Responses / Anthropic / Gemini providers", l.provider, tool.Name)
+	return nil, UnsupportedFeature(l.provider, "tools["+tool.Name+"]", "%s: builtin tool %q is not supported on this server — the Chat Completions wire carries function tools only, and unproven servers may silently ignore unknown tool types. Use compat='groq' for Groq's server-executed tools, or the OpenAI Responses / Anthropic / Gemini providers", l.provider, tool.Name)
 }
 
 func (l *OpenAIChatLM) toolChoicePayload(req *Request) (any, error) {
@@ -377,7 +380,7 @@ func (l *OpenAIChatLM) toolChoicePayload(req *Request) (any, error) {
 			}
 		}
 		if len(builtins) > 0 {
-			return nil, UnsupportedFeatureErrorf(l.provider, "%s: cannot force builtin tools %v — the Chat Completions wire has no hosted-tool tool_choice form (OpenAI Responses and Anthropic carry it)", l.provider, builtins)
+			return nil, UnsupportedFeature(l.provider, "config.tool_choice.allowed", "%s: cannot force builtin tools %v — the Chat Completions wire has no hosted-tool tool_choice form (OpenAI Responses and Anthropic carry it)", l.provider, builtins)
 		}
 		if len(entries) == 1 && tc.EffectiveMode() == "required" {
 			return JSONObject{"type": "function", "function": JSONObject{"name": entries[0].ToolName()}}, nil
@@ -394,32 +397,72 @@ func (l *OpenAIChatLM) toolChoicePayload(req *Request) (any, error) {
 	return "auto", nil
 }
 
-func (l *OpenAIChatLM) xaiChecks(req *Request) error {
-	cfg := req.Config
+// xaiAdapt applies api.x.ai's documented and live-measured gaps under
+// MAP-13, returning the request as it goes to the wire.
+func (l *OpenAIChatLM) xaiAdapt(req *Request, scope *adaptScope) (*Request, error) {
+	out := *req
+	cfg := out.Config
 	if cfg.Reasoning != nil && cfg.Reasoning.IsOff() {
-		return UnsupportedFeatureErrorf(l.provider, "xai: reasoning cannot be disabled — Grok reasoning models have no off switch, and xAI silently ignores disable fields on the wire. Omit the reasoning config, or pick a non-reasoning Grok model.")
+		// MAP-13 (decision 2026-09-14 §4.2): no off switch exists; the
+		// lowest level is the closest and the spend shows in usage.
+		if err := scope.substituted("config.reasoning.effort", "Grok reasoning models have no off switch and api.x.ai ignores disable fields (158 reasoning tokens on an explicit off, live 2026-09-01); the lowest level was sent", "off", "low"); err != nil {
+			return nil, err
+		}
+		r := *cfg.Reasoning
+		r.Effort = "low"
+		cfg.Reasoning = &r
 	}
 	if cfg.Logprobs != nil {
-		return UnsupportedFeatureErrorf(l.provider, "xai: config.logprobs is not supported — grok-4.20 and newer silently ignore logprobs/top_logprobs on the wire (docs.x.ai, verified live 2026-09-01). OpenAI and Gemini carry logprobs.")
+		if err := scope.dropped("config.logprobs", "grok-4.20 and newer ignore logprobs/top_logprobs (docs.x.ai, live 2026-09-01); Response.logprobs will be absent (OpenAI and Gemini carry them)", *cfg.Logprobs); err != nil {
+			return nil, err
+		}
+		cfg.Logprobs = nil
 	}
 	tc := cfg.ToolChoice
 	if tc != nil && len(tc.Allowed) > 0 && !(len(tc.Allowed) == 1 && tc.EffectiveMode() == "required") {
-		return UnsupportedFeatureErrorf(l.provider, "xai: tool_choice.allowed subsets are silently ignored by api.x.ai (verified live 2026-09-02); force a single tool with mode='required', or send only the allowed tools in Request.tools")
-	}
-	if tc != nil && tc.EffectiveMode() == "required" && len(cfg.ResponseFormat) > 0 {
-		return UnsupportedFeatureErrorf(l.provider, "xai: a forced tool (mode='required') cannot be combined with response_format — api.x.ai returns JSON text and drops the call (verified live 2026-09-02)")
-	}
-	return nil
-}
-
-func (l *OpenAIChatLM) payload(req *Request, stream bool) (JSONObject, error) {
-	if l.isXai() {
-		if err := l.xaiChecks(req); err != nil {
+		// api.x.ai accepts allowed_tools and ignores it (live 2026-09-02:
+		// with {lookup} allowed and weather asked, it called weather).
+		// MAP-13 client_side: send only the allowed tools — what the
+		// allowlist means — and record it.
+		var kept []Tool
+		var names []any
+		for _, t := range out.Tools {
+			if inVocab(t.ToolName(), tc.Allowed) {
+				kept = append(kept, t)
+				names = append(names, t.ToolName())
+			}
+		}
+		if err := scope.clientSide("config.tool_choice.allowed", "api.x.ai ignores tool_choice allowlists (live 2026-09-02); only the allowed tools were sent, which is what the allowlist means", toAnyList(tc.Allowed, func(s string) any { return s }), names); err != nil {
 			return nil, err
 		}
+		out.Tools = kept
+		narrowed := *tc
+		narrowed.Allowed = nil
+		cfg.ToolChoice = &narrowed
+		tc = &narrowed
+	}
+	if tc != nil && tc.EffectiveMode() == "required" && len(cfg.ResponseFormat) > 0 {
+		// MAP-13 rule 4(b): the program depends on the call.
+		return nil, UnsupportedFeature(l.provider, "config.tool_choice.mode", "xai: a forced tool (mode='required') cannot be combined with response_format — api.x.ai returns JSON text and drops the call (verified live 2026-09-02)")
+	}
+	out.Config = cfg
+	return &out, nil
+}
+
+func (l *OpenAIChatLM) payload(req *Request, stream bool, scope *adaptScope) (JSONObject, error) {
+	if l.isXai() {
+		adapted, err := l.xaiAdapt(req, scope)
+		if err != nil {
+			return nil, err
+		}
+		req = adapted
 	}
 	compat := l.compatFor(req.Model)
-	messages, err := l.buildMessages(req, compat)
+	breakpoint, err := cacheBreakpointIndex(req, compat.CacheControl, scope) // once: it may record
+	if err != nil {
+		return nil, err
+	}
+	messages, err := l.buildMessages(req, compat, breakpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +484,20 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool) (JSONObject, error) {
 		payload["top_p"] = jsonFloat(*cfg.TopP)
 	}
 	if cfg.TopK != nil {
-		return nil, UnsupportedFeatureErrorf(l.provider, "%s: config.top_k has no field on the Chat Completions wire; servers that accept top_k take it through extensions", l.provider)
+		// MAP-13: a sampling hint with no field on this wire; servers that
+		// take one do so through extensions.
+		if err := scope.dropped("config.top_k", "the Chat Completions wire has no top_k (Anthropic and Gemini carry it; servers that accept it take it through extensions)", *cfg.TopK); err != nil {
+			return nil, err
+		}
+	}
+	if cfg.Seed != nil {
+		payload["seed"] = *cfg.Seed
+	}
+	if cfg.FrequencyPenalty != nil {
+		payload["frequency_penalty"] = jsonFloat(*cfg.FrequencyPenalty)
+	}
+	if cfg.PresencePenalty != nil {
+		payload["presence_penalty"] = jsonFloat(*cfg.PresencePenalty)
 	}
 	if len(cfg.Stop) > 0 {
 		payload["stop"] = toAnyList(cfg.Stop, func(s string) any { return s })
@@ -481,11 +537,36 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool) (JSONObject, error) {
 	if toolChoice != nil {
 		tc := cfg.ToolChoice
 		if compat.ForcedToolChoice == "reject" && (tc.EffectiveMode() != "auto" || len(tc.Allowed) > 0) {
-			allowed := ""
-			if len(tc.Allowed) > 0 {
-				allowed = " allowed=" + fmtList(tc.Allowed)
+			// The server documents tool_choice=auto only and ignores every
+			// other form without an error (Z.AI, live 2026-09-03: required →
+			// text answer, none → a tool call). MAP-13: "none" and an
+			// allowlist have a client-side form — send no tools / only
+			// those tools — and are recorded; "required" cannot be forced
+			// and the program depends on the call (rule 4b): refused.
+			switch {
+			case tc.EffectiveMode() == "required":
+				return nil, UnsupportedFeature(l.provider, "config.tool_choice.mode", "%s: tool_choice mode='required' is silently ignored by this server (only 'auto' is honoured) and a forced call cannot be reproduced client-side", l.provider)
+			case tc.EffectiveMode() == "none":
+				if err := scope.clientSide("config.tool_choice.mode", "this server ignores tool_choice='none'; no tools were sent, which is the same outcome", "none", "no tools sent"); err != nil {
+					return nil, err
+				}
+				delete(payload, "tools")
+			default:
+				var kept []any
+				var names []any
+				for _, t := range wireList(payload["tools"]) {
+					name := wireStr(wireObj(wireObj(t)["function"])["name"])
+					if inVocab(name, tc.Allowed) {
+						kept = append(kept, t)
+						names = append(names, name)
+					}
+				}
+				if err := scope.clientSide("config.tool_choice.allowed", "this server ignores tool_choice allowlists; only the allowed tools were sent, which is what the allowlist means", toAnyList(tc.Allowed, func(s string) any { return s }), names); err != nil {
+					return nil, err
+				}
+				payload["tools"] = kept
 			}
-			return nil, UnsupportedFeatureErrorf(l.provider, "%s: tool_choice mode=%q%s is silently ignored by this server (only 'auto' is honoured); omit tool_choice, or send only the tools you want callable", l.provider, tc.EffectiveMode(), allowed)
+			toolChoice = "auto"
 		}
 		payload["tool_choice"] = toolChoice
 	}
@@ -494,23 +575,60 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool) (JSONObject, error) {
 	}
 	if len(cfg.ResponseFormat) > 0 {
 		if compat.JSONSchema == "reject" && cfg.ResponseFormat["type"] != "json_object" {
-			return nil, UnsupportedFeatureErrorf(l.provider, "%s: response_format type %q is silently ignored by this server; use {'type': 'json_object'} and describe the shape in the prompt", l.provider, wireStr(cfg.ResponseFormat["type"]))
+			// The server accepts response_format.type=json_schema and ignores
+			// it (Z.AI, live 2026-09-03). MAP-13: omit and record.
+			if err := scope.dropped("config.response_format", "this server accepts response_format type "+strconv.Quote(wireStr(cfg.ResponseFormat["type"]))+" and does not apply it; use {'type': 'json_object'} and describe the shape in the prompt", cfg.ResponseFormat); err != nil {
+				return nil, err
+			}
+		} else {
+			// MAP-14: the judgment convention goes verbatim on the chat
+			// dialect; a server that scores named tokens delivers
+			// probabilities through the trie driver, every other one
+			// answers with the pick only.
+			if !l.scoresNamedTokens() {
+				if err := noteUnmeasurableProbabilities(scope, req, l.provider); err != nil {
+					return nil, err
+				}
+			}
+			payload["response_format"] = responseFormatToChat(cfg.ResponseFormat)
 		}
-		payload["response_format"] = responseFormatToChat(cfg.ResponseFormat)
 	}
 	if r := cfg.Reasoning; r != nil {
 		if compat.ThinkingFormat == "none" {
-			return nil, UnsupportedFeatureErrorf(l.provider, "%s: reasoning.effort=%q has no field on this server (compat thinking_format='none'); omit config.reasoning, or pass the server's own knob through extensions", l.provider, r.Effort)
+			// No reasoning dial on this server. MAP-13: the dial is dropped
+			// and recorded — the model may reason at its own default and
+			// the tokens show in usage.
+			if err := scope.dropped("config.reasoning", "this server has no reasoning dial on its wire (compat thinking_format='none'); the model reasons at its own default; pass the server's own knob through extensions", JSONObject{"effort": r.Effort}); err != nil {
+				return nil, err
+			}
+			r = nil
 		}
-		if !r.IsOff() {
+		if r != nil && !r.IsOff() {
+			rr := *r
+			r = &rr
 			if r.ThinkingBudget != nil {
-				return nil, UnsupportedFeatureErrorf(l.provider, "%s: reasoning.thinking_budget is not supported — the Chat Completions wire has no thinking token budget; use effort", l.provider)
+				if err := scope.dropped("config.reasoning.thinking_budget", "the Chat Completions wire has no thinking token budget; effort carries the intent", *r.ThinkingBudget); err != nil {
+					return nil, err
+				}
 			}
 			if r.Summary == "concise" || r.Summary == "detailed" {
-				return nil, UnsupportedFeatureErrorf(l.provider, "%s: reasoning.summary=%q is an OpenAI Responses detail level; the Chat Completions wire has none (use 'auto')", l.provider, r.Summary)
+				if err := scope.substituted("config.reasoning.summary", "the Chat Completions wire has no summary detail levels; 'auto' is what it shows", r.Summary, "auto"); err != nil {
+					return nil, err
+				}
+				r.Summary = "auto"
 			}
 			if compat.ReasoningEfforts != nil && !inVocab(r.Effort, compat.ReasoningEfforts) {
-				return nil, UnsupportedFeatureErrorf(l.provider, "%s: reasoning.effort=%q has no level on this server (it accepts %s) and would be accepted silently", l.provider, r.Effort, strings.Join(compat.ReasoningEfforts, ", "))
+				// MAP-13: clamp to the nearest declared level; the server
+				// would have accepted the word silently (Moonshot kimi-k3
+				// answered 200 to `medium` and to `bogus`, live 2026-09-03).
+				nearest, err := nearestEffort(r.Effort, compat.ReasoningEfforts)
+				if err != nil {
+					return nil, err
+				}
+				if err := scope.clamped("config.reasoning.effort", "this server has no "+strconv.Quote(r.Effort)+" level (it accepts "+strings.Join(compat.ReasoningEfforts, ", ")+") and would have accepted the word silently", r.Effort, nearest); err != nil {
+					return nil, err
+				}
+				r.Effort = nearest
 			}
 			if compat.BuiltinTools == "groq" && r.Summary == "auto" {
 				payload["reasoning_format"] = "parsed"
@@ -528,7 +646,7 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool) (JSONObject, error) {
 			case "qwen_chat_template":
 				payload["chat_template_kwargs"] = JSONObject{"enable_thinking": true, "preserve_thinking": true}
 			}
-		} else {
+		} else if r != nil {
 			switch compat.ThinkingFormat {
 			case "reasoning_effort":
 				payload["reasoning_effort"] = "none"
@@ -543,7 +661,7 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool) (JSONObject, error) {
 			}
 		}
 	}
-	if err := cacheCommonPayload(req, payload, compat.CacheControl, l.provider); err != nil {
+	if err := cacheCommonPayload(req, payload, compat.CacheControl, l.provider, breakpoint); err != nil {
 		return nil, err
 	}
 	if compat.Routing != nil {
@@ -568,16 +686,18 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool) (JSONObject, error) {
 	return payload, nil
 }
 
-func (l *OpenAIChatLM) buildRequest(req *Request, stream bool) (*TransportRequest, error) {
-	payload, err := l.payload(req, stream)
+func (l *OpenAIChatLM) buildRequest(req *Request, stream bool, scope *adaptScope) (*TransportRequest, error) {
+	payload, err := l.payload(req, stream, scope)
 	if err != nil {
 		return nil, err
 	}
-	timeout := 60 * time.Second
-	if stream {
-		timeout = 120 * time.Second
-	}
-	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/chat/completions", endpoint: "chat/completions", stream: stream, model: req.Model, headers: l.headers(), payload: payload, readTimeout: timeout})
+	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/chat/completions", endpoint: "chat/completions", stream: stream, model: req.Model, headers: l.headers(), payload: payload, scope: scope})
+}
+
+// scoresNamedTokens reports whether this server can deliver a distribution
+// over declared keys (MAP-14 §4: honours logprob_token_ids; vLLM ≥ 0.29).
+func (l *OpenAIChatLM) scoresNamedTokens() bool {
+	return l.resolved.TokenScoring == "logprob_token_ids"
 }
 
 // ─── Response parsing ────────────────────────────────────────────────
@@ -717,20 +837,52 @@ func responseFromChatBody(provider string, data JSONObject, model string, choice
 }
 
 func (l *OpenAIChatLM) parseResponse(req *Request, resp *HTTPResponse) (*Response, error) {
-	data, err := resp.JSON()
+	data, err := l.jsonBody(resp)
 	if err != nil {
 		return nil, err
 	}
-	return responseFromChatBody(l.provider, data, req.Model, nil, func(code, message string) *Error { return openaiResponseError(&l.lmCore, code, message) })
+	out, err := responseFromChatBody(l.provider, data, req.Model, nil, func(code, message string) *Error { return openaiResponseError(&l.lmCore, code, message) })
+	if err != nil {
+		return nil, err
+	}
+	return foldJudgments(out, req.Config.ResponseFormat), nil
 }
 
-func (l *OpenAIChatLM) responseFromOpenAIChat(body JSONObject, model string, choice *int) (*Response, error) {
-	return responseFromChatBody(l.provider, body, model, choice, func(code, message string) *Error { return openaiResponseError(&l.lmCore, code, message) })
+// foldJudgments is MAP-14 §3: the single text part of a judgment answer
+// becomes a DataPart.
+func foldJudgments(resp *Response, responseFormat JSONObject) *Response {
+	if resp == nil || responseFormat == nil || responseFormat["type"] != "json_schema" {
+		return resp
+	}
+	found := JudgmentsInSchema(responseFormat["schema"])
+	if len(found) == 0 {
+		return resp
+	}
+	resp.Message.Parts = ReplaceTextWithData(resp.Message.Parts, found)
+	return resp
+}
+
+func (l *OpenAIChatLM) responseFromOpenAIChat(body JSONObject, model string, choice *int, responseFormat JSONObject) (*Response, error) {
+	out, err := responseFromChatBody(l.provider, body, model, choice, func(code, message string) *Error { return openaiResponseError(&l.lmCore, code, message) })
+	if err != nil {
+		return nil, err
+	}
+	return foldJudgments(out, responseFormat), nil
 }
 
 // ResponseFromOpenAIChat reads a Chat Completions response body into a
 // canonical Response (MAP-12 rule 9), under the openai-chat provider name.
-func ResponseFromOpenAIChat(body JSONObject, model string, choice *int) (*Response, error) {
+// responseFormat (optional) is the request's, so a judgment answer folds
+// into a DataPart (MAP-14 §3).
+func ResponseFromOpenAIChat(body JSONObject, model string, choice *int, responseFormat JSONObject) (*Response, error) {
+	out, err := responseFromOpenAIChatBody(body, model, choice)
+	if err != nil {
+		return nil, err
+	}
+	return foldJudgments(out, responseFormat), nil
+}
+
+func responseFromOpenAIChatBody(body JSONObject, model string, choice *int) (*Response, error) {
 	return responseFromChatBody("openai-chat", body, model, choice, func(code, message string) *Error {
 		kind, ok := openaiResponseErrorCodeMap[code]
 		if !ok {
@@ -840,7 +992,7 @@ func (l *OpenAIChatLM) imageGenerateRequest(req *ImageGenerationRequest) (*Trans
 		return nil, UnsupportedFeatureErrorf(l.provider, "xai: size has no wire slot; use extensions for xAI's quality/resolution fields")
 	}
 	if len(req.Images) == 0 {
-		return l.emit(emitSpec{method: "POST", url: base + "/images/generations", headers: l.headers(), payload: payload, readTimeout: 300 * time.Second})
+		return l.emit(emitSpec{method: "POST", url: base + "/images/generations", headers: l.headers(), payload: payload})
 	}
 	if len(req.Images) > 1 {
 		return nil, UnsupportedFeatureErrorf(l.provider, "xai: image edits take exactly one input image; the wire has no slot for more")
@@ -850,14 +1002,14 @@ func (l *OpenAIChatLM) imageGenerateRequest(req *ImageGenerationRequest) (*Trans
 		return nil, err
 	}
 	payload["image"] = img
-	return l.emit(emitSpec{method: "POST", url: base + "/images/edits", headers: l.headers(), payload: payload, readTimeout: 300 * time.Second})
+	return l.emit(emitSpec{method: "POST", url: base + "/images/edits", headers: l.headers(), payload: payload})
 }
 
 func (l *OpenAIChatLM) imageGenerationFromResponse(_ *ImageGenerationRequest, resp *HTTPResponse) (ImageGenerationResponse, error) {
 	if !l.isXai() {
 		return ImageGenerationResponse{}, l.unsupported("image generation")
 	}
-	data, err := resp.JSON()
+	data, err := l.jsonBody(resp)
 	if err != nil {
 		return ImageGenerationResponse{}, err
 	}
@@ -899,7 +1051,7 @@ func (l *OpenAIChatLM) videoSubmitRequest(req *VideoGenerationRequest) (*Transpo
 	for k, v := range req.Extensions {
 		payload[k] = v
 	}
-	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/videos/generations", headers: l.headers(), payload: payload, readTimeout: 120 * time.Second})
+	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/videos/generations", headers: l.headers(), payload: payload})
 }
 
 func (l *OpenAIChatLM) videoJobFromBody(body string, videoID string) (VideoJobInfo, error) {
@@ -935,7 +1087,7 @@ func (l *OpenAIChatLM) videoStatusRequest(videoID string) (*TransportRequest, er
 	if !l.isXai() {
 		return nil, l.unsupported("video generation")
 	}
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/videos/" + pathID(videoID, false), headers: l.headers(), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/videos/" + pathID(videoID, false), headers: l.headers()})
 }
 
 func (l *OpenAIChatLM) videoListRequest(int, string) (*TransportRequest, error) {

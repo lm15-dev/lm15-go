@@ -6,10 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"net/http"
 	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -50,11 +48,13 @@ func partsToText(parts []Part, provider, where string) (string, error) {
 			if provider != "" {
 				head = provider + ": "
 			}
-			return "", UnsupportedFeatureErrorf(provider, "%sa %s part cannot reach %s, which takes text only; no text rendering of a media part is made (MAP-10)", head, p.Type(), where)
+			return "", UnsupportedFeature(provider, "messages[*].parts["+p.Type()+"]", "%sa %s part cannot reach %s, which takes text only; no text rendering of a media part is made (MAP-10)", head, p.Type(), where)
 		}
 		switch x := p.(type) {
 		case TextPart:
 			out = append(out, x.Text)
+		case DataPart:
+			out = append(out, DataPartText(x))
 		case ThinkingPart:
 			if x.Text != "" {
 				out = append(out, x.Text)
@@ -118,7 +118,7 @@ func checkToolResultMedia(provider string, part ToolResultPart, policy, wire str
 			if !ok {
 				door = "no lm15 door yet"
 			}
-			return UnsupportedFeatureErrorf(provider,
+			return UnsupportedFeature(provider, "messages[*].tool_result["+part.ID+"].content["+p.Type()+"]",
 				"%s: a %s part in tool_result %q cannot reach %s — %s (compat tool_result_media=%q, measured: lm15-contract/research/tool-result-content/). Carried natively by %s; or render the part to text yourself before building the tool result (MAP-10)",
 				provider, p.Type(), part.ID, wire, why, policy, door)
 		}
@@ -361,6 +361,9 @@ func partToOpenAIInput(p Part, provider string) (JSONObject, error) {
 			return nil, err
 		}
 		return JSONObject{"type": "input_video", "video_data": uri}, nil
+	case DataPart:
+		// 2026-09-19 D3: a data part on a text wire is its compact JSON.
+		return JSONObject{"type": "input_text", "text": DataPartText(x)}, nil
 	case CitationPart, ThinkingPart:
 		text, err := partsToText([]Part{p}, provider, "")
 		if err != nil {
@@ -372,7 +375,7 @@ func partToOpenAIInput(p Part, provider string) (JSONObject, error) {
 	if provider != "" {
 		head = provider + ": "
 	}
-	return nil, UnsupportedFeatureErrorf(provider, "%sa %s part has no input block on the Responses wire (MAP-10)", head, p.Type())
+	return nil, UnsupportedFeature(provider, "messages[*].parts["+p.Type()+"]", "%sa %s part has no input block on the Responses wire (MAP-10)", head, p.Type())
 }
 
 // toolResultOutputOpenAI renders function_call_output.output (MAP-10).
@@ -518,50 +521,34 @@ func parseJSONBestEffort(raw string) JSONObject {
 	return JSONObject{"value": parsed}
 }
 
-// retryAfterSeconds parses a Retry-After header (delta-seconds or HTTP-date).
-func retryAfterSeconds(value string) *float64 {
-	if value == "" {
-		return nil
+// nonJSONReplyError is INV-054: a 2xx whose body is not JSON is a
+// ProviderError (code provider) carrying the status, the content type, the
+// first 200 bytes and the request id — never ServerError (bound to 5xx),
+// never retried by lm15 (the request may have been served and billed).
+func nonJSONReplyError(provider string, resp *HTTPResponse, cause error) *Error {
+	contentType := strings.TrimSpace(strings.SplitN(resp.Header("content-type"), ";", 2)[0])
+	if contentType == "" {
+		contentType = "unknown"
 	}
-	if f, err := strconv.ParseFloat(value, 64); err == nil {
-		if math.IsInf(f, 0) || math.IsNaN(f) || f < 0 {
-			return nil
-		}
-		return &f
+	preview := resp.Body
+	if len(preview) > 200 {
+		preview = preview[:200]
 	}
-	when, err := http.ParseTime(value)
-	if err != nil {
-		return nil
-	}
-	secs := math.Max(0, when.Sub(time.Now().UTC()).Seconds())
-	return &secs
+	e := providerErrorf(KindProvider, provider, nil, fmt.Sprintf("%s: the reply (HTTP %d, %s) is not JSON: %q", provider, resp.Status, contentType, string(preview)))
+	e.Code = CodeProvider
+	e.Status = resp.Status
+	e.RequestID = resp.Header("x-request-id")
+	return e.WithCause(cause)
 }
 
-// attachErrorMetadata fills request_id / retry_after from headers when the
-// body did not say (2026-09-11).
-func attachErrorMetadata(e *Error, headers [][2]string) {
-	if e.RetryAfter != nil && (math.IsInf(*e.RetryAfter, 0) || math.IsNaN(*e.RetryAfter) || *e.RetryAfter < 0) {
-		e.RetryAfter = nil
+// jsonBody decodes a 2xx reply as a JSON object, refusing a non-JSON body
+// as the provider fault it is (INV-054).
+func (c *lmCore) jsonBody(resp *HTTPResponse) (JSONObject, error) {
+	data, err := resp.JSON()
+	if err != nil {
+		return nil, c.replyError(resp, err)
 	}
-	if e.RetryAfter == nil {
-		for _, h := range headers {
-			if strings.EqualFold(h[0], "retry-after") {
-				e.RetryAfter = retryAfterSeconds(h[1])
-				break
-			}
-		}
-	}
-	if e.RequestID != "" {
-		return
-	}
-	for _, name := range []string{"x-request-id", "request-id", "x-amzn-requestid", "x-amz-request-id", "x-ms-request-id"} {
-		for _, h := range headers {
-			if strings.EqualFold(h[0], name) && h[1] != "" {
-				e.RequestID = h[1]
-				return
-			}
-		}
-	}
+	return data, nil
 }
 
 // splitURL separates a URL into its query-less form and decoded params

@@ -10,6 +10,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"time"
 )
 
@@ -35,17 +37,115 @@ func expand(p, home string) string {
 	return p
 }
 
-// LockPathFor is the deterministic lock-file path for a guarded file.
+// LockPathFor is the deterministic lock-file path for a guarded file: the
+// AUTH-4 lock identity, including missing leaves and dangling symlinks.
+// Ordinary realpath hashes are unchanged; a path whose leaf does not exist
+// yet resolves every existing component in filesystem order (so the
+// process that creates the file and the one that later reads it agree),
+// and a resolution error falls back to the absolute path rather than
+// guessing. On Windows the key is lowercased with verbatim prefixes
+// removed, deliberately over-locking case-sensitive directories.
 func LockPathFor(path string, env func(string) string, home string) string {
-	abs, err := filepath.Abs(path)
+	key, err := RealPathAllowMissing(path)
 	if err != nil {
-		abs = path
+		if abs, aerr := filepath.Abs(path); aerr == nil {
+			key = abs
+		} else {
+			key = path
+		}
 	}
-	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
-		abs = resolved
+	if runtime.GOOS == "windows" {
+		key = strings.ToLower(stripWindowsVerbatim(key))
 	}
-	sum := sha256.Sum256([]byte(abs))
+	sum := sha256.Sum256([]byte(key))
 	return filepath.Join(LockDir(env, home), hex.EncodeToString(sum[:])[:32]+".lock")
+}
+
+func stripWindowsVerbatim(path string) string {
+	path = strings.ReplaceAll(path, "/", "\\")
+	if len(path) >= 8 && strings.EqualFold(path[:8], "\\\\?\\unc\\") {
+		return "\\\\" + path[8:]
+	}
+	if strings.HasPrefix(path, "\\\\?\\") {
+		return path[4:]
+	}
+	return path
+}
+
+// RealPathAllowMissing resolves symlinks component by component in
+// filesystem order; only a missing component is recoverable (the walk
+// continues, so a later ".." can return to an existing ancestor). Forty
+// link expansions bound loops, like every other SDK.
+func RealPathAllowMissing(target string) (string, error) {
+	if strings.ContainsRune(target, 0) {
+		return "", errors.New("fslock: NUL in credential path")
+	}
+	if target == "~" || strings.HasPrefix(target, "~/") || strings.HasPrefix(target, "~\\") {
+		return "", errors.New("fslock: no home directory for credential lock path")
+	}
+	if strings.HasPrefix(target, "~") {
+		return "", errors.New("fslock: named-user home expansion is unsupported for credential locks")
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	if cwd, err = filepath.EvalSymlinks(cwd); err != nil {
+		return "", err
+	}
+	resolved, pending := splitPath(target, cwd)
+	links := 0
+	for len(pending) > 0 {
+		name := pending[0]
+		pending = pending[1:]
+		switch name {
+		case ".":
+			continue
+		case "..":
+			resolved = filepath.Dir(resolved)
+			continue
+		}
+		candidate := filepath.Join(resolved, name)
+		info, err := os.Lstat(candidate)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				resolved = candidate
+				continue
+			}
+			return "", err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			links++
+			if links > 40 {
+				return "", errors.New("fslock: too many credential path symlinks")
+			}
+			linked, err := os.Readlink(candidate)
+			if err != nil {
+				return "", err
+			}
+			base, rest := splitPath(linked, resolved)
+			resolved = base
+			pending = append(rest, pending...)
+			continue
+		}
+		resolved = candidate
+	}
+	return resolved, nil
+}
+
+// splitPath separates a path into the base it starts from (the root for an
+// absolute path, base otherwise) and its remaining components.
+func splitPath(value, base string) (string, []string) {
+	if filepath.IsAbs(value) {
+		vol := filepath.VolumeName(value)
+		base = vol + string(filepath.Separator)
+		value = value[len(vol):]
+	}
+	var names []string
+	for _, part := range strings.FieldsFunc(value, func(r rune) bool { return r == '/' || r == filepath.Separator }) {
+		names = append(names, part)
+	}
+	return base, names
 }
 
 // Lock is a held lock.

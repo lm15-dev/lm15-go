@@ -3,11 +3,11 @@ package lm15
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"iter"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/lm15-dev/lm15-go/internal/sse"
 )
@@ -141,16 +141,44 @@ func openaiModelHasCacheOptions(model string) bool {
 	return major > 5 || (major == 5 && minor >= 6)
 }
 
-func cacheBreakpointIndex(req *Request, cacheControl string) *int {
+// cacheBreakpointIndex is the message the prompt_cache_breakpoint mark goes
+// on, computed ONCE per build (it may record). MAP-13: the wire carries the
+// mark on a text block of a user/developer message only; a mark asked for
+// elsewhere walks back to the nearest eligible message ("cache up to here"
+// — the nearest boundary before "here" is the obvious answer); with none,
+// the mark is dropped and implicit caching still applies.
+func cacheBreakpointIndex(req *Request, cacheControl string, scope *adaptScope) (*int, error) {
 	cfg := req.Config.Cache
 	if cfg == nil || cfg.EffectiveMode() == "off" || cfg.PrefixUntilIndex == nil || cacheControl != "openai" {
-		return nil
+		return nil, nil
 	}
-	idx := *cfg.PrefixUntilIndex
-	if idx > len(req.Messages)-1 {
-		idx = len(req.Messages) - 1
+	asked := *cfg.PrefixUntilIndex
+	if asked > len(req.Messages)-1 {
+		asked = len(req.Messages) - 1
 	}
-	return &idx
+	for index := asked; index >= 0; index-- {
+		msg := req.Messages[index]
+		if msg.Role == RoleAssistant || msg.Role == RoleTool || len(msg.Parts) == 0 {
+			continue
+		}
+		if _, ok := msg.Parts[len(msg.Parts)-1].(TextPart); !ok {
+			continue
+		}
+		if index != asked {
+			if err := scope.substituted("config.cache.prefix_until_index",
+				fmt.Sprintf("message %d is a %s message or does not end with text; the Responses wire marks text blocks of user/developer messages only, so the mark moved to the nearest eligible message before it", asked, req.Messages[asked].Role),
+				asked, index); err != nil {
+				return nil, err
+			}
+		}
+		i := index
+		return &i, nil
+	}
+	if err := scope.dropped("config.cache.prefix_until_index",
+		fmt.Sprintf("no user/developer message ending with text at or before message %d; the Responses wire marks text blocks only (implicit caching still applies)", asked), asked); err != nil {
+		return nil, err
+	}
+	return nil, nil
 }
 
 func cacheStablePrefix(req *Request, cacheControl string) bool {
@@ -158,12 +186,12 @@ func cacheStablePrefix(req *Request, cacheControl string) bool {
 	return cfg != nil && cfg.EffectiveMode() != "off" && cfg.Prefix == "stable" && cacheControl == "openai"
 }
 
-func hasExplicitBreakpoint(req *Request, cacheControl string) bool {
-	return cacheBreakpointIndex(req, cacheControl) != nil || (cacheStablePrefix(req, cacheControl) && req.System != nil)
+func hasExplicitBreakpoint(req *Request, cacheControl string, breakpoint *int) bool {
+	return breakpoint != nil || (cacheStablePrefix(req, cacheControl) && req.System != nil)
 }
 
 // cacheCommonPayload adds the shared MAP-6 fields for both OpenAI dialects.
-func cacheCommonPayload(req *Request, payload JSONObject, cacheControl, provider string) error {
+func cacheCommonPayload(req *Request, payload JSONObject, cacheControl, provider string, breakpoint *int) error {
 	cfg := req.Config.Cache
 	if cfg == nil || (cacheControl != "openai" && cacheControl != "openai_implicit") {
 		return nil
@@ -178,7 +206,7 @@ func cacheCommonPayload(req *Request, payload JSONObject, cacheControl, provider
 			}
 		}
 		if cfg.Resource != "" {
-			return UnsupportedFeatureErrorf(provider, "%s: cache.resource is not supported — this provider has no stored-cache tier; it caches every prompt prefix automatically", provider)
+			return UnsupportedFeature(provider, "config.cache.resource", "%s: cache.resource is not supported — this provider has no stored-cache tier; it caches every prompt prefix automatically", provider)
 		}
 		return nil
 	}
@@ -194,17 +222,17 @@ func cacheCommonPayload(req *Request, payload JSONObject, cacheControl, provider
 	if cfg.Retention == "long" {
 		payload["prompt_cache_retention"] = "24h"
 	}
-	if openaiModelHasCacheOptions(req.Model) && hasExplicitBreakpoint(req, cacheControl) {
+	if openaiModelHasCacheOptions(req.Model) && hasExplicitBreakpoint(req, cacheControl, breakpoint) {
 		payload["prompt_cache_options"] = JSONObject{"mode": "explicit"}
 	}
 	if cfg.Resource != "" {
-		return UnsupportedFeatureErrorf(provider, "%s: cache.resource is not supported — this provider has no stored-cache tier; it caches by marks on blocks (prefix / prefix_until_index) and automatically", provider)
+		return UnsupportedFeature(provider, "config.cache.resource", "%s: cache.resource is not supported — this provider has no stored-cache tier; it caches by marks on blocks (prefix / prefix_until_index) and automatically", provider)
 	}
 	return nil
 }
 
 func breakpointUnsupported(provider string, index int, role string) *Error {
-	return UnsupportedFeatureErrorf(provider, "%s: cache.prefix_until_index=%d points at a %s message whose last block is not text — the wire carries prompt_cache_breakpoint on text input blocks only. Point the prefix at a user/developer message that ends with text, or omit prefix_until_index (implicit caching still applies).", provider, index, role)
+	return UnsupportedFeature(provider, "config.cache.prefix_until_index", "%s: cache.prefix_until_index=%d points at a %s message whose last block is not text — the wire carries prompt_cache_breakpoint on text input blocks only. Point the prefix at a user/developer message that ends with text, or omit prefix_until_index (implicit caching still applies).", provider, index, role)
 }
 
 func responseFormatToOpenAIText(f JSONObject) JSONObject {
@@ -325,6 +353,8 @@ var openaiResponseErrorCodeMap = map[string]ErrorKind{
 	"empty_image_file": KindInvalidRequest, "failed_to_download_image": KindInvalidRequest, "image_file_not_found": KindInvalidRequest,
 	"model_not_found": KindUnsupportedModel, "model_not_available": KindUnsupportedModel, "unsupported_model": KindUnsupportedModel,
 	"DeploymentNotFound": KindUnsupportedModel,
+	// Azure documents these on Responses error frames even under HTTP 200.
+	"no_capacity": KindRateLimit, "too_many_requests": KindRateLimit,
 }
 
 var openaiModelErrorCodes = map[string]bool{"model_not_found": true, "model_not_available": true, "unsupported_model": true, "DeploymentNotFound": true}
@@ -636,9 +666,13 @@ func (l *OpenAILM) toolChoicePayload(req *Request, compat ResolvedOpenAIResponse
 	return "auto"
 }
 
-func (l *OpenAILM) payload(req *Request, stream bool) (JSONObject, error) {
+func (l *OpenAILM) payload(req *Request, stream bool, scope *adaptScope) (JSONObject, error) {
 	compat := l.compat(req)
-	input, err := l.buildInput(req.Messages, compat, cacheBreakpointIndex(req, compat.CacheControl))
+	breakpoint, err := cacheBreakpointIndex(req, compat.CacheControl, scope) // once: it may record
+	if err != nil {
+		return nil, err
+	}
+	input, err := l.buildInput(req.Messages, compat, breakpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -666,10 +700,31 @@ func (l *OpenAILM) payload(req *Request, stream bool) (JSONObject, error) {
 		payload["top_p"] = jsonFloat(*cfg.TopP)
 	}
 	if len(cfg.Stop) > 0 {
-		return nil, UnsupportedFeatureErrorf(l.provider, "%s: config.stop has no field on the Responses wire (the Chat Completions dialect carries `stop`); a silent omission would run the model past the sequence", l.provider)
+		// MAP-13 client_side: the Responses wire has no stop field; the text
+		// is cut at the first sequence after the wire (complete) or as it
+		// streams (the source is closed at the cut).
+		stop := toAnyList(cfg.Stop, func(s string) any { return s })
+		if err := scope.clientSide("config.stop", "the Responses wire has no stop field; the reply is streamed and the connection closed at the first stop sequence (whether the provider then stops generating, and billing, is its own behaviour); the usage report rides only the final frame, so it is not reported when the cut happens (never estimated)", stop, stop); err != nil {
+			return nil, err
+		}
 	}
 	if cfg.TopK != nil {
-		return nil, UnsupportedFeatureErrorf(l.provider, "%s: config.top_k has no field on the Responses wire (Anthropic and Gemini carry it)", l.provider)
+		if err := scope.dropped("config.top_k", "the Responses wire has no top_k (Anthropic and Gemini carry it)", *cfg.TopK); err != nil {
+			return nil, err
+		}
+	}
+	for _, knob := range []struct {
+		name string
+		set  bool
+		val  any
+	}{{"seed", cfg.Seed != nil, deref(cfg.Seed)}, {"frequency_penalty", cfg.FrequencyPenalty != nil, deref(cfg.FrequencyPenalty)}, {"presence_penalty", cfg.PresencePenalty != nil, deref(cfg.PresencePenalty)}} {
+		if knob.set {
+			// The Responses API dropped these from the Chat Completions wire
+			// (no field in the reference); the chat dialect carries them.
+			if err := scope.dropped("config."+knob.name, "the Responses wire has no "+knob.name+" field (the Chat Completions dialect carries it)", knob.val); err != nil {
+				return nil, err
+			}
+		}
 	}
 	if cfg.Logprobs != nil {
 		payload["top_logprobs"] = *cfg.Logprobs
@@ -702,21 +757,35 @@ func (l *OpenAILM) payload(req *Request, stream bool) (JSONObject, error) {
 		payload["parallel_tool_calls"] = *cfg.ToolChoice.Parallel
 	}
 	if len(cfg.ResponseFormat) > 0 {
+		// MAP-14: the judgment convention goes verbatim (strict honours
+		// anyOf/const/title, receipted 2026-09-17); probabilities cannot be
+		// measured here.
+		if err := noteUnmeasurableProbabilities(scope, req, l.provider); err != nil {
+			return nil, err
+		}
 		payload["text"] = responseFormatToOpenAIText(cfg.ResponseFormat)
 	}
 	if r := cfg.Reasoning; r != nil {
 		if !r.IsOff() {
 			if r.ThinkingBudget != nil {
-				return nil, UnsupportedFeatureErrorf(l.provider, "%s: reasoning.thinking_budget is not supported — this wire has no thinking token budget; use effort (Anthropic's manual class and Gemini take a budget)", l.provider)
+				// MAP-13: effort carries the intent (MAP-7 rule 5); no budget
+				// field exists on this wire.
+				if err := scope.dropped("config.reasoning.thinking_budget", "this wire has no thinking token budget; effort carries the intent (Anthropic's manual class and Gemini take a budget)", *r.ThinkingBudget); err != nil {
+					return nil, err
+				}
 			}
-			if (r.Summary == "concise" || r.Summary == "detailed") && compat.ReasoningFormat != "responses_reasoning" {
-				return nil, UnsupportedFeatureErrorf(l.provider, "%s: reasoning.summary=%q is an OpenAI Responses detail level; this wire has no summary levels (use 'auto')", l.provider, r.Summary)
+			summary := r.Summary
+			if (summary == "concise" || summary == "detailed") && compat.ReasoningFormat != "responses_reasoning" {
+				if err := scope.substituted("config.reasoning.summary", "this wire has no summary detail levels; 'auto' is what it shows", summary, "auto"); err != nil {
+					return nil, err
+				}
+				summary = "auto"
 			}
 			switch compat.ReasoningFormat {
 			case "responses_reasoning":
 				rp := JSONObject{"effort": r.Effort}
-				if r.Summary != "" {
-					rp["summary"] = r.Summary
+				if summary != "" {
+					rp["summary"] = summary
 				}
 				payload["reasoning"] = rp
 			case "reasoning_effort":
@@ -748,7 +817,7 @@ func (l *OpenAILM) payload(req *Request, stream bool) (JSONObject, error) {
 			}
 		}
 	}
-	if err := cacheCommonPayload(req, payload, compat.CacheControl, l.provider); err != nil {
+	if err := cacheCommonPayload(req, payload, compat.CacheControl, l.provider, breakpoint); err != nil {
 		return nil, err
 	}
 	if compat.Routing != nil {
@@ -792,22 +861,18 @@ func nilIfEmpty(s string) any {
 	return s
 }
 
-func (l *OpenAILM) buildRequest(req *Request, stream bool) (*TransportRequest, error) {
-	payload, err := l.payload(req, stream)
+func (l *OpenAILM) buildRequest(req *Request, stream bool, scope *adaptScope) (*TransportRequest, error) {
+	payload, err := l.payload(req, stream, scope)
 	if err != nil {
 		return nil, err
 	}
-	timeout := 60 * time.Second
-	if stream {
-		timeout = 120 * time.Second
-	}
-	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/responses", endpoint: "responses", stream: stream, model: req.Model, headers: l.headers(""), payload: payload, readTimeout: timeout})
+	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/responses", endpoint: "responses", stream: stream, model: req.Model, headers: l.headers(""), payload: payload, scope: scope})
 }
 
 // ─── Response parsing ────────────────────────────────────────────────
 
 func (l *OpenAILM) parseResponse(req *Request, resp *HTTPResponse) (*Response, error) {
-	data, err := resp.JSON()
+	data, err := l.jsonBody(resp)
 	if err != nil {
 		return nil, err
 	}
@@ -919,7 +984,7 @@ func (l *OpenAILM) parseResponse(req *Request, resp *HTTPResponse) (*Response, e
 	return &Response{
 		ID:           wireStr(data["id"]),
 		Model:        model,
-		Message:      Message{Role: RoleAssistant, Parts: parts},
+		Message:      Message{Role: RoleAssistant, Parts: ReplaceTextWithData(parts, RequestJudgments(req))},
 		FinishReason: openaiFinishFromStatus(data, hasToolCall(parts)),
 		Usage:        usage,
 		Logprobs:     logprobs,
@@ -1064,7 +1129,7 @@ func (l *OpenAILM) modelsRequest() (*TransportRequest, error) {
 	if l.isCodex() {
 		params = map[string]string{"client_version": l.access.BackendOptions["client_version"]}
 	}
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/models", params: params, headers: l.headers(""), readTimeout: 30 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/models", params: params, headers: l.headers("")})
 }
 
 func (l *OpenAILM) modelsFromBody(body string) ([]ModelInfo, error) {
@@ -1102,7 +1167,7 @@ func (l *OpenAILM) fileUploadRequest(req *FileUploadRequest) (*TransportRequest,
 		return nil, err
 	}
 	ct, body := multipartFormBody(fields, []multipartFile{{Field: "file", Filename: req.Filename, ContentType: req.EffectiveMediaType(), Data: content}})
-	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/files", headers: l.headers(ct), body: body, readTimeout: 300 * time.Second})
+	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/files", headers: l.headers(ct), body: body})
 }
 
 func (l *OpenAILM) fileInfo(data JSONObject) (FileInfo, error) {
@@ -1132,7 +1197,7 @@ func (l *OpenAILM) fileInfoFromBody(body string) (FileInfo, error) {
 }
 
 func (l *OpenAILM) fileGetRequest(fileID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/files/" + pathID(fileID, false), headers: l.headers(""), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/files/" + pathID(fileID, false), headers: l.headers("")})
 }
 
 func (l *OpenAILM) fileListRequest(limit int, cursor string) (*TransportRequest, error) {
@@ -1140,7 +1205,7 @@ func (l *OpenAILM) fileListRequest(limit int, cursor string) (*TransportRequest,
 	if cursor != "" {
 		params["after"] = cursor
 	}
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/files", params: params, headers: l.headers(""), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/files", params: params, headers: l.headers("")})
 }
 
 func (l *OpenAILM) filePageFromListBody(body string) (FilePage, error) {
@@ -1166,19 +1231,19 @@ func (l *OpenAILM) filePageFromListBody(body string) (FilePage, error) {
 }
 
 func (l *OpenAILM) fileDeleteRequest(fileID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "DELETE", url: strings.TrimRight(l.baseURL, "/") + "/files/" + pathID(fileID, false), headers: l.headers(""), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "DELETE", url: strings.TrimRight(l.baseURL, "/") + "/files/" + pathID(fileID, false), headers: l.headers("")})
 }
 
 func (l *OpenAILM) fileDownloadRequest(fileID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/files/" + pathID(fileID, false) + "/content", headers: l.headers(""), readTimeout: 300 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/files/" + pathID(fileID, false) + "/content", headers: l.headers("")})
 }
 
 // ─── Batch ───────────────────────────────────────────────────────────
 
-func (l *OpenAILM) batchUploadRequest(req *BatchRequest) (*TransportRequest, error) {
+func (l *OpenAILM) batchUploadRequest(req *BatchRequest, scope *adaptScope) (*TransportRequest, error) {
 	var lines []string
 	for i, nested := range req.Requests {
-		body, err := l.payload(nested, false)
+		body, err := l.payload(nested, false, scope)
 		if err != nil {
 			return nil, err
 		}
@@ -1186,10 +1251,10 @@ func (l *OpenAILM) batchUploadRequest(req *BatchRequest) (*TransportRequest, err
 	}
 	data := []byte(strings.Join(lines, "\n") + "\n")
 	ct, body := multipartFormBody([][2]string{{"purpose", "batch"}}, []multipartFile{{Field: "file", Filename: "lm15-batch.jsonl", ContentType: "application/jsonl", Data: data}})
-	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/files", headers: l.headers(ct), body: body, readTimeout: 300 * time.Second})
+	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/files", headers: l.headers(ct), body: body, scope: scope})
 }
 
-func (l *OpenAILM) batchSubmitRequest(req *BatchRequest, uploadBody JSONObject) (*TransportRequest, error) {
+func (l *OpenAILM) batchSubmitRequest(req *BatchRequest, uploadBody JSONObject, scope *adaptScope) (*TransportRequest, error) {
 	inputFileID := stringOnly(uploadBody["id"])
 	if inputFileID == "" {
 		return nil, l.providerError(KindProvider, "openai: batch input file upload returned no id", 0, "", "")
@@ -1210,7 +1275,7 @@ func (l *OpenAILM) batchSubmitRequest(req *BatchRequest, uploadBody JSONObject) 
 	for k, v := range ext {
 		payload[k] = v
 	}
-	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/batches", headers: l.headers(""), payload: payload, readTimeout: 120 * time.Second})
+	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/batches", headers: l.headers(""), payload: payload, scope: scope})
 }
 
 func (l *OpenAILM) batchJobInfo(data JSONObject) (BatchJobInfo, error) {
@@ -1231,18 +1296,18 @@ func (l *OpenAILM) batchJobFromBody(body string) (BatchJobInfo, error) {
 }
 
 func (l *OpenAILM) batchStatusRequest(batchID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/batches/" + pathID(batchID, false), headers: l.headers(""), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/batches/" + pathID(batchID, false), headers: l.headers("")})
 }
 
 func (l *OpenAILM) batchCancelRequest(batchID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/batches/" + pathID(batchID, false) + "/cancel", headers: l.headers(""), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/batches/" + pathID(batchID, false) + "/cancel", headers: l.headers("")})
 }
 
 func (l *OpenAILM) batchResultFetches(statusBody JSONObject) ([]*TransportRequest, error) {
 	var out []*TransportRequest
 	for _, key := range []string{"output_file_id", "error_file_id"} {
 		if id := stringOnly(statusBody[key]); id != "" {
-			req, err := l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/files/" + pathID(id, false) + "/content", headers: l.headers(""), readTimeout: 300 * time.Second})
+			req, err := l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/files/" + pathID(id, false) + "/content", headers: l.headers("")})
 			if err != nil {
 				return nil, err
 			}
@@ -1325,7 +1390,7 @@ func (l *OpenAILM) batchEntries(statusBody JSONObject, fetched []string) ([]Batc
 }
 
 func (l *OpenAILM) batchListRequest(limit int) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/batches", params: map[string]string{"limit": strconv.Itoa(limit)}, headers: l.headers(""), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/batches", params: map[string]string{"limit": strconv.Itoa(limit)}, headers: l.headers("")})
 }
 
 func (l *OpenAILM) batchJobsFromListBody(body string) ([]BatchJobInfo, error) {
@@ -1361,7 +1426,7 @@ func (l *OpenAILM) videoSubmitRequest(req *VideoGenerationRequest) (*TransportRe
 	if req.Seconds != nil {
 		payload["seconds"] = strconv.Itoa(*req.Seconds)
 	}
-	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/videos", headers: l.headers(""), payload: payload, readTimeout: 120 * time.Second})
+	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/videos", headers: l.headers(""), payload: payload})
 }
 
 func (l *OpenAILM) videoJobInfo(data JSONObject) (VideoJobInfo, error) {
@@ -1393,11 +1458,11 @@ func (l *OpenAILM) videoJobFromBody(body string, _ string) (VideoJobInfo, error)
 }
 
 func (l *OpenAILM) videoStatusRequest(videoID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/videos/" + pathID(videoID, false), headers: l.headers(""), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/videos/" + pathID(videoID, false), headers: l.headers("")})
 }
 
 func (l *OpenAILM) videoResultFetch(statusBody JSONObject) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/videos/" + pathID(wireStr(statusBody["id"]), false) + "/content", headers: l.headers(""), readTimeout: 600 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/videos/" + pathID(wireStr(statusBody["id"]), false) + "/content", headers: l.headers("")})
 }
 
 func (l *OpenAILM) videoPart(_ JSONObject, fetched *HTTPResponse) (VideoPart, error) {
@@ -1412,7 +1477,7 @@ func (l *OpenAILM) videoPart(_ JSONObject, fetched *HTTPResponse) (VideoPart, er
 }
 
 func (l *OpenAILM) videoListRequest(limit int, _ string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/videos", params: map[string]string{"limit": strconv.Itoa(limit)}, headers: l.headers(""), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/videos", params: map[string]string{"limit": strconv.Itoa(limit)}, headers: l.headers("")})
 }
 
 func (l *OpenAILM) videoJobsFromListBody(body string) ([]VideoJobInfo, error) {
@@ -1448,7 +1513,7 @@ func (l *OpenAILM) imageGenerateRequest(req *ImageGenerationRequest) (*Transport
 				payload[k] = v
 			}
 		}
-		return l.emit(emitSpec{method: "POST", url: base + "/images/generations", headers: l.headers(""), payload: payload, readTimeout: 300 * time.Second})
+		return l.emit(emitSpec{method: "POST", url: base + "/images/generations", headers: l.headers(""), payload: payload})
 	}
 	for _, img := range req.Images {
 		if img.Data == "" && img.Path == "" {
@@ -1475,11 +1540,11 @@ func (l *OpenAILM) imageGenerateRequest(req *ImageGenerationRequest) (*Transport
 		files = append(files, multipartFile{Field: field, Filename: "image-" + strconv.Itoa(i), ContentType: img.MediaType, Data: data})
 	}
 	ct, body := multipartFormBody(fields, files)
-	return l.emit(emitSpec{method: "POST", url: base + "/images/edits", headers: l.headers(ct), body: body, readTimeout: 300 * time.Second})
+	return l.emit(emitSpec{method: "POST", url: base + "/images/edits", headers: l.headers(ct), body: body})
 }
 
 func (l *OpenAILM) imageGenerationFromResponse(_ *ImageGenerationRequest, resp *HTTPResponse) (ImageGenerationResponse, error) {
-	data, err := resp.JSON()
+	data, err := l.jsonBody(resp)
 	if err != nil {
 		return ImageGenerationResponse{}, err
 	}
@@ -1519,7 +1584,7 @@ func (l *OpenAILM) speechGenerateRequest(req *SpeechGenerationRequest) (*Transpo
 	if req.Format != "" {
 		payload["response_format"] = req.Format
 	}
-	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/audio/speech", headers: l.headers(""), payload: payload, readTimeout: 300 * time.Second})
+	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/audio/speech", headers: l.headers(""), payload: payload})
 }
 
 func (l *OpenAILM) speechGenerationFromResponse(_ *SpeechGenerationRequest, resp *HTTPResponse) (SpeechGenerationResponse, error) {

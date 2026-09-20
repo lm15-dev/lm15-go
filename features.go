@@ -1,6 +1,9 @@
 package lm15
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 // EndpointSupport declares the surfaces an access path carries. A dialect
 // that implements a surface still refuses when the policy does not carry it.
@@ -72,6 +75,67 @@ type HostSpec struct {
 	StreamFraming      string // "" reads as "sse"
 	RequiredHeaders    [][2]string
 	SigV4Service       string
+	// EndpointEnv: the cloud vendor's own variables, consulted in order by
+	// the router, that name a full endpoint root for this door
+	// (AZURE_OPENAI_ENDPOINT, AWS_ENDPOINT_URL_BEDROCK_RUNTIME). An endpoint
+	// replaces the root of BaseURL (the part before the first path
+	// segment); the door's path is appended unless already present
+	// (AUTH-10, amended 2026-09-19).
+	EndpointEnv []string
+}
+
+// RootTemplate is BaseURL up to (not including) the first path segment:
+// the part an endpoint override replaces.
+func (h HostSpec) RootTemplate() string {
+	scheme, rest, _ := strings.Cut(h.BaseURL, "://")
+	host, _, _ := strings.Cut(rest, "/")
+	return scheme + "://" + host
+}
+
+// PathTemplate is the door's path under the root ("/openai/v1",
+// "/v1/projects/{project}/locations/{location}/publishers/google"); ""
+// when the template is a bare host.
+func (h HostSpec) PathTemplate() string {
+	_, rest, _ := strings.Cut(h.BaseURL, "://")
+	_, path, slash := strings.Cut(rest, "/")
+	if !slash {
+		return ""
+	}
+	return "/" + path
+}
+
+var templateSettingRe = regexp.MustCompile(`\{(\w+)\}`)
+
+func templateSettings(text string) map[string]bool {
+	out := map[string]bool{}
+	for _, m := range templateSettingRe.FindAllStringSubmatch(text, -1) {
+		out[m[1]] = true
+	}
+	return out
+}
+
+// URLOnlySettings are the settings an endpoint override makes
+// unnecessary: those that appear in the root of the template and nowhere
+// else — not in the path, not in a required header, and not the SigV4
+// signing region (AWS's own SDK requires a region even with endpoint_url;
+// the signature's credential scope names it).
+func (h HostSpec) URLOnlySettings() map[string]bool {
+	inRoot := templateSettings(h.RootTemplate())
+	if inRoot["location_host"] {
+		delete(inRoot, "location_host")
+		inRoot["location"] = true
+	}
+	inPath := templateSettings(h.PathTemplate())
+	for _, rh := range h.RequiredHeaders {
+		delete(inRoot, rh[1])
+	}
+	for name := range inPath {
+		delete(inRoot, name)
+	}
+	if h.SigV4Service != "" {
+		delete(inRoot, "region")
+	}
+	return inRoot
 }
 
 // EffectiveModelIn returns ModelIn or "body".

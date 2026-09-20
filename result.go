@@ -31,7 +31,9 @@ type StreamAccumulator struct {
 	messageContinuation []ContinuationState
 	partContinuation    map[int][]ContinuationState
 	logprobSeq          []TokenLogprob
+	logprobsIncomplete  bool
 	providerData        JSONObject
+	adaptations         []Adaptation
 }
 
 // NewStreamAccumulator creates an accumulator for a request.
@@ -62,6 +64,9 @@ func (a *StreamAccumulator) Push(event StreamEvent) {
 		if e.Model != "" {
 			a.startedModel = e.Model
 		}
+		if len(e.Adaptations) > 0 {
+			a.adaptations = e.Adaptations
+		}
 	case StreamEndEvent:
 		if e.FinishReason != "" {
 			a.finishReason = e.FinishReason
@@ -82,6 +87,8 @@ func (a *StreamAccumulator) pushDelta(delta Delta) {
 	case TextDelta:
 		a.textParts[d.PartIndex] = append(a.textParts[d.PartIndex], d.Text)
 		a.logprobSeq = append(a.logprobSeq, d.Logprobs...)
+		// AND across text events: a later true never erases false.
+		a.logprobsIncomplete = a.logprobsIncomplete || d.LogprobsIncomplete
 	case ThinkingDelta:
 		a.thinkingParts[d.PartIndex] = append(a.thinkingParts[d.PartIndex], d.Text)
 	case AudioDelta:
@@ -270,14 +277,20 @@ func (a *StreamAccumulator) assemble(skip map[int]bool) *Response {
 	if len(a.logprobSeq) > 0 {
 		logprobs = a.logprobSeq
 	}
+	// MAP-14 §3: the single text part of a judgment answer becomes a DataPart.
+	if a.request != nil {
+		parts = ReplaceTextWithData(parts, RequestJudgments(a.request))
+	}
 	return &Response{
-		ID:           a.startedID,
-		Model:        model,
-		Message:      Message{Role: RoleAssistant, Parts: parts, Continuation: a.messageContinuation},
-		FinishReason: finish,
-		Usage:        usage.Normalize(),
-		Logprobs:     logprobs,
-		ProviderData: a.providerData,
+		ID:                 a.startedID,
+		Model:              model,
+		Message:            Message{Role: RoleAssistant, Parts: parts, Continuation: a.messageContinuation},
+		FinishReason:       finish,
+		Usage:              usage.Normalize(),
+		Logprobs:           logprobs,
+		LogprobsIncomplete: a.logprobsIncomplete,
+		ProviderData:       a.providerData,
+		Adaptations:        a.adaptations,
 	}
 }
 
@@ -339,6 +352,21 @@ func pcmToWav(pcm []byte, sampleRate, channels, bits int) []byte {
 // CoalesceStream enforces one leading start and one final merged end event
 // over a raw adapter stream; delta and error events pass through.
 func CoalesceStream(events iter.Seq2[StreamEvent, error], model string) iter.Seq2[StreamEvent, error] {
+	return CoalesceStreamWith(events, model, nil)
+}
+
+// stampStart puts the build's adaptations (MAP-13) on the start event,
+// provider-sent or synthesized: they are known before the first byte.
+func stampStart(e StreamStartEvent, adaptations []Adaptation) StreamStartEvent {
+	if len(adaptations) > 0 && len(e.Adaptations) == 0 {
+		e.Adaptations = adaptations
+	}
+	return e
+}
+
+// CoalesceStreamWith is CoalesceStream with the build's adaptations stamped
+// on the start event.
+func CoalesceStreamWith(events iter.Seq2[StreamEvent, error], model string, adaptations []Adaptation) iter.Seq2[StreamEvent, error] {
 	return func(yield func(StreamEvent, error) bool) {
 		started := false
 		sawEnd := false
@@ -357,7 +385,7 @@ func CoalesceStream(events iter.Seq2[StreamEvent, error], model string) iter.Seq
 					continue
 				}
 				started = true
-				if !yield(e, nil) {
+				if !yield(stampStart(e, adaptations), nil) {
 					return
 				}
 				continue
@@ -385,7 +413,7 @@ func CoalesceStream(events iter.Seq2[StreamEvent, error], model string) iter.Seq
 			case StreamDeltaEvent:
 				if !started {
 					started = true
-					if !yield(StreamStartEvent{Model: model}, nil) {
+					if !yield(StreamStartEvent{Model: model, Adaptations: adaptations}, nil) {
 						return
 					}
 				}
@@ -396,7 +424,7 @@ func CoalesceStream(events iter.Seq2[StreamEvent, error], model string) iter.Seq
 		}
 		if sawEnd {
 			if !started {
-				if !yield(StreamStartEvent{Model: model}, nil) {
+				if !yield(StreamStartEvent{Model: model, Adaptations: adaptations}, nil) {
 					return
 				}
 			}
@@ -411,6 +439,11 @@ func errorFromEvent(detail ErrorDetail) *Error {
 	e := newError(ErrorKindForCode(detail.Code), detail.Message)
 	e.Code = detail.Code
 	e.ProviderCode = detail.ProviderCode
+	// The handshake diagnostics propagate into the error's metadata; the
+	// status stays absent (an in-stream error is never labelled 200).
+	e.RequestID = detail.HTTPResponse.RequestID
+	e.RetryAfter = detail.HTTPResponse.RetryAfter
+	e.RateLimitHeaders = detail.HTTPResponse.RateLimitHeaders.Clone()
 	return e
 }
 
@@ -617,14 +650,27 @@ func (s *ResponseStream) Close() error {
 // ResponseToEvents converts a Response to stream events (lossless for the
 // Delta vocabulary; a non-streamable part is an error).
 func ResponseToEvents(r *Response) ([]StreamEvent, error) {
-	events := []StreamEvent{StreamStartEvent{ID: r.ID, Model: r.Model}}
+	events := []StreamEvent{StreamStartEvent{ID: r.ID, Model: r.Model, Adaptations: r.Adaptations}}
 	pending := r.Logprobs
+	pendingIncomplete := r.LogprobsIncomplete
+	if pendingIncomplete {
+		hasText := false
+		for _, part := range r.Message.Parts {
+			if _, ok := part.(TextPart); ok {
+				hasText = true
+			}
+		}
+		if !hasText {
+			return nil, typeErrorf("Cannot stream incomplete logprobs without a TextPart to carry their coverage")
+		}
+	}
 	for idx, part := range r.Message.Parts {
 		var delta Delta
 		switch p := part.(type) {
 		case TextPart:
-			delta = TextDelta{Text: p.Text, PartIndex: idx, Logprobs: pending}
+			delta = TextDelta{Text: p.Text, PartIndex: idx, Logprobs: pending, LogprobsIncomplete: pendingIncomplete}
 			pending = nil
+			pendingIncomplete = false
 		case ThinkingPart:
 			delta = ThinkingDelta{Text: p.Text, PartIndex: idx}
 		case ToolCallPart:

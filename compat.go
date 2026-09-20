@@ -135,7 +135,6 @@ var OpenAIResponsesPresetBaseURLs = map[string]string{
 
 func init() {
 	openaiResponsesPresets["lmstudio"] = openaiResponsesPresets["ollama"]
-	openaiChatPresets["lmstudio"] = openaiChatPresets["ollama"]
 }
 
 // OpenAIResponsesPreset returns the named Responses preset.
@@ -152,7 +151,7 @@ func OpenAIResponsesPreset(name string) (OpenAIResponsesCompat, error) {
 var chatOverridable = map[string]bool{
 	"instruction_role": true, "max_tokens_field": true, "stream_usage": true, "thinking_format": true, "thinking_replay": true,
 	"assistant_reasoning_content": true, "strict_tools": true, "cache_control": true, "user_field": true,
-	"forced_tool_choice": true, "json_schema": true, "reasoning_efforts": true, "tool_result_media": true,
+	"forced_tool_choice": true, "json_schema": true, "reasoning_efforts": true, "tool_result_media": true, "token_scoring": true,
 }
 
 // ModelOverride is a per-model-family knob override (first matching prefix wins).
@@ -178,10 +177,16 @@ type OpenAIChatCompat struct {
 	UserField                 string // auto | user | user_id | safety_identifier
 	ForcedToolChoice          string // auto | send | reject
 	JSONSchema                string // auto | send | reject
-	ReasoningEfforts          []string
-	Routing                   JSONObject
-	Extensions                JSONObject
-	ModelOverrides            []ModelOverride
+	// TokenScoring (MAP-14 §4): can the server score named tokens
+	// (logprob_token_ids on the completions endpoint) so lm15 can deliver a
+	// distribution over declared keys? auto | none | logprob_token_ids.
+	// Receipted on vLLM 0.29.0 (honoured) and 0.25.1 (200, silently
+	// absent) 2026-09-17; the response-side check catches the latter.
+	TokenScoring     string
+	ReasoningEfforts []string
+	Routing          JSONObject
+	Extensions       JSONObject
+	ModelOverrides   []ModelOverride
 }
 
 // ResolvedOpenAIChatCompat is a fully resolved Chat policy.
@@ -201,6 +206,7 @@ type ResolvedOpenAIChatCompat struct {
 	UserField                 string
 	ForcedToolChoice          string
 	JSONSchema                string
+	TokenScoring              string
 	ReasoningEfforts          []string
 	Routing                   JSONObject
 	Extensions                JSONObject
@@ -258,6 +264,8 @@ func (c OpenAIChatCompat) ForModel(model string) OpenAIChatCompat {
 					out.JSONSchema = value
 				case "tool_result_media":
 					out.ToolResultMedia = value
+				case "token_scoring":
+					out.TokenScoring = value
 				case "reasoning_efforts":
 					out.ReasoningEfforts = strings.Split(value, ",")
 				}
@@ -286,6 +294,7 @@ func ResolveOpenAIChatCompat(p OpenAIChatCompat) ResolvedOpenAIChatCompat {
 		UserField:                 pick(p.UserField, "user"),
 		ForcedToolChoice:          pick(p.ForcedToolChoice, "send"),
 		JSONSchema:                pick(p.JSONSchema, "send"),
+		TokenScoring:              pick(p.TokenScoring, "none"),
 		ReasoningEfforts:          p.ReasoningEfforts,
 		Routing:                   p.Routing,
 		Extensions:                p.Extensions,
@@ -293,15 +302,26 @@ func ResolveOpenAIChatCompat(p OpenAIChatCompat) ResolvedOpenAIChatCompat {
 }
 
 var openaiChatPresets = map[string]OpenAIChatCompat{
-	"openai":     {InstructionRole: "system", MaxTokensField: "max_completion_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ToolResultName: "omit", StrictTools: "omit", CacheControl: "openai", ToolResultMedia: "reject"},
-	"ollama":     {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "none", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "reject"},
+	"openai": {InstructionRole: "system", MaxTokensField: "max_completion_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ToolResultName: "omit", StrictTools: "omit", CacheControl: "openai", ToolResultMedia: "reject"},
+	// ollama: reasoning_effort on the wire, mapped to Ollama's `think` by
+	// openai/openai.go thinkFromReasoningEffort (research/tool-result-content/
+	// sources/ollama.txt:536-560): none → think:false, minimal → low,
+	// low|medium|high|max verbatim, xhigh → max; an unknown word is a 400.
+	"ollama": {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ReasoningEfforts: []string{"minimal", "low", "medium", "high", "xhigh", "max"}, ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "reject"},
+	// LM Studio: its own policy (HYPOTHESIS, no receipt): lmstudio.ai lists
+	// max_tokens and no reasoning dial, so thinking_format="none" — under
+	// MAP-13 a set dial is dropped and recorded, never refused on this
+	// unverified line.
+	"lmstudio":   {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "none", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "reject"},
 	"groq":       {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ToolResultName: "omit", StrictTools: "omit", BuiltinTools: "groq", CacheControl: "none", ToolResultMedia: "reject"},
 	"openrouter": {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "openrouter", ToolResultName: "omit", StrictTools: "omit", CacheControl: "openai", ToolResultMedia: "reject"},
 	"xai":        {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "deepseek", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "images"},
-	"vllm":       {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "reject"},
-	"sglang":     {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "reject"},
-	"deepseek":   {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "deepseek", ThinkingReplay: "native", AssistantReasoningContent: "include_empty", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", UserField: "user_id", ToolResultMedia: "reject"},
-	"qwen":       {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "qwen", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none"},
+	// vllm: MAP-14 §4, receipts/2026-09-17-judgments/vllm-0.29-lfm-trie.json
+	// (honoured) and vllm-0.25.1-qwen-trie-negative.json (silently absent).
+	"vllm":     {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "reject", TokenScoring: "logprob_token_ids"},
+	"sglang":   {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "reject"},
+	"deepseek": {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "deepseek", ThinkingReplay: "native", AssistantReasoningContent: "include_empty", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", UserField: "user_id", ToolResultMedia: "reject"},
+	"qwen":     {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "qwen", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none"},
 	"bedrock": {InstructionRole: "system", MaxTokensField: "max_completion_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", UserField: "user", ForcedToolChoice: "send", JSONSchema: "send",
 		ModelOverrides: []ModelOverride{
 			{Prefix: "openai.gpt-oss", Knobs: map[string]string{"forced_tool_choice": "reject", "json_schema": "reject"}},
@@ -367,6 +387,7 @@ func MergeOpenAIChatCompat(base OpenAIChatCompat, override *OpenAIChatCompat) Op
 	ov(&out.UserField, override.UserField)
 	ov(&out.ForcedToolChoice, override.ForcedToolChoice)
 	ov(&out.JSONSchema, override.JSONSchema)
+	ov(&out.TokenScoring, override.TokenScoring)
 	if override.ReasoningEfforts != nil {
 		out.ReasoningEfforts = override.ReasoningEfforts
 	}

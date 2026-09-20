@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/lm15-dev/lm15-go/internal/sse"
 )
@@ -384,7 +383,7 @@ func (l *GeminiLM) functionResponse(part ToolResultPart, names map[string]string
 	for _, p := range part.Content {
 		if IsMediaPart(p) {
 			if p.Type() != "image" && p.Type() != "document" {
-				return nil, UnsupportedFeatureErrorf(l.provider, "%s: a %s part in tool_result %q cannot reach a functionResponse — multimodal function responses take images (png/jpeg/webp) and documents (pdf, text/plain) only (MAP-10)", l.provider, p.Type(), part.ID)
+				return nil, UnsupportedFeature(l.provider, "messages[*].tool_result["+part.ID+"].content["+p.Type()+"]", "%s: a %s part in tool_result %q cannot reach a functionResponse — multimodal function responses take images (png/jpeg/webp) and documents (pdf, text/plain) only (MAP-10)", l.provider, p.Type(), part.ID)
 			}
 			mediaParts = append(mediaParts, p)
 		} else {
@@ -396,7 +395,7 @@ func (l *GeminiLM) functionResponse(part ToolResultPart, names map[string]string
 		name = names[part.ID]
 	}
 	if name == "" {
-		return nil, UnsupportedFeatureErrorf(l.provider, "%s: tool_result %q needs a function name on the Gemini wire and no preceding assistant tool_call with that id is in the transcript; set ToolResultPart.name (MAP-10 rule 6)", l.provider, part.ID)
+		return nil, UnsupportedFeature(l.provider, "messages[*].tool_result["+part.ID+"].name", "%s: tool_result %q needs a function name on the Gemini wire and no preceding assistant tool_call with that id is in the transcript; set ToolResultPart.name (MAP-10 rule 6)", l.provider, part.ID)
 	}
 	text, err := partsToText(textParts, l.provider, "functionResponse.response")
 	if err != nil {
@@ -437,6 +436,9 @@ func (l *GeminiLM) part(p Part, names map[string]string) (JSONObject, error) {
 			out["thoughtSignature"] = thought["value"]
 		}
 		return out, nil
+	case DataPart:
+		// 2026-09-19 D3: a data part on a text wire is its compact JSON.
+		return JSONObject{"text": DataPartText(x)}, nil
 	case ToolCallPart:
 		fc := JSONObject{"name": x.Name, "args": x.Input}
 		if x.ID != "" {
@@ -513,13 +515,18 @@ func callNames(messages []Message) map[string]string {
 	return names
 }
 
-func (l *GeminiLM) toolConfigPayload(req *Request) (JSONObject, error) {
+func (l *GeminiLM) toolConfigPayload(req *Request, scope *adaptScope) (JSONObject, error) {
 	tc := req.Config.ToolChoice
 	if tc == nil {
 		return nil, nil
 	}
 	if tc.Parallel != nil && !*tc.Parallel {
-		return nil, UnsupportedFeatureErrorf(l.provider, "gemini: tool_choice.parallel=False is not supported — GenerateContent has no parallel-tool-calls knob and returns several calls regardless (OpenAI and Anthropic carry it)")
+		// MAP-13: no wire knob (live 2026-09-02: two calls came back on 2.5
+		// and 3.7 with the preference set). A preference; agent loops
+		// iterate tool-call parts as a list anyway. Dropped and recorded.
+		if err := scope.dropped("config.tool_choice.parallel", "GenerateContent has no parallel-tool-calls knob and may return several calls (OpenAI and Anthropic carry it)", false); err != nil {
+			return nil, err
+		}
 	}
 	mode := map[string]string{"none": "NONE", "required": "ANY", "auto": "AUTO"}[tc.EffectiveMode()]
 	cfg := JSONObject{"mode": mode}
@@ -531,7 +538,8 @@ func (l *GeminiLM) toolConfigPayload(req *Request) (JSONObject, error) {
 			}
 		}
 		if len(builtins) > 0 {
-			return nil, UnsupportedFeatureErrorf(l.provider, "gemini: cannot force builtin tools %v — functionCallingConfig addresses function declarations only; googleSearch/codeExecution have no tool_choice form (OpenAI Responses and Anthropic carry builtin forcing)", builtins)
+			// MAP-13 rule 4(b): the program depends on the forced tool running.
+			return nil, UnsupportedFeature(l.provider, "config.tool_choice.allowed", "gemini: cannot force builtin tools %v — functionCallingConfig addresses function declarations only; googleSearch/codeExecution have no tool_choice form (OpenAI Responses and Anthropic carry builtin forcing)", builtins)
 		}
 		cfg["allowedFunctionNames"] = toAnyList(tc.Allowed, func(s string) any { return s })
 		if tc.EffectiveMode() == "auto" {
@@ -548,17 +556,21 @@ func (l *GeminiLM) cacheResource(cacheID string) string {
 	return "cachedContents/" + cacheID
 }
 
-func (l *GeminiLM) payload(req *Request) (JSONObject, error) {
+func (l *GeminiLM) payload(req *Request, scope *adaptScope) (JSONObject, error) {
 	cfg := req.Config
 	ext := copyObject(cfg.Extensions)
 	resource := ""
 	suffixFrom := 0
 	if c := cfg.Cache; c != nil && c.EffectiveMode() != "off" {
 		if c.Key != "" {
-			return nil, UnsupportedFeatureErrorf(l.provider, "gemini: cache.key is not supported — GenerateContent has no cache affinity key; use cache.resource with a stored cache (lm.cache(prefix))")
+			if err := scope.dropped("config.cache.key", "GenerateContent has no cache affinity key; implicit caching applies, and a stored cache (lm.cache(prefix), cache.resource) is the explicit tier", c.Key); err != nil {
+				return nil, err
+			}
 		}
 		if c.Retention != "" && c.Retention != "short" {
-			return nil, UnsupportedFeatureErrorf(l.provider, "gemini: cache.retention is not supported in-request — lifetime belongs to the stored cache (cache_create(..., ttl_seconds=...) / cache_update)")
+			if err := scope.dropped("config.cache.retention", "GenerateContent takes no lifetime in-request; it belongs to the stored cache (cache_create(..., ttl_seconds=...) / cache_update)", c.Retention); err != nil {
+				return nil, err
+			}
 		}
 		if c.Resource != "" {
 			resource = c.Resource
@@ -614,6 +626,15 @@ func (l *GeminiLM) payload(req *Request) (JSONObject, error) {
 	if len(cfg.Stop) > 0 {
 		gen["stopSequences"] = toAnyList(cfg.Stop, func(s string) any { return s })
 	}
+	if cfg.Seed != nil {
+		gen["seed"] = *cfg.Seed
+	}
+	if cfg.FrequencyPenalty != nil {
+		gen["frequencyPenalty"] = geminiNumber(*cfg.FrequencyPenalty)
+	}
+	if cfg.PresencePenalty != nil {
+		gen["presencePenalty"] = geminiNumber(*cfg.PresencePenalty)
+	}
 	if cfg.Logprobs != nil {
 		gen["responseLogprobs"] = true
 		if *cfg.Logprobs > 0 {
@@ -621,20 +642,46 @@ func (l *GeminiLM) payload(req *Request) (JSONObject, error) {
 		}
 	}
 	if len(cfg.ResponseFormat) > 0 {
-		for k, v := range geminiResponseFormat(cfg.ResponseFormat) {
+		// MAP-14 §2: judgment properties go as enum with descriptions folded
+		// into the property description — responseJsonSchema ignores
+		// anyOf/const (receipted 2026-09-17); probabilities cannot be
+		// measured here.
+		if err := noteUnmeasurableProbabilities(scope, req, l.provider); err != nil {
+			return nil, err
+		}
+		format := cfg.ResponseFormat
+		if found := RequestJudgments(req); len(found) > 0 {
+			if schema, ok := format["schema"].(map[string]any); ok {
+				format = copyObject(format)
+				format["schema"] = geminiSchema(schema, found)
+			}
+		}
+		for k, v := range geminiResponseFormat(format) {
 			gen[k] = v
 		}
 	}
 	if r := cfg.Reasoning; r != nil {
+		rr := *r
+		r = &rr
 		levelClass := GeminiLevelClass(req.Model)
-		if r.IsOff() {
-			if levelClass {
-				return nil, UnsupportedFeatureErrorf(l.provider, "gemini: reasoning cannot be disabled on %s — the Gemini 3 class has no full off switch (thinkingBudget 0 is accepted but not honoured); use effort='low' or a 2.5 model", req.Model)
+		if r.IsOff() && levelClass {
+			// MAP-13 (decision 2026-09-14 §4.2): the Gemini 3 class has no
+			// honoured off switch (thinkingBudget 0 accepted, 58 tokens still
+			// spent on 3.7 Flash, live 2026-09-02); the closest to "none" is
+			// the lowest level, and the spend shows in usage.reasoning_tokens.
+			if err := scope.substituted("config.reasoning.effort", req.Model+" cannot disable thinking (the Gemini 3 class honours no off switch); the lowest level was sent and the thinking spend is visible in usage", "off", "minimal"); err != nil {
+				return nil, err
 			}
+			r.Effort = "minimal"
+		}
+		if r.IsOff() {
 			gen["thinkingConfig"] = JSONObject{"thinkingBudget": 0}
 		} else {
 			if r.Summary == "concise" || r.Summary == "detailed" {
-				return nil, UnsupportedFeatureErrorf(l.provider, "gemini: reasoning.summary=%q is an OpenAI detail level; GenerateContent has includeThoughts only (use 'auto')", r.Summary)
+				if err := scope.substituted("config.reasoning.summary", "GenerateContent has includeThoughts only, no detail levels; 'auto' shows the thoughts", r.Summary, "auto"); err != nil {
+					return nil, err
+				}
+				r.Summary = "auto"
 			}
 			thinking := JSONObject{}
 			if r.Summary != "" {
@@ -644,10 +691,14 @@ func (l *GeminiLM) payload(req *Request) (JSONObject, error) {
 			case r.ThinkingBudget != nil:
 				thinking["thinkingBudget"] = *r.ThinkingBudget
 			case levelClass:
-				if r.Effort == "xhigh" || r.Effort == "max" {
-					return nil, UnsupportedFeatureErrorf(l.provider, "gemini: reasoning.effort=%q has no thinkingLevel on the Gemini 3 class (minimal|low|medium|high); 'high' is the ceiling", r.Effort)
+				effort := r.Effort
+				if effort == "xhigh" || effort == "max" {
+					if err := scope.clamped("config.reasoning.effort", "the Gemini 3 class has thinkingLevel minimal|low|medium|high; 'high' is the ceiling", effort, "high"); err != nil {
+						return nil, err
+					}
+					effort = "high"
 				}
-				thinking["thinkingLevel"] = r.Effort
+				thinking["thinkingLevel"] = effort
 			default:
 				thinking["thinkingBudget"] = EffortThinkingBudgets[r.Effort]
 			}
@@ -676,7 +727,7 @@ func (l *GeminiLM) payload(req *Request) (JSONObject, error) {
 		payload["tools"] = tools
 	}
 	if resource == "" {
-		tc, err := l.toolConfigPayload(req)
+		tc, err := l.toolConfigPayload(req, scope)
 		if err != nil {
 			return nil, err
 		}
@@ -707,7 +758,12 @@ func (l *GeminiLM) payload(req *Request) (JSONObject, error) {
 		payload["serviceTier"] = cfg.ServiceTier
 	}
 	if cfg.UserID != "" {
-		return nil, UnsupportedFeatureErrorf(l.provider, "gemini: config.user_id is not supported — GenerateContent has no end-user attribution field (OpenAI and Anthropic carry it)")
+		// MAP-13 (decision 2026-09-14 §4.5): attribution has no field here
+		// and nothing in the program depends on it at run time; a
+		// compliance policy sets adaptations="refuse".
+		if err := scope.dropped("config.user_id", "GenerateContent has no end-user attribution field (OpenAI and Anthropic carry it)", cfg.UserID); err != nil {
+			return nil, err
+		}
 	}
 	for k, v := range ext {
 		if k != "prompt_caching" && k != "output" {
@@ -729,23 +785,21 @@ func geminiBuiltin(t BuiltinTool) JSONObject {
 	return JSONObject{key: cfg}
 }
 
-func (l *GeminiLM) buildRequest(req *Request, stream bool) (*TransportRequest, error) {
-	payload, err := l.payload(req)
+func (l *GeminiLM) buildRequest(req *Request, stream bool, scope *adaptScope) (*TransportRequest, error) {
+	payload, err := l.payload(req, scope)
 	if err != nil {
 		return nil, err
 	}
 	endpoint := "generateContent"
 	var params map[string]string
-	timeout := 60 * time.Second
 	if stream {
 		endpoint = "streamGenerateContent"
 		params = map[string]string{"alt": "sse"}
-		timeout = 120 * time.Second
 	}
 	return l.emit(emitSpec{
 		method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/" + l.modelPath(req.Model) + ":" + endpoint,
 		endpoint: "generateContent", stream: stream, model: req.Model,
-		headers: [][2]string{{"Content-Type", "application/json"}}, params: params, payload: payload, readTimeout: timeout,
+		headers: [][2]string{{"Content-Type", "application/json"}}, params: params, payload: payload, scope: scope,
 	})
 }
 
@@ -847,7 +901,7 @@ func hasAnyKey(m JSONObject, keys []string) bool {
 }
 
 func (l *GeminiLM) parseResponse(req *Request, resp *HTTPResponse) (*Response, error) {
-	data, err := resp.JSON()
+	data, err := l.jsonBody(resp)
 	if err != nil {
 		return nil, err
 	}
@@ -877,7 +931,7 @@ func (l *GeminiLM) parseResponse(req *Request, resp *HTTPResponse) (*Response, e
 	return &Response{
 		ID:           wireStr(data["responseId"]),
 		Model:        req.Model,
-		Message:      Message{Role: RoleAssistant, Parts: parts},
+		Message:      Message{Role: RoleAssistant, Parts: ReplaceTextWithData(parts, RequestJudgments(req))},
 		FinishReason: geminiFinish(wireStr(candidate["finishReason"]), hasToolCall(parts)),
 		Usage:        geminiUsage(wireObj(data["usageMetadata"]), "candidatesTokenCount", "responseTokenCount"),
 		Logprobs:     geminiTokenLogprobs(candidate["logprobsResult"]),
@@ -994,7 +1048,7 @@ func (l *GeminiLM) parseStreamEvents(_ *Request, ev sse.Event) ([]StreamEvent, e
 // ─── Models ──────────────────────────────────────────────────────────
 
 func (l *GeminiLM) modelsRequest() (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/models", params: map[string]string{"pageSize": "1000"}, readTimeout: 30 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/models", params: map[string]string{"pageSize": "1000"}})
 }
 
 func (l *GeminiLM) modelsFromBody(body string) ([]ModelInfo, error) {
@@ -1034,7 +1088,7 @@ func (l *GeminiLM) fileUploadRequest(req *FileUploadRequest) (*TransportRequest,
 		return nil, err
 	}
 	ct, body := multipartRelatedBody(JSONObject{"file": JSONObject{"display_name": req.Filename}}, req.EffectiveMediaType(), content)
-	return l.emit(emitSpec{method: "POST", url: buildURL(strings.TrimRight(l.uploadBaseURL, "/")+"/files", params), headers: [][2]string{{"X-Goog-Upload-Protocol", "multipart"}, {"Content-Type", ct}}, body: body, readTimeout: 300 * time.Second})
+	return l.emit(emitSpec{method: "POST", url: buildURL(strings.TrimRight(l.uploadBaseURL, "/")+"/files", params), headers: [][2]string{{"X-Goog-Upload-Protocol", "multipart"}, {"Content-Type", ct}}, body: body})
 }
 
 func (l *GeminiLM) fileInfo(data JSONObject) (FileInfo, error) {
@@ -1090,7 +1144,7 @@ func (l *GeminiLM) fileInfoFromBody(body string) (FileInfo, error) {
 }
 
 func (l *GeminiLM) fileGetRequest(fileID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(geminiFileResource(fileID), true), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(geminiFileResource(fileID), true)})
 }
 
 func (l *GeminiLM) fileListRequest(limit int, cursor string) (*TransportRequest, error) {
@@ -1098,7 +1152,7 @@ func (l *GeminiLM) fileListRequest(limit int, cursor string) (*TransportRequest,
 	if cursor != "" {
 		params["pageToken"] = cursor
 	}
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/files", params: params, readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/files", params: params})
 }
 
 func (l *GeminiLM) filePageFromListBody(body string) (FilePage, error) {
@@ -1120,11 +1174,11 @@ func (l *GeminiLM) filePageFromListBody(body string) (FilePage, error) {
 }
 
 func (l *GeminiLM) fileDeleteRequest(fileID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "DELETE", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(geminiFileResource(fileID), true), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "DELETE", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(geminiFileResource(fileID), true)})
 }
 
 func (l *GeminiLM) fileDownloadRequest(fileID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(geminiFileResource(fileID), true) + ":download", params: map[string]string{"alt": "media"}, readTimeout: 300 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(geminiFileResource(fileID), true) + ":download", params: map[string]string{"alt": "media"}})
 }
 
 // ─── Cache resources ─────────────────────────────────────────────────
@@ -1170,7 +1224,7 @@ func (l *GeminiLM) cacheCreateRequest(prefix *Request, ttlSeconds *int, label st
 	if label != "" {
 		body["displayName"] = label
 	}
-	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/cachedContents", headers: [][2]string{{"Content-Type", "application/json"}}, payload: body, readTimeout: 120 * time.Second})
+	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/cachedContents", headers: [][2]string{{"Content-Type", "application/json"}}, payload: body})
 }
 
 func (l *GeminiLM) cacheInfo(data JSONObject) (CacheInfo, error) {
@@ -1206,7 +1260,7 @@ func (l *GeminiLM) cacheInfoFromBody(body string) (CacheInfo, error) {
 }
 
 func (l *GeminiLM) cacheGetRequest(cacheID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(l.cacheResource(cacheID), true), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(l.cacheResource(cacheID), true)})
 }
 
 func (l *GeminiLM) cacheListRequest(limit int, cursor string) (*TransportRequest, error) {
@@ -1214,7 +1268,7 @@ func (l *GeminiLM) cacheListRequest(limit int, cursor string) (*TransportRequest
 	if cursor != "" {
 		params["pageToken"] = cursor
 	}
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/cachedContents", params: params, readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/cachedContents", params: params})
 }
 
 func (l *GeminiLM) cachePageFromListBody(body string) (CachePage, error) {
@@ -1236,20 +1290,20 @@ func (l *GeminiLM) cachePageFromListBody(body string) (CachePage, error) {
 }
 
 func (l *GeminiLM) cacheDeleteRequest(cacheID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "DELETE", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(l.cacheResource(cacheID), true), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "DELETE", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(l.cacheResource(cacheID), true)})
 }
 
 func (l *GeminiLM) cacheUpdateRequest(cacheID string, ttlSeconds int) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "PATCH", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(l.cacheResource(cacheID), true), headers: [][2]string{{"Content-Type", "application/json"}}, payload: JSONObject{"ttl": strconv.Itoa(ttlSeconds) + "s"}, readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "PATCH", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(l.cacheResource(cacheID), true), headers: [][2]string{{"Content-Type", "application/json"}}, payload: JSONObject{"ttl": strconv.Itoa(ttlSeconds) + "s"}})
 }
 
 // ─── Batch ───────────────────────────────────────────────────────────
 
-func (l *GeminiLM) batchSubmitRequest(req *BatchRequest, _ JSONObject) (*TransportRequest, error) {
+func (l *GeminiLM) batchSubmitRequest(req *BatchRequest, _ JSONObject, scope *adaptScope) (*TransportRequest, error) {
 	model := req.EffectiveModel()
 	var requests []any
 	for i, nested := range req.Requests {
-		p, err := l.payload(nested)
+		p, err := l.payload(nested, scope)
 		if err != nil {
 			return nil, err
 		}
@@ -1263,7 +1317,7 @@ func (l *GeminiLM) batchSubmitRequest(req *BatchRequest, _ JSONObject) (*Transpo
 	for k, v := range req.Extensions {
 		payload[k] = v
 	}
-	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/" + l.modelPath(model) + ":batchGenerateContent", headers: [][2]string{{"Content-Type", "application/json"}}, payload: payload, readTimeout: 120 * time.Second})
+	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/" + l.modelPath(model) + ":batchGenerateContent", headers: [][2]string{{"Content-Type", "application/json"}}, payload: payload, scope: scope})
 }
 
 func (l *GeminiLM) batchJobInfo(data JSONObject) (BatchJobInfo, error) {
@@ -1284,11 +1338,11 @@ func (l *GeminiLM) batchJobFromBody(body string) (BatchJobInfo, error) {
 }
 
 func (l *GeminiLM) batchStatusRequest(batchID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(batchID, true), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(batchID, true)})
 }
 
 func (l *GeminiLM) batchCancelRequest(batchID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(batchID, true) + ":cancel", headers: [][2]string{{"Content-Type", "application/json"}}, payload: JSONObject{}, readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(batchID, true) + ":cancel", headers: [][2]string{{"Content-Type", "application/json"}}, payload: JSONObject{}})
 }
 
 func (l *GeminiLM) batchResultFetches(JSONObject) ([]*TransportRequest, error) { return nil, nil }
@@ -1340,7 +1394,7 @@ func (l *GeminiLM) batchEntries(statusBody JSONObject, _ []string) ([]BatchEntry
 }
 
 func (l *GeminiLM) batchListRequest(limit int) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/batches", params: map[string]string{"pageSize": strconv.Itoa(limit)}, readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/batches", params: map[string]string{"pageSize": strconv.Itoa(limit)}})
 }
 
 func (l *GeminiLM) batchJobsFromListBody(body string) ([]BatchJobInfo, error) {
@@ -1376,7 +1430,7 @@ func (l *GeminiLM) videoSubmitRequest(req *VideoGenerationRequest) (*TransportRe
 			payload["parameters"] = JSONObject{"durationSeconds": *req.Seconds}
 		}
 	}
-	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/" + l.modelPath(req.Model) + ":predictLongRunning", headers: [][2]string{{"Content-Type", "application/json"}}, payload: payload, readTimeout: 120 * time.Second})
+	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/" + l.modelPath(req.Model) + ":predictLongRunning", headers: [][2]string{{"Content-Type", "application/json"}}, payload: payload})
 }
 
 func (l *GeminiLM) videoJobInfo(data JSONObject) (VideoJobInfo, error) {
@@ -1403,7 +1457,7 @@ func (l *GeminiLM) videoJobFromBody(body string, _ string) (VideoJobInfo, error)
 }
 
 func (l *GeminiLM) videoStatusRequest(videoID string) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(videoID, true), readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(videoID, true)})
 }
 
 func (l *GeminiLM) videoResultURI(statusBody JSONObject) (string, error) {
@@ -1421,7 +1475,7 @@ func (l *GeminiLM) videoResultFetch(statusBody JSONObject) (*TransportRequest, e
 	if err != nil {
 		return nil, err
 	}
-	return l.emit(emitSpec{method: "GET", url: uri, readTimeout: 600 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: uri})
 }
 
 func (l *GeminiLM) videoPart(_ JSONObject, fetched *HTTPResponse) (VideoPart, error) {
@@ -1439,7 +1493,7 @@ func (l *GeminiLM) videoListRequest(limit int, model string) (*TransportRequest,
 	if model == "" {
 		return nil, UnsupportedFeatureErrorf(l.provider, "gemini: video jobs list per model — pass model= (operations live under models/<model>/operations)")
 	}
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/" + l.modelPath(model) + "/operations", params: map[string]string{"pageSize": strconv.Itoa(limit)}, readTimeout: 60 * time.Second})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/" + l.modelPath(model) + "/operations", params: map[string]string{"pageSize": strconv.Itoa(limit)}})
 }
 
 func (l *GeminiLM) videoJobsFromListBody(body string) ([]VideoJobInfo, error) {
@@ -1485,7 +1539,7 @@ func (l *GeminiLM) imageGenerationLMRequest(req *ImageGenerationRequest) *Reques
 }
 
 func (l *GeminiLM) imageGenerateRequest(req *ImageGenerationRequest) (*TransportRequest, error) {
-	return l.buildRequest(l.imageGenerationLMRequest(req), false)
+	return l.buildRequest(l.imageGenerationLMRequest(req), false, nil)
 }
 
 func (l *GeminiLM) imageGenerationFromResponse(req *ImageGenerationRequest, resp *HTTPResponse) (ImageGenerationResponse, error) {
@@ -1531,7 +1585,7 @@ func (l *GeminiLM) speechGenerateRequest(req *SpeechGenerationRequest) (*Transpo
 	if err != nil {
 		return nil, err
 	}
-	return l.buildRequest(lmReq, false)
+	return l.buildRequest(lmReq, false, nil)
 }
 
 func (l *GeminiLM) speechGenerationFromResponse(req *SpeechGenerationRequest, resp *HTTPResponse) (SpeechGenerationResponse, error) {

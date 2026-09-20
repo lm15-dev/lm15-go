@@ -152,6 +152,16 @@ func PartToDict(p Part) JSONObject {
 		if x.IsError {
 			d["is_error"] = true
 		}
+	case DataPart:
+		// value is always emitted, whatever it is (null is a value; the
+		// cleaner never looks inside — serde-rules.md "Data parts").
+		d["value"] = deref(x.Value)
+		if x.Probabilities != nil {
+			d["probabilities"] = probabilitiesToJSON(x.Probabilities)
+		}
+		if x.Method != "" {
+			d["method"] = x.Method
+		}
 	}
 	if c := continuationToJSON(p.ContinuationStates()); c != nil {
 		d["continuation"] = c
@@ -313,10 +323,68 @@ func PartFromDict(d JSONObject) (Part, error) {
 			isError = b
 		}
 		part = ToolResultPart{ID: id, Content: content, Name: name, IsError: isError, Continuation: continuation}
+	case PartTypeData:
+		value, present := d["value"]
+		if !present {
+			return nil, keyError("value")
+		}
+		probabilities, err := probabilitiesFromJSON(d["probabilities"])
+		if err != nil {
+			return nil, err
+		}
+		method, err := optString(d, "method")
+		if err != nil {
+			return nil, err
+		}
+		part = DataPart{Value: value, Probabilities: probabilities, Method: method, Continuation: continuation}
 	default:
 		return nil, valueErrorf("unsupported part type: %s", t)
 	}
 	return part, part.Validate()
+}
+
+// probabilitiesToJSON renders the nested maps with every probability as a
+// JSON float (1.0, never 1).
+func probabilitiesToJSON(p map[string]map[string]float64) JSONObject {
+	out := JSONObject{}
+	for name, dist := range p {
+		inner := JSONObject{}
+		for key, prob := range dist {
+			inner[key] = jsonFloat(prob)
+		}
+		out[name] = inner
+	}
+	return out
+}
+
+func probabilitiesFromJSON(v any) (map[string]map[string]float64, error) {
+	if v == nil {
+		return nil, nil
+	}
+	outer, ok := v.(map[string]any)
+	if !ok {
+		return nil, typeErrorf("DataPart.probabilities must be a mapping of field -> {key: probability}")
+	}
+	out := make(map[string]map[string]float64, len(outer))
+	for name, raw := range outer {
+		inner, ok := raw.(map[string]any)
+		if !ok {
+			return nil, typeErrorf("DataPart.probabilities[%q] must be a mapping of key -> probability", name)
+		}
+		dist := make(map[string]float64, len(inner))
+		for key, prob := range inner {
+			if _, isBool := prob.(bool); isBool {
+				return nil, typeErrorf("DataPart.probabilities[%q][%q] must be a number", name, key)
+			}
+			f, err := jsonFloat64(prob, "DataPart.probabilities")
+			if err != nil {
+				return nil, typeErrorf("DataPart.probabilities[%q][%q] must be a number", name, key)
+			}
+			dist[key] = f
+		}
+		out[name] = dist
+	}
+	return out, nil
 }
 
 // partsFromList reads a list of part dicts (INV-047: scalars become text).
@@ -370,6 +438,9 @@ func (p BinaryPart) MarshalJSON() ([]byte, error) {
 	return marshalVia(func() JSONObject { return PartToDict(p) })
 }
 func (p ToolCallPart) MarshalJSON() ([]byte, error) {
+	return marshalVia(func() JSONObject { return PartToDict(p) })
+}
+func (p DataPart) MarshalJSON() ([]byte, error) {
 	return marshalVia(func() JSONObject { return PartToDict(p) })
 }
 func (p ToolResultPart) MarshalJSON() ([]byte, error) {
@@ -611,7 +682,18 @@ func ConfigToDict(c Config) JSONObject {
 	if c.Cache != nil {
 		d["cache"] = CacheConfigToDict(*c.Cache)
 	}
-	d.omit("service_tier", c.ServiceTier).omit("user_id", c.UserID).omit("store", c.Store).omit("logprobs", c.Logprobs).omit("extensions", c.Extensions)
+	// seed 0 and a 0.0 penalty are data, emitted (spec/types.md § Config).
+	if c.Seed != nil {
+		d["seed"] = *c.Seed
+	}
+	if c.FrequencyPenalty != nil {
+		d["frequency_penalty"] = jsonFloat(*c.FrequencyPenalty)
+	}
+	if c.PresencePenalty != nil {
+		d["presence_penalty"] = jsonFloat(*c.PresencePenalty)
+	}
+	d.omit("service_tier", c.ServiceTier).omit("user_id", c.UserID).omit("store", c.Store).omit("logprobs", c.Logprobs).
+		omit("probabilities", c.Probabilities).omit("extensions", c.Extensions)
 	return JSONObject(d)
 }
 
@@ -696,6 +778,18 @@ func ConfigFromDict(d JSONObject) (Config, error) {
 		return c, typeErrorf("Config.store must be a bool or None")
 	}
 	if c.Logprobs, err = optInt(d, "logprobs"); err != nil {
+		return c, err
+	}
+	if c.Seed, err = optInt(d, "seed"); err != nil {
+		return c, err
+	}
+	if c.FrequencyPenalty, err = optFloat(d, "frequency_penalty"); err != nil {
+		return c, err
+	}
+	if c.PresencePenalty, err = optFloat(d, "presence_penalty"); err != nil {
+		return c, err
+	}
+	if c.Probabilities, err = optString(d, "probabilities"); err != nil {
 		return c, err
 	}
 	if ext, ok := d["extensions"]; ok && ext != nil {
@@ -867,7 +961,11 @@ func (t TokenLogprob) MarshalJSON() ([]byte, error) {
 
 // ErrorDetailToDict serializes an error detail.
 func ErrorDetailToDict(e ErrorDetail) JSONObject {
-	return JSONObject(dict{"code": e.Code}.omit("message", e.Message).omit("provider_code", e.ProviderCode))
+	d := dict{"code": e.Code}.omit("message", e.Message).omit("provider_code", e.ProviderCode)
+	if h := e.HTTPResponse.toDict(); h != nil {
+		d["http_response"] = h
+	}
+	return JSONObject(d)
 }
 
 // ErrorDetailFromDict reads an error detail (message defaults to "").
@@ -884,7 +982,11 @@ func ErrorDetailFromDict(d JSONObject) (ErrorDetail, error) {
 	if err != nil {
 		return ErrorDetail{}, err
 	}
-	e := ErrorDetail{Code: code, Message: message, ProviderCode: providerCode}
+	http, err := httpResponseDetailFromJSON(d["http_response"])
+	if err != nil {
+		return ErrorDetail{}, err
+	}
+	e := ErrorDetail{Code: code, Message: message, ProviderCode: providerCode, HTTPResponse: http}
 	return e, e.Validate()
 }
 
@@ -904,6 +1006,9 @@ func DeltaToDict(dl Delta) JSONObject {
 		out["text"] = x.Text
 		if len(x.Logprobs) > 0 {
 			out["logprobs"] = logprobsToJSON(x.Logprobs)
+		}
+		if x.LogprobsIncomplete {
+			out["logprobs_complete"] = false
 		}
 	case ThinkingDelta:
 		out["part_index"] = x.PartIndex
@@ -972,7 +1077,11 @@ func DeltaFromDict(d JSONObject) (Delta, error) {
 		if err != nil {
 			return nil, err
 		}
-		dl = TextDelta{Text: text, PartIndex: partIndex, Logprobs: lps}
+		complete, err := optBool(d, "logprobs_complete")
+		if err != nil {
+			return nil, typeErrorf("TextDelta.logprobs_complete must be a bool")
+		}
+		dl = TextDelta{Text: text, PartIndex: partIndex, Logprobs: lps, LogprobsIncomplete: complete != nil && !*complete}
 	case DeltaTypeThinking:
 		text, err := optString(d, "text")
 		if err != nil {
@@ -1132,7 +1241,11 @@ func (u *Usage) UnmarshalJSON(b []byte) error {
 func StreamEventToDict(e StreamEvent) JSONObject {
 	switch x := e.(type) {
 	case StreamStartEvent:
-		return JSONObject(dict{"type": "start"}.omit("id", x.ID).omit("model", x.Model))
+		d := dict{"type": "start"}.omit("id", x.ID).omit("model", x.Model)
+		if a := adaptationsToJSON(x.Adaptations); a != nil {
+			d["adaptations"] = a
+		}
+		return JSONObject(d)
 	case StreamDeltaEvent:
 		return JSONObject{"type": "delta", "delta": DeltaToDict(x.Delta)}
 	case StreamEndEvent:
@@ -1164,7 +1277,12 @@ func StreamEventFromDict(d JSONObject) (StreamEvent, error) {
 		if err != nil {
 			return nil, err
 		}
-		return StreamStartEvent{ID: id, Model: model}, nil
+		adaptations, err := adaptationsFromJSON(d["adaptations"])
+		if err != nil {
+			return nil, err
+		}
+		e := StreamStartEvent{ID: id, Model: model, Adaptations: adaptations}
+		return e, e.Validate()
 	case "delta":
 		obj, ok := d["delta"].(map[string]any)
 		if !ok {
@@ -1353,8 +1471,14 @@ func ResponseToDict(r *Response, includeProviderData bool) JSONObject {
 	d.omit("id", r.ID)
 	d.omit("usage", UsageToDict(r.Usage))
 	d.omit("logprobs", logprobsToJSON(r.Logprobs))
+	if r.LogprobsIncomplete {
+		d["logprobs_complete"] = false
+	}
 	if includeProviderData && r.ProviderData != nil {
 		d["provider_data"] = r.ProviderData
+	}
+	if a := adaptationsToJSON(r.Adaptations); a != nil {
+		d["adaptations"] = a
 	}
 	return JSONObject(d)
 }
@@ -1398,7 +1522,16 @@ func ResponseFromDict(d JSONObject) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	r := &Response{ID: id, Model: model, Message: message, FinishReason: finish, Usage: usage, Logprobs: lps, ProviderData: pd}
+	adaptations, err := adaptationsFromJSON(d["adaptations"])
+	if err != nil {
+		return nil, err
+	}
+	complete, err := optBool(d, "logprobs_complete")
+	if err != nil {
+		return nil, typeErrorf("Response.logprobs_complete must be a bool")
+	}
+	r := &Response{ID: id, Model: model, Message: message, FinishReason: finish, Usage: usage, Logprobs: lps, ProviderData: pd,
+		Adaptations: adaptations, LogprobsIncomplete: complete != nil && !*complete}
 	return r, r.Validate()
 }
 

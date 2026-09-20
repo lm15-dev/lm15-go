@@ -1797,9 +1797,190 @@ func ChainFor(policy AccessPolicy) ([]Rung, error) {
 	return nil, valueErrorf("%s: not a cloud chain policy", policy.Provider)
 }
 
+// CredentialSource is where a resolved credential came from (AUTH-1
+// provenance, 2026-09-19). Never the value: the rung's fixture kind, its
+// human label, the name that selected it (platform …) when one did, and
+// the expiry if known.
+type CredentialSource struct {
+	Rung      string
+	Label     string
+	Named     string
+	ExpiresAt *time.Time
+}
+
+// Describe renders the source for an error or the doctor.
+func (s CredentialSource) Describe(now time.Time) string {
+	text := s.Label
+	if s.Named != "" {
+		text += " (named credential \"" + s.Named + "\")"
+	}
+	if s.ExpiresAt != nil {
+		if now.IsZero() {
+			now = time.Now().UTC()
+		}
+		left := int(s.ExpiresAt.Sub(now).Seconds())
+		switch {
+		case left <= 0:
+			text += ", expired"
+		case left < 3600:
+			minutes := left / 60
+			if minutes < 1 {
+				minutes = 1
+			}
+			text += fmt.Sprintf(", expires in %d min", minutes)
+		default:
+			text += fmt.Sprintf(", expires in %d h %d min", left/3600, (left%3600)/60)
+		}
+	}
+	return text
+}
+
+// NamedRungs is AUTH-1 (amended 2026-09-19): the rungs each named
+// credential covers on each cloud. One word, the same on every cloud; the
+// doctor and every auth error print the concrete mechanism, never just the
+// word. platform on AWS covers two rungs (the container endpoint, then
+// IMDS): both are the machine's own identity, boto3 tries them in this
+// order, and the doctor says which answered. workload and environment on
+// GCP are the same file rung told apart by the file's type
+// (external_account vs service_account); the wrong type is refused by
+// name, never read as the other.
+var NamedRungs = map[string]map[string][]string{
+	"aws-chain": {
+		CredentialPlatform:    {"container", "imds"},
+		CredentialWorkload:    {"web-identity"},
+		CredentialEnvironment: {"env:AWS_ACCESS_KEY_ID"},
+		CredentialCLI:         {"assume-role", "sso", "shared-credentials-file", "login", "credential_process", "config-file"},
+	},
+	"azure-chain": {
+		CredentialPlatform:    {"managed-identity"},
+		CredentialWorkload:    {"workload-identity"},
+		CredentialEnvironment: {"environment"},
+		CredentialCLI:         {"az", "pwsh", "azd"},
+	},
+	"gcp-chain": {
+		CredentialPlatform:    {"metadata"},
+		CredentialWorkload:    {"adc-env"},
+		CredentialEnvironment: {"adc-env"},
+		CredentialCLI:         {"adc-file", "gcloud"},
+	},
+}
+
+var gcpNamedTypes = map[string][]string{
+	CredentialWorkload:    {"external_account"},
+	CredentialEnvironment: {"service_account", "impersonated_service_account"},
+}
+
+// NamedMeaning is what each name means on each cloud, for the doctor and
+// for errors.
+var NamedMeaning = map[string]map[string]string{
+	"aws-chain": {
+		CredentialPlatform:    "the ECS/EKS container endpoint, else the EC2 instance role (IMDSv2)",
+		CredentialWorkload:    "web identity (AWS_WEB_IDENTITY_TOKEN_FILE + AWS_ROLE_ARN) via STS",
+		CredentialEnvironment: "AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY",
+		CredentialCLI:         "the active `aws` profile (assume-role, SSO, shared files, `aws login`, credential_process)",
+	},
+	"azure-chain": {
+		CredentialPlatform:    "Azure managed identity",
+		CredentialWorkload:    "Entra workload identity (AZURE_FEDERATED_TOKEN_FILE)",
+		CredentialEnvironment: "an Entra service principal from AZURE_TENANT_ID / AZURE_CLIENT_ID + secret or certificate",
+		CredentialCLI:         "`az`, Azure PowerShell or `azd` sign-in",
+	},
+	"gcp-chain": {
+		CredentialPlatform:    "the attached service account (GCE metadata server)",
+		CredentialWorkload:    "workload identity federation (GOOGLE_APPLICATION_CREDENTIALS, type external_account)",
+		CredentialEnvironment: "a service-account file (GOOGLE_APPLICATION_CREDENTIALS, type service_account)",
+		CredentialCLI:         "`gcloud auth application-default login` (the ADC file) or `gcloud auth print-access-token`",
+	},
+}
+
+// gcpTyped narrows the GOOGLE_APPLICATION_CREDENTIALS rung to the file
+// types the name means; another type is refused naming the name it
+// belongs to.
+func gcpTyped(rung Rung, name string) Rung {
+	allowed := gcpNamedTypes[name]
+	other := CredentialWorkload
+	if name == CredentialWorkload {
+		other = CredentialEnvironment
+	}
+	kindOf := func(ctx *ChainContext) (string, string) {
+		path := ctx.Env["GOOGLE_APPLICATION_CREDENTIALS"]
+		if path == "" {
+			return "", ""
+		}
+		info, _ := gcpCredentialFile(ctx, path)
+		if info == nil {
+			return path, ""
+		}
+		return path, wireStr(info["type"])
+	}
+	mismatch := func(path, kind string) string {
+		return fmt.Sprintf("%s holds %s credentials; that is the named credential %q, not %q", path, kind, other, name)
+	}
+	out := rung
+	out.Probe = func(ctx *ChainContext) (string, string) {
+		if path, kind := kindOf(ctx); path != "" && kind != "" && !inVocab(kind, allowed) {
+			return "absent", mismatch(path, kind)
+		}
+		return rung.Probe(ctx)
+	}
+	out.Acquire = func(ctx *ChainContext) (Credential, error) {
+		if path, kind := kindOf(ctx); path != "" && kind != "" && !inVocab(kind, allowed) {
+			return nil, NotConfiguredErrorf("", nil, "credentials={\"<provider>\": \""+other+"\"}", "%s", mismatch(path, kind))
+		}
+		return rung.Acquire(ctx)
+	}
+	return out
+}
+
+// NamedRungsFor is the rungs a named credential covers on this door, in
+// chain order. An unknown name fails here, at construction.
+func NamedRungsFor(policy AccessPolicy, name string) ([]Rung, error) {
+	if !inVocab(name, NamedCredentials) {
+		quoted := make([]string, 0, len(NamedCredentials))
+		for _, n := range NamedCredentials {
+			quoted = append(quoted, strconv.Quote(n))
+		}
+		return nil, NotConfiguredErrorf(policy.Provider, nil, "", "%s: unknown named credential %q; one of %s", policy.Provider, name, strings.Join(quoted, ", "))
+	}
+	all, err := ChainFor(policy)
+	if err != nil {
+		return nil, err
+	}
+	wanted := NamedRungs[policy.EffectiveCredentialPolicy()][name]
+	var rungs []Rung
+	for _, rung := range all {
+		if inVocab(rung.Name, wanted) {
+			if policy.EffectiveCredentialPolicy() == "gcp-chain" && gcpNamedTypes[name] != nil {
+				rung = gcpTyped(rung, name)
+			}
+			rungs = append(rungs, rung)
+		}
+	}
+	return rungs, nil
+}
+
+// NamedMeaningFor is the sentence a name means on this door.
+func NamedMeaningFor(policy AccessPolicy, name string) string {
+	return NamedMeaning[policy.EffectiveCredentialPolicy()][name]
+}
+
+func chainWalk(policy AccessPolicy, named string) ([]Rung, error) {
+	if named != "" {
+		return NamedRungsFor(policy, named)
+	}
+	return ChainFor(policy)
+}
+
 // ExplainChain is the AUTH-7 walk over a cloud chain (offline).
 func ExplainChain(policy AccessPolicy, ctx *ChainContext, explicit bool) ([]ChainStep, bool, error) {
-	rungs, err := ChainFor(policy)
+	return ExplainChainNamed(policy, ctx, explicit, "")
+}
+
+// ExplainChainNamed is ExplainChain under a named credential: only the
+// rungs the name covers are walked (the rest are not steps at all: a named
+// credential never falls through).
+func ExplainChainNamed(policy AccessPolicy, ctx *ChainContext, explicit bool, named string) ([]ChainStep, bool, error) {
+	rungs, err := chainWalk(policy, named)
 	if err != nil {
 		return nil, false, err
 	}
@@ -1837,9 +2018,39 @@ func ExplainChain(policy AccessPolicy, ctx *ChainContext, explicit bool) ([]Chai
 
 // ResolveChain walks the chain online; the first rung that yields wins.
 func ResolveChain(policy AccessPolicy, ctx *ChainContext) (Credential, error) {
-	rungs, err := ChainFor(policy)
+	cred, _, err := ResolveChainNamed(policy, ctx, "")
+	return cred, err
+}
+
+func sourceOf(rung Rung, value Credential, named string) CredentialSource {
+	src := CredentialSource{Rung: rung.Name, Label: rung.Source, Named: named}
+	switch v := value.(type) {
+	case BearerToken:
+		src.ExpiresAt = v.ExpiresAt
+	case AwsCredentials:
+		src.ExpiresAt = v.ExpiresAt
+	}
+	return src
+}
+
+func probedSummary(ctx *ChainContext, rungs []Rung) string {
+	var parts []string
+	for _, rung := range rungs {
+		_, detail := rung.Probe(ctx)
+		parts = append(parts, rung.Source+": "+detail)
+	}
+	return strings.Join(parts, "; ")
+}
+
+// ResolveChainNamed walks the chain online; the first rung that yields
+// wins, and the result names the rung (AUTH-1 provenance). A rung that is
+// configured and fails raises. Azure developer commands are the AUTH-1
+// exception: try all three before reporting their failure. With named,
+// only that name's rungs run and nothing else is tried.
+func ResolveChainNamed(policy AccessPolicy, ctx *ChainContext, named string) (Credential, CredentialSource, error) {
+	rungs, err := chainWalk(policy, named)
 	if err != nil {
-		return nil, err
+		return nil, CredentialSource{}, err
 	}
 	developerFailed := false
 	for _, rung := range rungs {
@@ -1849,29 +2060,52 @@ func ResolveChain(policy AccessPolicy, ctx *ChainContext) (Credential, error) {
 				developerFailed = true
 				continue
 			}
-			return nil, err
+			return nil, CredentialSource{}, err
 		}
 		if got != nil {
-			return got, nil
+			return got, sourceOf(rung, got, named), nil
 		}
 	}
 	if developerFailed {
 		e := chainAuthError("Azure developer credentials failed; sign in with az, Azure PowerShell, or azd")
 		e.Provider = policy.Provider
-		return nil, e
+		return nil, CredentialSource{}, e
+	}
+	if named != "" {
+		e := NotConfiguredErrorf(policy.Provider, nil,
+			fmt.Sprintf("credentials={%q: \"<platform|workload|environment|cli>\"} names one identity; omit it to walk the %s chain", policy.Provider, policy.EffectiveCredentialPolicy()),
+			"%s: named credential %q — %s — answered nothing (%s). This door was told to use that identity only; it will not try the rest of the %s chain.",
+			policy.Provider, named, NamedMeaningFor(policy, named), probedSummary(ctx, rungs), policy.EffectiveCredentialPolicy())
+		return nil, CredentialSource{}, e
 	}
 	hint := "configure the cloud SDK"
 	if len(policy.EnvKeys) > 0 {
 		hint = "set " + policy.EnvKeys[0] + " or configure the cloud SDK"
 	}
-	return nil, NotConfiguredErrorf(policy.Provider, policy.EnvKeys, "", "%s: no credential found in the %s chain; %s", policy.Provider, policy.EffectiveCredentialPolicy(), hint)
+	return nil, CredentialSource{}, NotConfiguredErrorf(policy.Provider, policy.EnvKeys, "", "%s: no credential found in the %s chain; %s", policy.Provider, policy.EffectiveCredentialPolicy(), hint)
 }
 
+// cachingProvider is the AUTH-2 provider over a cloud chain (or a named
+// credential) with the AUTH-3 in-memory cache. Source is where the last
+// resolution came from (AUTH-1 provenance); zero until the first request.
 type cachingProvider struct {
 	policy AccessPolicy
 	ctx    *ChainContext
+	named  string
 	mu     sync.Mutex
 	value  Credential
+	source CredentialSource
+}
+
+// Named is the named credential this provider was built for ("" = the chain).
+func (p *cachingProvider) Named() string { return p.named }
+
+// Source is where the last resolution came from; ok is false before the
+// first request.
+func (p *cachingProvider) Source() (CredentialSource, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.source, p.source.Rung != ""
 }
 
 func (p *cachingProvider) Credential(context.Context) (Credential, error) {
@@ -1880,12 +2114,13 @@ func (p *cachingProvider) Credential(context.Context) (Credential, error) {
 	if p.value != nil && !p.value.IsExpired(p.ctx.now()) {
 		return p.value, nil
 	}
-	value, err := ResolveChain(p.policy, p.ctx)
+	value, source, err := ResolveChainNamed(p.policy, p.ctx, p.named)
 	if err != nil {
 		return nil, err
 	}
+	p.source = source
 	if value.IsExpired(p.ctx.now()) {
-		e := chainAuthError("cloud credential is expired; renew the configured credential source")
+		e := chainAuthError("cloud credential is expired; renew the configured credential source (credential came from: " + source.Describe(p.ctx.now()) + ")")
 		e.Provider = p.policy.Provider
 		return nil, e
 	}
@@ -1910,6 +2145,31 @@ func (p *cachingProvider) String() string {
 // AUTH-3 in-memory cache.
 func CredentialProviderFor(policy AccessPolicy, ctx *ChainContext) CredentialProvider {
 	return &cachingProvider{policy: policy, ctx: ctx}
+}
+
+// NamedCredentialProviderFor is CredentialProviderFor under a named
+// credential (AUTH-1): an unknown name fails at construction, not on the
+// first request.
+func NamedCredentialProviderFor(policy AccessPolicy, ctx *ChainContext, named string) (CredentialProvider, error) {
+	if named != "" {
+		if _, err := NamedRungsFor(policy, named); err != nil {
+			return nil, err
+		}
+	}
+	return &cachingProvider{policy: policy, ctx: ctx, named: named}, nil
+}
+
+// ChainCredentialSource reports the provenance of a cloud credential
+// provider after its first resolution (nil for any other provider).
+func ChainCredentialSource(p CredentialProvider) *CredentialSource {
+	cp, ok := p.(*cachingProvider)
+	if !ok {
+		return nil
+	}
+	if src, ok := cp.Source(); ok {
+		return &src
+	}
+	return nil
 }
 
 // ChainCacheKey is provider id + the identity-selecting settings (AUTH-3).

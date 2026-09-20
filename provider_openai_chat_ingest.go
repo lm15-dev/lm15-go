@@ -12,26 +12,28 @@ import (
 // call-mode / default); malformed input is a native error.
 
 var ingestExtensionsKeys = map[string]bool{
-	"seed": true, "logit_bias": true, "presence_penalty": true, "frequency_penalty": true, "metadata": true,
-	"verbosity": true, "moderation": true, "provider": true,
+	"logit_bias": true, "metadata": true, "verbosity": true, "moderation": true, "provider": true,
+	// prediction: a latency hint (predicted outputs); harmless verbatim on
+	// OpenAI, dropped-with-note elsewhere (decision 2026-09-14 §4.9).
+	"prediction": true,
 }
 
 var ingestRefusedKeys = map[string]string{
 	"n":                  "lm15 reads one choice per response; n>1 would silently lose choices — fan out in the caller",
-	"functions":          "the deprecated function-calling shape; declare tools with {type: function, function: {...}}",
-	"function_call":      "the deprecated function-calling shape; use tool_choice",
 	"audio":              "audio output parameters have no canonical slot on the chat surface",
 	"modalities":         "output modality selection has no canonical slot on the chat surface",
-	"prediction":         "predicted-output content has no canonical slot",
 	"web_search_options": "a server-executed search the chat dialect cannot map to parts (MAP-1); the Responses dialect carries web_search as a BuiltinTool",
-	"top_k":              "the Chat Completions wire has no top_k (the builder raises on Config.top_k for the same reason); servers that take it do so through extensions",
 }
 
 var ingestCallModeKeys = map[string]bool{"stream": true, "stream_options": true}
 
 var ingestConfigKeys = map[string]bool{
 	"model": true, "messages": true, "tools": true, "tool_choice": true, "parallel_tool_calls": true,
-	"max_completion_tokens": true, "max_tokens": true, "temperature": true, "top_p": true, "stop": true,
+	// functions / function_call: the deprecated function-calling shape,
+	// translated to tools / tool_choice (MAP-13: a pure spelling change).
+	"functions": true, "function_call": true,
+	"max_completion_tokens": true, "max_tokens": true, "temperature": true, "top_p": true, "top_k": true, "stop": true,
+	"seed": true, "frequency_penalty": true, "presence_penalty": true,
 	"logprobs": true, "top_logprobs": true, "response_format": true, "service_tier": true, "store": true,
 	"user": true, "safety_identifier": true, "user_id": true,
 	"reasoning_effort": true, "reasoning": true, "thinking": true, "enable_thinking": true, "chat_template_kwargs": true, "reasoning_format": true,
@@ -647,6 +649,20 @@ func ingestTools(provider string, raw any, compat ResolvedOpenAIChatCompat) ([]T
 	return tools, nil
 }
 
+// toolChoiceFromFunctionCall translates the deprecated function_call
+// spelling to the tool_choice shape.
+func toolChoiceFromFunctionCall(raw any) (any, error) {
+	if raw == "none" || raw == "auto" {
+		return raw, nil
+	}
+	if obj, ok := raw.(map[string]any); ok {
+		if name, has := obj["name"]; has {
+			return JSONObject{"type": "function", "function": JSONObject{"name": name}}, nil
+		}
+	}
+	return nil, valueErrorf("function_call must be 'none', 'auto', or {name}; got %s", jsonRaw(raw))
+}
+
 func ingestToolChoice(provider string, raw any, parallel any) (*ToolChoice, error) {
 	mode := ""
 	var allowed []string
@@ -1027,6 +1043,18 @@ func ingestConfig(provider string, body JSONObject, compat ResolvedOpenAIChatCom
 	if cfg.TopP, err = optFloat(body, "top_p"); err != nil {
 		return cfg, err
 	}
+	if cfg.TopK, err = optInt(body, "top_k"); err != nil {
+		return cfg, err
+	}
+	if cfg.Seed, err = optInt(body, "seed"); err != nil {
+		return cfg, err
+	}
+	if cfg.FrequencyPenalty, err = optFloat(body, "frequency_penalty"); err != nil {
+		return cfg, err
+	}
+	if cfg.PresencePenalty, err = optFloat(body, "presence_penalty"); err != nil {
+		return cfg, err
+	}
 	if cfg.ServiceTier, err = optString(body, "service_tier"); err != nil {
 		return cfg, err
 	}
@@ -1057,7 +1085,18 @@ func ingestConfig(provider string, body JSONObject, compat ResolvedOpenAIChatCom
 			return cfg, err
 		}
 	}
-	if cfg.ToolChoice, err = ingestToolChoice(provider, body["tool_choice"], body["parallel_tool_calls"]); err != nil {
+	_, hasFunctionCall := body["function_call"]
+	_, hasToolChoice := body["tool_choice"]
+	if hasFunctionCall && hasToolChoice {
+		return cfg, valueErrorf("function_call and tool_choice cannot both be given")
+	}
+	rawToolChoice := body["tool_choice"]
+	if hasFunctionCall {
+		if rawToolChoice, err = toolChoiceFromFunctionCall(body["function_call"]); err != nil {
+			return cfg, err
+		}
+	}
+	if cfg.ToolChoice, err = ingestToolChoice(provider, rawToolChoice, body["parallel_tool_calls"]); err != nil {
 		return cfg, err
 	}
 	var userKeys []string
@@ -1119,7 +1158,20 @@ func ingestOpenAIChat(provider string, body JSONObject, compat ResolvedOpenAICha
 	if err != nil {
 		return nil, err
 	}
-	tools, err := ingestTools(provider, body["tools"], compat)
+	_, hasFunctions := body["functions"]
+	_, hasTools := body["tools"]
+	if hasFunctions && hasTools {
+		return nil, valueErrorf("functions and tools cannot both be given")
+	}
+	rawTools := body["tools"]
+	if hasFunctions {
+		list, ok := body["functions"].([]any)
+		if !ok {
+			return nil, typeErrorf("functions must be an array")
+		}
+		rawTools = toAnyList(list, func(fn any) any { return JSONObject{"type": "function", "function": fn} })
+	}
+	tools, err := ingestTools(provider, rawTools, compat)
 	if err != nil {
 		return nil, err
 	}

@@ -15,6 +15,7 @@ const (
 	DialectOpenAIChat      = "openai-chat"
 	DialectAnthropic       = "anthropic"
 	DialectGemini          = "gemini"
+	DialectTypeSafe        = "typesafe"
 )
 
 // ProviderDefinition is everything lm15 knows about one named provider.
@@ -29,6 +30,52 @@ type ProviderDefinition struct {
 	// AdapterOwned: the dialect's own manifest is this policy (openai,
 	// anthropic, gemini, xai, claude-code, openai-codex, openai-chat).
 	AdapterOwned bool
+	// Aliases are extra input spellings (hyphenated) of a declared provider
+	// (RouterConfig.Providers); the registry's entries use none.
+	Aliases []string
+	// CompatValue is a declared provider's compat as a value (Compat holds
+	// a preset name); one of the two.
+	CompatValue *OpenAIChatCompat
+	// Declared: from RouterConfig.Providers, not the receipted registry.
+	Declared bool
+}
+
+// Spellings are every input spelling that names this provider: the id
+// and the aliases.
+func (d ProviderDefinition) Spellings() []string {
+	return append([]string{d.ID}, d.Aliases...)
+}
+
+// DeclareChatProvider declares a provider the registry does not list — a
+// gateway, a service lm15 has not receipted — speaking the OpenAI Chat
+// Completions wire: access names it (AccessPolicy{Provider, EnvKeys,
+// BaseURL}) and compat describes the server's spellings. It routes like a
+// registry entry in every router built with a RouterConfig that lists it,
+// and answers Resolution.Declared: no live receipt backs it, and lm15
+// says so.
+func DeclareChatProvider(access AccessPolicy, compat OpenAIChatCompat, aliases []string, placeholderKey, consoleURL, note string) (ProviderDefinition, error) {
+	if err := access.Validate(); err != nil {
+		return ProviderDefinition{}, err
+	}
+	if err := compat.Validate(); err != nil {
+		return ProviderDefinition{}, err
+	}
+	if access.Provider == "" {
+		return ProviderDefinition{}, valueErrorf("a declared provider needs a non-empty id (AccessPolicy.Provider)")
+	}
+	seen := map[string]bool{access.Provider: true}
+	for _, a := range aliases {
+		if a == "" || CanonicalProvider(a) != a {
+			return ProviderDefinition{}, valueErrorf("%s: aliases are non-empty and hyphenated, got %q", access.Provider, a)
+		}
+		if seen[a] {
+			return ProviderDefinition{}, valueErrorf("%s: aliases repeat a spelling", access.Provider)
+		}
+		seen[a] = true
+	}
+	c := compat
+	return ProviderDefinition{ID: access.Provider, Dialect: DialectOpenAIChat, Access: access, CompatValue: &c, Aliases: append([]string(nil), aliases...),
+		PlaceholderKey: placeholderKey, ConsoleURL: consoleURL, Note: note, Declared: true}, nil
 }
 
 // Bound reports whether the router binds Access onto the dialect at construction.
@@ -78,6 +125,7 @@ var providerDefinitions = []ProviderDefinition{
 	owned("xai", DialectOpenAIChat, Xai, "https://console.x.ai", "xAI Grok (Chat Completions dialect; XAI_API_KEY or subscription OAuth)"),
 	owned("claude-code", DialectAnthropic, ClaudeCode, "", "Claude subscription through the local `claude` CLI login"),
 	owned("openai-codex", DialectOpenAIResponses, OpenAICodex, "", "ChatGPT subscription through the local `codex` CLI login"),
+	owned("typesafe", DialectTypeSafe, TypeSafeAPI, "https://console.typesafe.ai/keys", "TypeSafe System One (Jev): judgments over declared keys with probabilities; no text generation"),
 	chatBound(Groq, "", "", "https://console.groq.com/keys", "Groq Cloud (Chat Completions dialect)"),
 	chatBound(OpenRouter, "", "", "https://openrouter.ai/keys", "OpenRouter (Chat Completions dialect)"),
 	chatBound(DeepSeek, "", "", "https://platform.deepseek.com/api_keys", "DeepSeek (Chat Completions dialect; thinking mode on by default)"),

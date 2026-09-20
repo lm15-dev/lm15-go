@@ -30,6 +30,15 @@ type AuthReport struct {
 	Steps      []AuthStep
 	Configured bool
 	Settings   [][2]string
+	// Named is the AUTH-1 named credential the config pins, and
+	// NamedMeaning what it means on this cloud; the steps are then only the
+	// rungs it covers.
+	Named        string
+	NamedMeaning string
+	// BaseURL is the address a cloud door will send to, and BaseURLSource
+	// where it came from ("base_urls", "env $VAR", or "template").
+	BaseURL       string
+	BaseURLSource string
 }
 
 // Selected returns the winning step.
@@ -69,6 +78,16 @@ func (r AuthReport) Describe() string {
 	for _, s := range r.Settings {
 		lines = append(lines, "  setting "+s[0]+": "+s[1])
 	}
+	if r.Named != "" {
+		lines = append(lines, fmt.Sprintf("  named credential %q: %s — the chain is not walked", r.Named, r.NamedMeaning))
+	}
+	if r.BaseURL != "" {
+		origin := ""
+		if r.BaseURLSource != "" {
+			origin = " (from " + r.BaseURLSource + ")"
+		}
+		lines = append(lines, "  base url: "+r.BaseURL+origin)
+	}
 	return strings.Join(lines, "\n")
 }
 
@@ -84,6 +103,12 @@ type ExplainOptions struct {
 	Files                 map[string]string
 	Home                  string
 	Settings              map[string]string
+	// Credential names one identity on a cloud door (AUTH-1: "platform",
+	// "workload", "environment", "cli"); only its rungs are walked.
+	Credential string
+	// BaseURL is an explicit endpoint root for a cloud door (the router's
+	// BaseURLs entry); "" reads the vendor's variable, then the template.
+	BaseURL string
 	// Now overrides the clock used for expiry details.
 	Now func() time.Time
 }
@@ -171,6 +196,9 @@ func ExplainAuth(provider string, opts ExplainOptions) (AuthReport, error) {
 	if def.Access.CloudChain() || def.Hosted() {
 		return explainCloud(canonical, def, config, opts)
 	}
+	if opts.Credential != "" {
+		return AuthReport{}, NotConfiguredErrorf(canonical, nil, "", "%s: credential=%q names a cloud identity, and this is not a cloud door", canonical, opts.Credential)
+	}
 	policy := def.CredentialPolicy()
 	if policy == "oauth" {
 		override := opts.CodexAuthPath
@@ -235,8 +263,26 @@ func explainCloud(canonical string, def ProviderDefinition, config RouterConfig,
 		home = homeDir()
 	}
 	ctx := &ChainContext{Env: env, Home: expandHome(home), Files: opts.Files, Now: opts.Now}
+	if opts.Credential != "" {
+		if err := checkNamedCredential(RouterConfig{Env: opts.Env, APIKeys: opts.APIKeys, Credentials: map[string]string{canonical: opts.Credential}}, canonical, opts.Credential); err != nil {
+			return AuthReport{}, err
+		}
+	}
+	endpoint, endpointSource := opts.BaseURL, ""
+	if endpoint != "" {
+		endpointSource = "base_urls"
+	} else if def.Access.Host != nil {
+		if endpoint = EndpointFromEnv(def.Access.Host, env); endpoint != "" {
+			for _, name := range def.Access.Host.EndpointEnv {
+				if strings.TrimSpace(env[name]) != "" {
+					endpointSource = "env $" + name
+					break
+				}
+			}
+		}
+	}
 	settingError := ""
-	resolved, err := resolveSettings(def.Access.Host, opts.Settings, env, canonical, ProfileSettings(def.Access, ctx))
+	resolved, err := resolveSettingsWithEndpoint(def.Access.Host, opts.Settings, env, canonical, ProfileSettings(def.Access, ctx), endpoint)
 	if err != nil {
 		if IsKind(err, KindNotConfigured) {
 			settingError = firstLine(err)
@@ -246,10 +292,26 @@ func explainCloud(canonical string, def ProviderDefinition, config RouterConfig,
 		}
 	}
 	ctx.Settings = resolved
+	rendered, renderedSource := "", ""
+	if def.Access.Host != nil && settingError == "" {
+		if url, err := renderBaseURLAt(*def.Access.Host, resolved, endpoint, canonical); err != nil {
+			if IsKind(err, KindNotConfigured) {
+				settingError = firstLine(err)
+			} else {
+				return AuthReport{}, err
+			}
+		} else {
+			rendered = url
+			renderedSource = endpointSource
+			if renderedSource == "" {
+				renderedSource = "template"
+			}
+		}
+	}
 	var steps []AuthStep
 	configured := false
 	if def.Access.CloudChain() {
-		chainSteps, isConfigured, err := ExplainChain(def.Access, ctx, entry != "")
+		chainSteps, isConfigured, err := ExplainChainNamed(def.Access, ctx, entry != "", opts.Credential)
 		if err != nil {
 			return AuthReport{}, err
 		}
@@ -292,5 +354,10 @@ func explainCloud(canonical string, def ProviderDefinition, config RouterConfig,
 	if settingError != "" {
 		shown = append(shown, [2]string{"error", settingError})
 	}
-	return AuthReport{Provider: canonical, Steps: steps, Configured: configured, Settings: shown}, nil
+	report := AuthReport{Provider: canonical, Steps: steps, Configured: configured, Settings: shown, BaseURL: rendered, BaseURLSource: renderedSource}
+	if opts.Credential != "" {
+		report.Named = opts.Credential
+		report.NamedMeaning = NamedMeaningFor(def.Access, opts.Credential)
+	}
+	return report, nil
 }

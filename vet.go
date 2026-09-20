@@ -108,6 +108,11 @@ func vetErrorReply(id any, err error) JSONObject {
 		if e.Kind.IsA(KindStreamAssembly) && e.Partial != nil {
 			errObj["partial_response"] = ResponseToDict(e.Partial, false)
 		}
+		if e.Feature != "" {
+			// MAP-13: the config path a refusal is about, so a policy layer
+			// can act on it; pinned by cases as expect_lm15.raises.feature.
+			errObj["feature"] = e.Feature
+		}
 		if e.Kind.IsA(KindUnknownModel) || e.Kind.IsA(KindAmbiguousModel) {
 			errObj["model"] = e.Model
 			if e.Kind.IsA(KindAmbiguousModel) {
@@ -284,7 +289,21 @@ func vetBuildRequest(msg JSONObject) (JSONObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	return normalizedOrErr(lm.BuildRequest(req, truthy(msg["stream"])))
+	wire, adaptations, err := lm.Build(req, truthy(msg["stream"]))
+	if err != nil {
+		return nil, err
+	}
+	out := NormalizeTransportRequest(wire)
+	if len(adaptations) > 0 {
+		// MAP-13: the record, without the adapter's own wording (never
+		// pinned).
+		out["adaptations"] = toAnyList(adaptations, func(a Adaptation) any {
+			d := AdaptationToDict(a)
+			delete(d, "reason")
+			return d
+		})
+	}
+	return out, nil
 }
 
 func vetIngestOpenAIChat(msg JSONObject) (JSONObject, error) {
@@ -840,7 +859,7 @@ func vetBatchOpBuild(msg JSONObject) (JSONObject, error) {
 		if err != nil {
 			return nil, err
 		}
-		wire, err := h.batchUploadRequest(&req)
+		wire, err := h.batchUploadRequest(&req, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -853,7 +872,7 @@ func vetBatchOpBuild(msg JSONObject) (JSONObject, error) {
 		if err != nil {
 			return nil, err
 		}
-		wire, err := h.batchSubmitRequest(&req, wireObj(msg["upload_body"]))
+		wire, err := h.batchSubmitRequest(&req, wireObj(msg["upload_body"]), nil)
 		if err != nil {
 			return nil, err
 		}
@@ -1006,6 +1025,8 @@ func vetExplainAuth(msg JSONObject) (JSONObject, error) {
 		opts.Home = env["HOME"]
 	}
 	opts.Settings = vetSettings(msg)
+	opts.Credential = wireStr(msg["credential"])
+	opts.BaseURL = wireStr(msg["base_url"])
 	if cp := msg["credentials_path"]; cp != nil {
 		switch provider {
 		case "claude-code":
@@ -1022,7 +1043,11 @@ func vetExplainAuth(msg JSONObject) (JSONObject, error) {
 	}
 	steps := toAnyList(report.Steps, func(s AuthStep) any { return JSONObject{"kind": s.Kind, "state": s.State} })
 	text := report.Describe()
-	return JSONObject{"configured": report.Configured, "steps": steps, "report_text": strings.Join([]string{text, fmt.Sprintf("%+v", report.Steps), text}, "\n")}, nil
+	out := JSONObject{"configured": report.Configured, "steps": steps, "report_text": strings.Join([]string{text, fmt.Sprintf("%+v", report.Steps), text}, "\n")}
+	if report.BaseURL != "" {
+		out["base_url"] = report.BaseURL
+	}
+	return out, nil
 }
 
 func vetTokenExchangeBuild(msg JSONObject) (JSONObject, error) {

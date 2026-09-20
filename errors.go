@@ -13,6 +13,7 @@ import (
 //	├── TransportError
 //	├── LockTimeoutError
 //	├── StreamAssemblyError
+//	├── CollectionLimitError
 //	├── ConfigurationError
 //	│   ├── NotConfiguredError
 //	│   ├── UnknownModelError
@@ -35,6 +36,7 @@ const (
 	KindTransport          ErrorKind = "TransportError"
 	KindLockTimeout        ErrorKind = "LockTimeoutError"
 	KindStreamAssembly     ErrorKind = "StreamAssemblyError"
+	KindCollectionLimit    ErrorKind = "CollectionLimitError"
 	KindConfiguration      ErrorKind = "ConfigurationError"
 	KindNotConfigured      ErrorKind = "NotConfiguredError"
 	KindUnknownModel       ErrorKind = "UnknownModelError"
@@ -59,6 +61,7 @@ var errorParent = map[ErrorKind]ErrorKind{
 	KindTransport:          KindLM15Error,
 	KindLockTimeout:        KindLM15Error,
 	KindStreamAssembly:     KindLM15Error,
+	KindCollectionLimit:    KindLM15Error,
 	KindConfiguration:      KindLM15Error,
 	KindNotConfigured:      KindConfiguration,
 	KindUnknownModel:       KindConfiguration,
@@ -100,6 +103,7 @@ var kindDefaultCode = map[ErrorKind]string{
 	KindLockTimeout:        CodeLockTimeout,
 	KindCredentialLockWait: CodeLockTimeout,
 	KindStreamAssembly:     CodeStreamAssembly,
+	KindCollectionLimit:    CodeCollectionLimit,
 	KindProvider:           CodeProvider,
 	KindDeviceCodeExpired:  CodeAuth,
 }
@@ -120,6 +124,7 @@ var codeToKind = map[string]ErrorKind{
 	CodeTransport:          KindTransport,
 	CodeLockTimeout:        KindLockTimeout,
 	CodeStreamAssembly:     KindStreamAssembly,
+	CodeCollectionLimit:    KindCollectionLimit,
 	CodeProvider:           KindProvider,
 }
 
@@ -169,9 +174,32 @@ type Error struct {
 	RequestID    string
 	RetryAfter   *float64
 
+	// RateLimitHeaders is the bounded, immutable snapshot of provider
+	// rate-limit evidence (docs/error-diagnostics.md, 2026-09-19): lowercase
+	// header name → the values in arrival order, closed allowlist, at most
+	// four values of 1–256 printable ASCII characters each. Empty means no
+	// retained evidence, not unlimited quota. Never a credential.
+	RateLimitHeaders RateLimitHeaders
+
+	// Feature (CapabilityError, MAP-13): the config path the refusal is
+	// about — "config.top_k", "messages[0].parts[1]", "tools[name]" — so a
+	// policy layer can act without parsing prose. Empty when the refusal
+	// is not about one addressable field.
+	Feature string
+
 	// Guidance metadata (AuthError / NotConfiguredError).
 	EnvKeys        []string
 	CredentialHint string
+	// CredentialOrigin (AuthError, AUTH-1 provenance): where the rejected
+	// credential came from — a label, never the value.
+	CredentialOrigin string
+
+	// CollectionLimitError: the breached budget and what was kept.
+	Limit         string            // "max_bytes" | "max_events"
+	Maximum       int               // the configured budget
+	RetainedBytes int               // bytes charged for the accepted events
+	PartialEvents []LiveServerEvent // every accepted event, in order
+	RejectedEvent LiveServerEvent   // a byte overflow's received-but-not-kept event; nil on a count overflow
 
 	// StreamAssemblyError: what assembled, and the first offending part.
 	Partial   *Response
@@ -208,14 +236,15 @@ func (e *Error) Error() string {
 	if e.RequestID != "" {
 		ctx = append(ctx, "request "+e.RequestID)
 	}
-	if len(ctx) == 0 {
-		return base
+	suffix := ""
+	if len(ctx) > 0 {
+		suffix = " (" + strings.Join(ctx, ", ") + ")"
 	}
-	suffix := " (" + strings.Join(ctx, ", ") + ")"
+	details := diagnosticsText(e.RateLimitHeaders, e.RetryAfter)
 	if head, tail, ok := strings.Cut(base, "\n\n"); ok {
-		return head + suffix + "\n\n" + tail
+		return head + suffix + details + "\n\n" + tail
 	}
-	return base + suffix
+	return base + suffix + details
 }
 
 // Unwrap exposes the cause (a transport failure, a JSON error).
@@ -350,6 +379,45 @@ func UnsupportedFeatureErrorf(provider string, format string, args ...any) *Erro
 	return e
 }
 
+// UnsupportedFeature builds an UnsupportedFeatureError about one
+// addressable config path (MAP-13 rule 4): feature is "config.top_k",
+// "messages[0].parts[1]", "tools[name]", ...
+func UnsupportedFeature(provider, feature, format string, args ...any) *Error {
+	e := UnsupportedFeatureErrorf(provider, format, args...)
+	e.Feature = feature
+	return e
+}
+
+// WithFeature names the config path a capability refusal is about.
+func (e *Error) WithFeature(feature string) *Error {
+	e.Feature = feature
+	return e
+}
+
+const originMarker = "\n\n  credential came from: "
+
+// WithCredentialOrigin names where an AuthError's credential came from
+// (AUTH-1 provenance, 2026-09-19): its own line under the provider's
+// message, before the guidance, added once. Non-auth errors pass through.
+func WithCredentialOrigin(err *Error, origin string) *Error {
+	if err == nil || !err.Kind.IsA(KindAuth) || origin == "" {
+		return err
+	}
+	base, _, _ := strings.Cut(err.Message, guidanceMarker)
+	if strings.Contains(base, originMarker) {
+		return err
+	}
+	out := AuthErrorf(err.Provider, err.EnvKeys, err.CredentialHint, "%s", strings.TrimRight(base, " \t\r\n")+originMarker+origin)
+	out.ProviderCode = err.ProviderCode
+	out.Status = err.Status
+	out.RequestID = err.RequestID
+	out.RetryAfter = err.RetryAfter
+	out.RateLimitHeaders = err.RateLimitHeaders
+	out.CredentialOrigin = origin
+	out.cause = err.cause
+	return out
+}
+
 // providerErrorf builds an error of a provider class with guidance where the
 // class prepends one (RateLimitError, ContextLengthError, AuthError).
 func providerErrorf(kind ErrorKind, provider string, envKeys []string, message string) *Error {
@@ -357,7 +425,7 @@ func providerErrorf(kind ErrorKind, provider string, envKeys []string, message s
 	case kind.IsA(KindAuth):
 		return AuthErrorf(provider, envKeys, "", "%s", message)
 	case kind.IsA(KindRateLimit):
-		message = appendGuidance(message, "\n\n  To fix:\n    - Wait a moment and retry\n    - Retry with backoff in your application layer (lm15 never retries for you)\n    - Reduce request rate or upgrade your API plan\n")
+		message = appendGuidance(message, "\n\n  To fix:\n    - Wait a moment and retry\n    - Retry with backoff in your application layer (lm15 never retries for you)\n    - Check the reported limits and deployment capacity; a 429 does not prove the endpoint is unsupported\n")
 	case kind.IsA(KindContextLength):
 		message = appendGuidance(message, "\n\n  To fix:\n    - Reduce the prompt or system prompt length\n    - Clear conversation history\n    - Use a model with a larger context window\n    - Lower max_tokens to leave more room for input\n")
 	}
@@ -378,6 +446,9 @@ func WithCredentialHint(err *Error, hint string) *Error {
 	out.Status = err.Status
 	out.RequestID = err.RequestID
 	out.RetryAfter = err.RetryAfter
+	out.RateLimitHeaders = err.RateLimitHeaders
+	out.CredentialOrigin = err.CredentialOrigin
+	out.cause = err.cause
 	return out
 }
 

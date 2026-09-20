@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // JSONObject is an opaque JSON object (tool input, extensions, provider_data,
@@ -47,8 +48,14 @@ func DecodeJSONObject(data []byte) (JSONObject, error) {
 }
 
 // EncodeJSON serializes a canonical dict compactly (no HTML escaping, as
-// every other port does).
+// every other port does). Text that is not valid Unicode — a lone
+// surrogate U+D800..U+DFFF, or any other invalid UTF-8 — has no UTF-8
+// form and can reach no provider; it is refused here, before the wire, as
+// the input error it is (INV-055), never silently replaced by U+FFFD.
 func EncodeJSON(v any) ([]byte, error) {
+	if err := checkUnicode(reflect.ValueOf(v), 0); err != nil {
+		return nil, err
+	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
@@ -60,6 +67,64 @@ func EncodeJSON(v any) ([]byte, error) {
 		out = out[:n-1]
 	}
 	return out, nil
+}
+
+// checkUnicode walks strings inside a JSON-shaped value (INV-055).
+func checkUnicode(rv reflect.Value, depth int) error {
+	if !rv.IsValid() || depth > 512 {
+		return nil
+	}
+	switch rv.Kind() {
+	case reflect.String:
+		return checkUnicodeString(rv.String())
+	case reflect.Interface, reflect.Pointer:
+		if rv.IsNil() {
+			return nil
+		}
+		return checkUnicode(rv.Elem(), depth+1)
+	case reflect.Slice, reflect.Array:
+		if rv.Kind() == reflect.Slice && rv.Type().Elem().Kind() == reflect.Uint8 {
+			return nil // raw bytes (json.RawMessage) are the caller's
+		}
+		for i := 0; i < rv.Len(); i++ {
+			if err := checkUnicode(rv.Index(i), depth+1); err != nil {
+				return err
+			}
+		}
+	case reflect.Map:
+		iter := rv.MapRange()
+		for iter.Next() {
+			if err := checkUnicode(iter.Key(), depth+1); err != nil {
+				return err
+			}
+			if err := checkUnicode(iter.Value(), depth+1); err != nil {
+				return err
+			}
+		}
+	case reflect.Struct:
+		// Typed values marshal through their own MarshalJSON (parts,
+		// messages, ...), which route back through EncodeJSON.
+	}
+	return nil
+}
+
+func checkUnicodeString(s string) error {
+	if utf8.ValidString(s) {
+		return nil
+	}
+	for i := 0; i < len(s); {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if r == utf8.RuneError && size == 1 {
+			// A WTF-8 surrogate (ED A0..BF xx) names its code point.
+			if i+2 < len(s) && s[i] == 0xED && s[i+1] >= 0xA0 && s[i+1] <= 0xBF {
+				cp := 0xD000 | int(s[i+1]&0x3F)<<6 | int(s[i+2]&0x3F)
+				return valueErrorf("request contains text that is not valid Unicode (lone surrogate U+%04X), which no provider can receive; repair the text first", cp)
+			}
+			return valueErrorf("request contains text that is not valid UTF-8 (byte 0x%02X at offset %d), which no provider can receive; repair the text first", s[i], i)
+		}
+		i += size
+	}
+	return nil
 }
 
 func mustJSON(v any) []byte {

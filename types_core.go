@@ -3,6 +3,7 @@ package lm15
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -73,7 +74,7 @@ func validateMessageParts(role string, parts []Part) error {
 			return typeErrorf("%s messages cannot contain model/tool protocol parts", role)
 		}
 	}
-	return nil
+	return validateInputDataParts(role, parts)
 }
 
 // UserMessage creates a user message from text.
@@ -396,7 +397,17 @@ type Config struct {
 	UserID         string
 	Store          *bool
 	Logprobs       *int
-	Extensions     JSONObject
+	// Sampling knobs promoted from extensions 2026-09-14 (MAP-13 audit):
+	// OpenAI (both dialects), Gemini and every OpenAI-compatible server
+	// carry them; a wire without them (Anthropic) drops and records.
+	Seed             *int
+	FrequencyPenalty *float64
+	PresencePenalty  *float64
+	// Probabilities asks for a distribution over the keys the json_schema
+	// declares (MAP-14). "" = off. "if_available": a wire that cannot
+	// measure one records dropped; "required": it refuses before the wire.
+	Probabilities string
+	Extensions    JSONObject
 }
 
 // IsDefault reports whether every field is unset (serializes to {}).
@@ -404,6 +415,7 @@ func (c Config) IsDefault() bool {
 	return c.MaxTokens == nil && c.Temperature == nil && c.TopP == nil && c.TopK == nil &&
 		len(c.Stop) == 0 && len(c.ResponseFormat) == 0 && c.ToolChoice == nil && c.Reasoning == nil &&
 		c.Cache == nil && c.ServiceTier == "" && c.UserID == "" && c.Store == nil && c.Logprobs == nil &&
+		c.Seed == nil && c.FrequencyPenalty == nil && c.PresencePenalty == nil && c.Probabilities == "" &&
 		len(c.Extensions) == 0
 }
 
@@ -415,8 +427,19 @@ func (c Config) Validate() error {
 	if c.TopK != nil && *c.TopK <= 0 {
 		return valueErrorf("top_k must be > 0")
 	}
-	if c.Temperature != nil && *c.Temperature < 0 {
-		return valueErrorf("temperature must be >= 0")
+	// The canonical range is 0–2 (OpenAI's and Gemini's); a wire whose
+	// ceiling is 1 (Anthropic) clamps and records it (MAP-13), never rescales.
+	if c.Temperature != nil && (*c.Temperature < 0 || *c.Temperature > 2) {
+		return valueErrorf("temperature must be in [0, 2]")
+	}
+	if c.FrequencyPenalty != nil && (*c.FrequencyPenalty < -2 || *c.FrequencyPenalty > 2) {
+		return valueErrorf("frequency_penalty must be in [-2, 2]")
+	}
+	if c.PresencePenalty != nil && (*c.PresencePenalty < -2 || *c.PresencePenalty > 2) {
+		return valueErrorf("presence_penalty must be in [-2, 2]")
+	}
+	if c.Probabilities != "" && !inVocab(c.Probabilities, ProbabilityPolicies) {
+		return valueErrorf("Config.probabilities must be one of %v, got %q", ProbabilityPolicies, c.Probabilities)
 	}
 	if c.TopP != nil && (*c.TopP < 0 || *c.TopP > 1) {
 		return valueErrorf("top_p must be in [0, 1]")
@@ -685,6 +708,12 @@ func (t TokenLogprob) Validate() error {
 }
 
 // Response is what a foundation model returned.
+//
+// LogprobsIncomplete (the wire's logprobs_complete=false) means local text
+// editing (a client-side stop inside a token) left retained text without
+// its original scores; remaining scores describe whole original tokens
+// only. False (the default, "complete") does not promise the provider
+// supplied scores at all.
 type Response struct {
 	ID           string
 	Model        string
@@ -693,7 +722,16 @@ type Response struct {
 	Usage        Usage
 	Logprobs     []TokenLogprob // nil = not reported
 	ProviderData JSONObject
+	// Adaptations is what the wire got that differs from what was asked
+	// (MAP-13): a dropped hint, a clamped dial, a client-side stop. Empty
+	// when the request went out exactly as written. Data, never printed.
+	Adaptations []Adaptation
+	// LogprobsIncomplete: see the type comment.
+	LogprobsIncomplete bool
 }
+
+// LogprobsComplete is the wire's spelling of !LogprobsIncomplete.
+func (r *Response) LogprobsComplete() bool { return !r.LogprobsIncomplete }
 
 // Validate checks INV-036.
 func (r *Response) Validate() error {
@@ -717,7 +755,67 @@ func (r *Response) Validate() error {
 			return err
 		}
 	}
+	if err := validateAdaptations(r.Adaptations); err != nil {
+		return err
+	}
 	return checkJSONObject(r.ProviderData, "provider_data", false)
+}
+
+// ─── Judgments (changes/2026-09-17-judgments.md D12) ────────────────
+
+// DataPart returns the message's first data part, if any.
+func (r *Response) DataPart() (DataPart, bool) {
+	for _, p := range r.Message.Parts {
+		if d, ok := p.(DataPart); ok {
+			return d, true
+		}
+	}
+	return DataPart{}, false
+}
+
+// Data is the answer of a judgment request: the DataPart's value. Falls
+// back to the parsed JSON text of a plain structured-output response so
+// Data reads the same on a wire that answered with text; nil when neither.
+func (r *Response) Data() any {
+	if d, ok := r.DataPart(); ok {
+		return d.Value
+	}
+	return r.JSON()
+}
+
+// Probabilities are the per-judgment distributions over the declared keys,
+// or nil when none was measured (never a fabricated one).
+func (r *Response) Probabilities() map[string]map[string]float64 {
+	if d, ok := r.DataPart(); ok {
+		return d.Probabilities
+	}
+	return nil
+}
+
+// Method is how the distributions were measured (JudgmentMethod), or "".
+func (r *Response) Method() string {
+	if d, ok := r.DataPart(); ok {
+		return d.Method
+	}
+	return ""
+}
+
+// Expected is Σ p·i over an ordered judgment's levels (Jev's score); ok is
+// false when the field has no distribution or its keys are not level indexes.
+func (r *Response) Expected(field string) (float64, bool) {
+	dist := r.Probabilities()[field]
+	if len(dist) == 0 {
+		return 0, false
+	}
+	total := 0.0
+	for key, p := range dist {
+		i, err := strconv.Atoi(key)
+		if err != nil {
+			return 0, false
+		}
+		total += p * float64(i)
+	}
+	return total, true
 }
 
 // Text is the visible answer text: the joined TextParts when the message

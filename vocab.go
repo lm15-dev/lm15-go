@@ -30,18 +30,19 @@ const (
 	PartTypeThinking   = "thinking"
 	PartTypeRefusal    = "refusal"
 	PartTypeCitation   = "citation"
+	PartTypeData       = "data"
 )
 
 // PartTypes is the PartType vocabulary in declaration order.
 var PartTypes = []string{
 	PartTypeText, PartTypeImage, PartTypeAudio, PartTypeVideo, PartTypeDocument, PartTypeBinary,
-	PartTypeToolCall, PartTypeToolResult, PartTypeThinking, PartTypeRefusal, PartTypeCitation,
+	PartTypeToolCall, PartTypeToolResult, PartTypeThinking, PartTypeRefusal, PartTypeCitation, PartTypeData,
 }
 
 // StreamablePartTypes / NonStreamablePartTypes partition PartTypes (INV-035).
 var (
 	StreamablePartTypes    = []string{PartTypeText, PartTypeThinking, PartTypeImage, PartTypeAudio, PartTypeToolCall, PartTypeCitation}
-	NonStreamablePartTypes = []string{PartTypeVideo, PartTypeDocument, PartTypeBinary, PartTypeToolResult, PartTypeRefusal}
+	NonStreamablePartTypes = []string{PartTypeVideo, PartTypeDocument, PartTypeBinary, PartTypeToolResult, PartTypeRefusal, PartTypeData}
 )
 
 // Delta type discriminators.
@@ -104,6 +105,7 @@ const (
 	CodeTransport          = "transport"
 	CodeLockTimeout        = "lock_timeout"
 	CodeStreamAssembly     = "stream_assembly"
+	CodeCollectionLimit    = "collection_limit"
 	CodeProvider           = "provider"
 )
 
@@ -111,7 +113,7 @@ const (
 var ErrorCodes = []string{
 	CodeAuth, CodeBilling, CodeRateLimit, CodeInvalidRequest, CodeContextLength, CodeTimeout, CodeServer,
 	CodeUnsupportedModel, CodeUnsupportedFeature, CodeNotConfigured, CodeUnknownModel, CodeAmbiguousModel,
-	CodeTransport, CodeLockTimeout, CodeStreamAssembly, CodeProvider,
+	CodeTransport, CodeLockTimeout, CodeStreamAssembly, CodeCollectionLimit, CodeProvider,
 }
 
 // StreamEventTypes is the StreamEventType vocabulary.
@@ -158,6 +160,61 @@ var (
 	CacheRetentions = []string{"short", "long"}
 	CachePrefixes   = []string{"stable", "history"}
 )
+
+// AdaptationAction values (MAP-13, 2026-09-14): what the wire got that
+// differs from what was asked.
+const (
+	AdaptDropped     = "dropped"
+	AdaptClamped     = "clamped"
+	AdaptSubstituted = "substituted"
+	AdaptClientSide  = "client_side"
+	AdaptSatisfied   = "satisfied"
+	AdaptDefaulted   = "defaulted"
+)
+
+// AdaptationActions is the AdaptationAction vocabulary.
+var AdaptationActions = []string{AdaptDropped, AdaptClamped, AdaptSubstituted, AdaptClientSide, AdaptSatisfied, AdaptDefaulted}
+
+// AdaptationPolicy values: the value of WithAdaptations / RouterConfig.Adaptations.
+const (
+	AdaptationsNote   = "note"
+	AdaptationsSilent = "silent"
+	AdaptationsRefuse = "refuse"
+)
+
+// AdaptationPolicies is the AdaptationPolicy vocabulary.
+var AdaptationPolicies = []string{AdaptationsNote, AdaptationsSilent, AdaptationsRefuse}
+
+// ProbabilityPolicy values (Config.Probabilities; MAP-14, 2026-09-17).
+const (
+	ProbabilitiesOff         = "off"
+	ProbabilitiesIfAvailable = "if_available"
+	ProbabilitiesRequired    = "required"
+)
+
+// ProbabilityPolicies is the ProbabilityPolicy vocabulary.
+var ProbabilityPolicies = []string{ProbabilitiesOff, ProbabilitiesIfAvailable, ProbabilitiesRequired}
+
+// JudgmentMethod values: how a DataPart's distribution was measured.
+const (
+	MethodProviderClassification      = "provider_classification"
+	MethodCandidateSequenceLikelihood = "candidate_sequence_likelihood"
+)
+
+// JudgmentMethods is the JudgmentMethod vocabulary.
+var JudgmentMethods = []string{MethodProviderClassification, MethodCandidateSequenceLikelihood}
+
+// NamedCredential values (AUTH-1, 2026-09-19): one identity on a cloud
+// door instead of its chain; the same four words on every cloud.
+const (
+	CredentialPlatform    = "platform"
+	CredentialWorkload    = "workload"
+	CredentialEnvironment = "environment"
+	CredentialCLI         = "cli"
+)
+
+// NamedCredentials is the NamedCredential vocabulary.
+var NamedCredentials = []string{CredentialPlatform, CredentialWorkload, CredentialEnvironment, CredentialCLI}
 
 // Live event vocabularies.
 var (
@@ -207,6 +264,11 @@ var Vocabularies = map[string][]string{
 	"AuthStepState":           AuthStepStates,
 	"StreamFraming":           StreamFramings,
 	"ModelPlacement":          ModelPlacements,
+	"AdaptationAction":        AdaptationActions,
+	"AdaptationPolicy":        AdaptationPolicies,
+	"ProbabilityPolicy":       ProbabilityPolicies,
+	"JudgmentMethod":          JudgmentMethods,
+	"NamedCredential":         NamedCredentials,
 }
 
 func inVocab(value string, vocab []string) bool {

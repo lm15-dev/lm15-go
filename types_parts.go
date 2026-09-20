@@ -374,6 +374,9 @@ func (p ToolResultPart) Validate() error {
 			return err
 		}
 	}
+	if err := validateInputDataParts("tool result", p.Content); err != nil {
+		return err
+	}
 	return validateContinuation(p.Continuation)
 }
 

@@ -5,7 +5,45 @@ provider the [lm15-contract](https://github.com/lm15-dev/lm15-contract)
 names. Zero dependencies (standard library only). Builds for Linux, macOS,
 Windows and `GOOS=js GOARCH=wasm` (the browser).
 
-The contract commit this port is written against is in `CONTRACT_PIN`.
+The contract commit this port is written against is in `CONTRACT_PIN`:
+`18dad7b3b3e54701dc5b55a3aadb298f0783eb31`. This is not a claim of parity
+with later contract revisions (including `b721`). The byte-order deviations
+below remain.
+
+## Browser runtime
+
+The website bridge runs the actual Go SDK, not a JavaScript translation:
+
+```bash
+GOOS=js GOARCH=wasm go build -trimpath -ldflags='-s -w' \
+  -o /tmp/lm15-go.wasm ./cmd/lm15-wasm
+# Use wasm_exec.js from the SAME Go toolchain as the build:
+node cmd/lm15-wasm/smoke.mjs "$(go env GOROOT)/lib/wasm/wasm_exec.js" /tmp/lm15-go.wasm
+```
+
+Start `go.run(instance)` without awaiting its lifetime promise; wait for
+`globalThis.lm15Go`. Its `call(op, inputJSON, signal?, onEvent?)` returns a
+Promise of a JSON string. Operations: `version`, `build_request`, `complete`,
+`stream`. Input is `{provider, api_key, base_url?, settings?, canonical_request,
+stream?}`; pass the key explicitly, or a nonempty placeholder for keyless
+endpoints. Custom endpoints use `openai-chat` with `base_url`. Local media
+paths are refused; use inline data, URLs or provider file IDs.
+
+`build_request` returns the vet wire shape plus **always** `body_b64`: the
+actual SDK bytes, including Go's sorted JSON keys, not reserialized JavaScript.
+`complete`/`stream` return `{canonical_response}`. Streaming delivers canonical
+JSON events immediately through `onEvent` and uses the SDK's stop handling,
+adaptations and final assembler. Failures resolve `{error:{name,code,message,
+status?,provider_code?,http_response?}}`; messages include SDK diagnostics.
+Cancellation resolves `AbortError` and closes the HTTP stream. Host callbacks
+and abort listeners are released/detached when the call ends.
+
+The browser-only transport uses Go's Fetch path (nil dial hooks), lets Fetch
+handle compression, and injects Anthropic's direct-browser opt-in **after**
+SDK request building. Native presets are unchanged. CORS still applies;
+servers must expose diagnostic headers for browsers to see them. The smoke
+test uses only loopback HTTP, no provider credentials or paid calls. Build and
+smoke verified with Go 1.26.7.
 
 ## Status
 

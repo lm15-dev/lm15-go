@@ -167,7 +167,8 @@ func vetSettings(msg JSONObject) map[string]string {
 
 // AdapterForProvider constructs the LM a contract case's provider names,
 // exactly as the router would, with the given credential and base URL.
-func AdapterForProvider(provider string, credential CredentialLike, baseURL string, settings map[string]string, clock func() time.Time) (LM, error) {
+// Extra options can supply an embedding's transport or adaptation policy.
+func AdapterForProvider(provider string, credential CredentialLike, baseURL string, settings map[string]string, clock func() time.Time, extra ...Option) (LM, error) {
 	def, ok := LookupProvider(provider)
 	if !ok {
 		return nil, valueErrorf("unknown provider: %s", provider)
@@ -188,10 +189,7 @@ func AdapterForProvider(provider string, credential CredentialLike, baseURL stri
 	if clock != nil {
 		opts = append(opts, WithClock(clock))
 	}
-	if def.ID == "openai-codex" {
-		opts = append(opts, WithAccountID("test-account"))
-	}
-	return construct(def, opts)
+	return construct(def, append(opts, extra...))
 }
 
 func vetAdapter(msg JSONObject, parseOnly bool) (LM, error) {
@@ -207,7 +205,12 @@ func vetAdapter(msg JSONObject, parseOnly bool) (LM, error) {
 	if err != nil {
 		return nil, err
 	}
-	return AdapterForProvider(wireStr(msg["provider"]), cred, wireStr(msg["base_url"]), vetSettings(msg), clock)
+	var opts []Option
+	if def, ok := LookupProvider(wireStr(msg["provider"])); ok && def.ID == "openai-codex" {
+		// Fixture identity belongs to the vet shim, never a real SDK caller.
+		opts = append(opts, WithAccountID("test-account"))
+	}
+	return AdapterForProvider(wireStr(msg["provider"]), cred, wireStr(msg["base_url"]), vetSettings(msg), clock, opts...)
 }
 
 // NormalizeTransportRequest renders a wire request in the protocol's shape.

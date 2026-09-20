@@ -206,7 +206,7 @@ func (s *SystemPrompt) Validate() error {
 			return err
 		}
 	}
-	return nil
+	return validateInputDataParts("system", s.parts)
 }
 
 // ─── Tools ───────────────────────────────────────────────────────────

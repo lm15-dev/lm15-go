@@ -840,6 +840,14 @@ func (l *OpenAILM) payload(req *Request, stream bool, scope *adaptScope) (JSONOb
 		payload[k] = v
 	}
 	if l.isCodex() {
+		// An explicit cap or store=true is refused, never stripped: dropping a
+		// cap means unbounded spend (MAP-13 rule 4; Rust, R, Python and TS refuse the same).
+		if req.Config.MaxTokens != nil {
+			return nil, UnsupportedFeature(l.provider, "config.max_tokens", "%s: config.max_tokens: this backend has no output cap; dropping it risks unbounded paid generation", l.provider)
+		}
+		if req.Config.Store != nil && *req.Config.Store {
+			return nil, UnsupportedFeature(l.provider, "config.store", "%s: config.store: this backend cannot store a retrievable response; the program may depend on retrieval", l.provider)
+		}
 		if l.access.SystemPrefix != "" {
 			if _, has := payload["instructions"]; !has {
 				payload["instructions"] = l.access.SystemPrefix

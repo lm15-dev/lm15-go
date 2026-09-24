@@ -5,10 +5,18 @@ provider the [lm15-contract](https://github.com/lm15-dev/lm15-contract)
 names. Zero dependencies (standard library only). Builds for Linux, macOS,
 Windows and `GOOS=js GOARCH=wasm` (the browser).
 
-The contract commit this port is written against is in `CONTRACT_PIN`:
-`18dad7b3b3e54701dc5b55a3aadb298f0783eb31`. This is not a claim of parity
-with later contract revisions (including `b721`). The byte-order deviations
-below remain.
+The contract commit this port is written against is in `CONTRACT_PIN`
+(`fc0c460`, 2026-09-24). At that commit the port passes 1,416 of the
+contract's 1,440 cases; the 24 it fails are listed in
+[RELEASING.md](RELEASING.md). The byte-order deviations below are most of them.
+
+## Versions
+
+There is no released version yet. `v1.0.0` was tagged by mistake on
+2026-06-11, from an early prototype, and is **retracted**: `go get` skips it
+and warns anyone who pinned it. Until the first release candidate
+(`v1.1.0-rc.1`), `go get github.com/lm15-dev/lm15-go` installs the current
+`main` as an untagged pseudo-version. See [RELEASING.md](RELEASING.md).
 
 ## Browser runtime
 

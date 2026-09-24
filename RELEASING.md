@@ -25,7 +25,7 @@ retracted, `go get` installs `main` as a pseudo-version; a module pinned to
 
 The port must pass the contract at its `CONTRACT_PIN`
 (`python3 harness/check.py --shim go --direction all` in lm15-contract). At
-`b87e434` it fails 24 cases:
+`186ff6b` it fails 24 cases:
 
 - 23 where Go writes JSON object keys in sorted order and the recorded bytes
   keep insertion order: 20 Bedrock Chat / Mantle requests (the SigV4 signature

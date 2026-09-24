@@ -410,6 +410,9 @@ func openaiErrorDetail(providerCode, message string) ErrorDetail {
 	if !ok {
 		kind = KindProvider
 	}
+	if IsPinnedModelNotFound(providerCode, message) { // MAP-15
+		kind = KindUnsupportedModel
+	}
 	msg := message
 	if msg == "" {
 		msg = providerCode
@@ -461,7 +464,7 @@ func openaiNormalizeError(c *lmCore, status int, body string) *Error {
 	switch {
 	case code == "context_length_exceeded":
 		return c.providerError(KindContextLength, msg, status, providerCode, "")
-	case openaiModelErrorCodes[code] || (status == 404 && isModelErrorMessage(msg, code, errType)):
+	case openaiModelErrorCodes[code] || (status == 404 && isModelErrorMessage(msg, code, errType)) || IsPinnedModelNotFound(providerCode, msg): // MAP-15
 		return c.providerError(KindUnsupportedModel, msg, status, providerCode, "")
 	case code == "insufficient_quota" || code == "1113" || errType == "insufficient_quota" || errType == "exceeded_current_quota_error":
 		return c.providerError(KindBilling, msg, status, providerCode, "")

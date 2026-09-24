@@ -482,3 +482,39 @@ func MapHTTPError(status int, message, provider string, envKeys []string, provid
 
 // ClassName returns the canonical class name the vet protocol reports.
 func (e *Error) ClassName() string { return string(e.Kind) }
+
+// ModelNotFoundForm is one pinned MAP-15 form of a provider's "no such model"
+// answer: an exact provider code, and the text tests the message must pass.
+type ModelNotFoundForm struct {
+	Code, Prefix, Contains, Suffix string
+}
+
+// ModelNotFoundForms are the pinned forms that carry no model-specific code and
+// no not-found class (lm15-contract spec/model-not-found.json, carried verbatim;
+// each form has a live receipt).
+var ModelNotFoundForms = []ModelNotFoundForm{
+	{Code: "not_found_error", Prefix: "model: "},                                    // Anthropic, Claude Code
+	{Code: "invalid_request_error", Contains: "The supported API model names are "}, // DeepSeek
+	{Code: "1211"},                                                                   // Z.AI: Unknown Model
+	{Code: "1214", Prefix: "modelCode: "},                                            // Z.AI: the model field is invalid
+	{Code: "400", Suffix: " is not a valid model ID"},                                // OpenRouter
+	{Code: "invalid-argument", Prefix: "Model not found: "},                          // xAI (2026-09-01)
+	{Code: "validation_error", Contains: "The provided model identifier is invalid"}, // Bedrock Chat
+}
+
+// IsPinnedModelNotFound reports whether an error is one of the pinned MAP-15
+// forms: the code matches exactly and the message passes every test given.
+func IsPinnedModelNotFound(providerCode, message string) bool {
+	if providerCode == "" {
+		return false
+	}
+	for _, f := range ModelNotFoundForms {
+		if f.Code == providerCode &&
+			strings.HasPrefix(message, f.Prefix) &&
+			strings.Contains(message, f.Contains) &&
+			strings.HasSuffix(message, f.Suffix) {
+			return true
+		}
+	}
+	return false
+}

@@ -111,7 +111,7 @@ func (l *AnthropicLM) errorDetail(providerCode, message string) ErrorDetail {
 	}
 	if anthropicContextLengthMessage(message) {
 		kind = KindContextLength
-	} else if providerCode == "not_found_error" && isModelErrorMessage(message) {
+	} else if (providerCode == "not_found_error" && isModelErrorMessage(message)) || IsPinnedModelNotFound(providerCode, message) { // MAP-15
 		kind = KindUnsupportedModel
 	}
 	msg := message
@@ -152,7 +152,7 @@ func (l *AnthropicLM) normalizeError(status int, body string) *Error {
 	switch {
 	case anthropicContextLengthMessage(msg):
 		return l.providerError(KindContextLength, msg, status, errType, requestID)
-	case errType == "DeploymentNotFound" || ((errType == "not_found_error" || errType == "resource_not_found_error") && isModelErrorMessage(msg)):
+	case errType == "DeploymentNotFound" || ((errType == "not_found_error" || errType == "resource_not_found_error") && isModelErrorMessage(msg)) || IsPinnedModelNotFound(errType, msg): // MAP-15
 		return l.providerError(KindUnsupportedModel, msg, status, errType, requestID)
 	}
 	if kind, ok := anthropicErrorTypeMap[errType]; ok {

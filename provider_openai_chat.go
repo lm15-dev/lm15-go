@@ -450,6 +450,9 @@ func (l *OpenAIChatLM) xaiAdapt(req *Request, scope *adaptScope) (*Request, erro
 }
 
 func (l *OpenAIChatLM) payload(req *Request, stream bool, scope *adaptScope) (JSONObject, error) {
+	if err := checkMessageMedia(req.Messages, "openai_chat", l.provider); err != nil {
+		return nil, err
+	}
 	if l.isXai() {
 		adapted, err := l.xaiAdapt(req, scope)
 		if err != nil {

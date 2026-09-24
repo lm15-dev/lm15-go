@@ -6,8 +6,8 @@ names. Zero dependencies (standard library only). Builds for Linux, macOS,
 Windows and `GOOS=js GOARCH=wasm` (the browser).
 
 The contract commit this port is written against is in `CONTRACT_PIN`
-(`186ff6b`, 2026-09-24). At that commit the port passes 1,416 of the
-contract's 1,440 cases; the 24 it fails are listed in
+(`b0ff3c0`, 2026-09-24). At that commit the port passes 1,425 of the
+contract's 1,449 cases; the 24 it fails are listed in
 [RELEASING.md](RELEASING.md). The byte-order deviations below are most of them.
 
 ## Versions

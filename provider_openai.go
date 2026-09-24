@@ -197,6 +197,12 @@ func cacheCommonPayload(req *Request, payload JSONObject, cacheControl, provider
 		return nil
 	}
 	if cacheControl != "openai" && cacheControl != "openai_implicit" {
+		// MAP-6 rule 7: a stored-cache resource where there is no such tier
+		// RAISES; dropping it would send the request without the prompt
+		// prefix it holds (MAP-13: refuse when a guess could hurt).
+		if cfg.Resource != "" {
+			return UnsupportedFeature(provider, "config.cache.resource", "%s: cache.resource is not supported — this provider has no stored-cache tier; sending without it would drop the prompt prefix the resource holds", provider)
+		}
 		// MAP-13: the key and the lifetime have no home on a server without
 		// OpenAI's cache fields; dropped and recorded.
 		if cfg.Key != "" {
@@ -685,6 +691,9 @@ func (l *OpenAILM) toolChoicePayload(req *Request, compat ResolvedOpenAIResponse
 }
 
 func (l *OpenAILM) payload(req *Request, stream bool, scope *adaptScope) (JSONObject, error) {
+	if err := checkMessageMedia(req.Messages, "openai", l.provider); err != nil {
+		return nil, err
+	}
 	compat := l.compat(req)
 	breakpoint, err := cacheBreakpointIndex(req, compat.CacheControl, scope) // once: it may record
 	if err != nil {

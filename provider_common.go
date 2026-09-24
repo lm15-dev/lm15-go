@@ -106,6 +106,38 @@ var mediaDoors = map[string]string{
 	"document": "the OpenAI Responses, Anthropic Messages and Gemini dialects",
 }
 
+// noMessageSlot is MAP-10 for message parts: the cells where a dialect has no
+// slot at all. Found 2026-09-24 (lm15-contract
+// changes/2026-09-24-message-media.md): the builders turned such a part into
+// an empty text block or dropped it, silently. lm15-rs refused; this is the
+// same preflight.
+var noMessageSlot = map[string]func(role, kind string) bool{
+	// The Messages API has image and document blocks only, in either role.
+	"anthropic": func(_, kind string) bool { return kind == "audio" || kind == "video" || kind == "binary" },
+	// Assistant content is output text (and refusals) on both OpenAI wires.
+	"openai":      func(role, _ string) bool { return role == "assistant" },
+	"openai_chat": func(role, _ string) bool { return role == "assistant" },
+}
+
+// checkMessageMedia raises before any wire when a message holds a media part
+// the dialect has no content slot for in that role (MAP-10).
+func checkMessageMedia(messages []Message, dialect, provider string) error {
+	gap, ok := noMessageSlot[dialect]
+	if !ok {
+		return nil
+	}
+	for i, m := range messages {
+		for j, p := range m.Parts {
+			if IsMediaPart(p) && gap(m.Role, p.Type()) {
+				return UnsupportedFeature(provider, fmt.Sprintf("messages[%d].parts[%d]", i, j),
+					"%s: messages[%d].parts[%d]: the program depends on this %s %s part; no native %s content slot carries it (MAP-10)",
+					provider, i, j, m.Role, p.Type(), dialect)
+			}
+		}
+	}
+	return nil
+}
+
 func checkToolResultMedia(provider string, part ToolResultPart, policy, wire string) error {
 	admits := toolResultMediaAdmits[policy]
 	for _, p := range part.Content {

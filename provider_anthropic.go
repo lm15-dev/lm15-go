@@ -421,6 +421,9 @@ func anthropicDefaultMaxTokensFor(model string) int {
 }
 
 func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSONObject, error) {
+	if err := checkMessageMedia(req.Messages, "anthropic", l.provider); err != nil {
+		return nil, err
+	}
 	compat := l.resolved
 	cfg := req.Config
 	if compat.ModelPrefixes != nil {
@@ -459,6 +462,11 @@ func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSO
 		if err := scope.dropped("config.cache.retention", "this server caches implicitly and has no cache-control TTL", "long"); err != nil {
 			return nil, err
 		}
+	}
+	if !useCache && cacheCfg != nil && cacheCfg.Resource != "" {
+		// MAP-6 rule 7 on a server without marks (e.g. meta-anthropic): the
+		// same refusal; dropping it would lose the prefix it holds.
+		return nil, UnsupportedFeature(l.provider, "config.cache.resource", "%s: cache.resource is not supported — this server has no stored-cache tier and no cache marks; sending without it would drop the prompt prefix the resource holds", l.provider)
 	}
 	if useCache {
 		if cacheCfg.Resource != "" {

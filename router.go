@@ -727,8 +727,32 @@ func buildLM(res Resolution, config RouterConfig, transport Transport) (LM, erro
 		}
 		return constructWithOrigin(def, append(opts, WithAPIKey(apiKey), WithSettings(settings)), origin)
 	}
-	if apiKey == nil && policy == "oauth-unless-explicit" && HasStoredCredential(def.Access) {
-		return construct(def, opts)
+	if apiKey == nil && policy == "oauth-unless-explicit" {
+		// A usable stored subscription login outranks ambient env keys: it
+		// spends no money per token (AUTH-1). An unusable or signed-out one
+		// BLOCKS them (R3, ratified 2026-09-22): a failed subscription is
+		// never silently replaced by a metered key.
+		switch state := StoredCredentialState(def.Access); state {
+		case "usable":
+			return construct(def, opts)
+		case "unusable", "logged_out":
+			what := "is expired and cannot be renewed"
+			if state == "logged_out" {
+				what = "was signed out"
+			}
+			present := ""
+			for _, k := range def.Access.EnvKeys {
+				if env[k] != "" {
+					present = "$" + k + " is set but is used only when passed explicitly: "
+					break
+				}
+			}
+			e := NotConfiguredErrorf(res.Provider, def.Access.EnvKeys, def.Access.LoginHint,
+				"the %q subscription login %s. %ssign in again, or pass the key deliberately with RouterConfig(api_keys={%q: \"...\"}).",
+				res.Provider, what, present, res.Provider)
+			e.Kind = KindMissingCredential
+			return nil, e
+		}
 	}
 	if apiKey == nil {
 		for _, k := range def.Access.EnvKeys {

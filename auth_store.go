@@ -576,11 +576,46 @@ func ReadXaiCredential(path string) *LocalOAuthCredential {
 // UsableXaiCredential reports a stored login that is fresh or refreshable.
 // Files only; never the network (the oauth-unless-explicit probe).
 func UsableXaiCredential(path string) bool {
-	cred := ReadXaiCredential(path)
-	if cred == nil {
-		return false
+	return XaiStoredState(path) == "usable"
+}
+
+// XaiStoredState is the stored xAI subscription's state, offline
+// (spec/auth.md AUTH-1, ratified R2/R3 2026-09-22): "usable" (fresh, or
+// expired with a refresh token); "unusable" (expired, no refresh token);
+// "logged_out" (lm15's non-secret sign-out marker); "absent" (nothing
+// stored). "unusable" and "logged_out" BLOCK the environment key: a failed
+// subscription is never silently replaced by a metered key.
+func XaiStoredState(path string) string { return xaiStoredStateAt(path, time.Now()) }
+
+func xaiStoredStateAt(path string, now time.Time) string {
+	paths := xaiStorePaths()
+	if path != "" {
+		paths = []string{expandHome(path)}
 	}
-	return !cred.Expired() || cred.RefreshToken != ""
+	for _, p := range paths {
+		data := readJSONFileOrNil(p)
+		if data == nil {
+			continue
+		}
+		if cred := xaiEntryToCredential(data["xai"]); cred != nil {
+			expired := cred.ExpiresAt != nil && now.UnixMilli() >= *cred.ExpiresAt
+			if !expired || cred.RefreshToken != "" {
+				return "usable"
+			}
+			return "unusable"
+		}
+		if own := wireObj(data["_lm15"]); own != nil {
+			if slots := wireObj(own["slots"]); slots != nil {
+				if slot := wireObj(slots["xai"]); slot != nil {
+					marker := slot["logged_out"]
+					if on, isBool := marker.(bool); marker != nil && (!isBool || on) {
+						return "logged_out"
+					}
+				}
+			}
+		}
+	}
+	return "absent"
 }
 
 func xaiCredentialFromToken(payload JSONObject, previousRefresh string) (LocalOAuthCredential, error) {

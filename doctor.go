@@ -221,19 +221,35 @@ func ExplainAuth(provider string, opts ExplainOptions) (AuthReport, error) {
 	} else {
 		steps = append(steps, AuthStep{Kind: "api_keys", Source: "explicit api_keys entry", Detail: "not provided", State: "absent"})
 	}
+	// An unusable or signed-out subscription login BLOCKS the env keys (R3,
+	// ratified 2026-09-22): they show as shadowed, and nothing is selected.
+	blocked := false
 	if policy == "oauth-unless-explicit" {
 		step := xaiOAuthStep(opts.XaiCredentialsPath, selected, now)
+		switch xaiStoredStateAt(opts.XaiCredentialsPath, now) {
+		case "logged_out":
+			if !selected {
+				step = AuthStep{Kind: "oauth-file", Source: step.Source, Detail: "signed out (marker present)", State: "absent"}
+				blocked = true
+			}
+		case "unusable":
+			blocked = !selected
+		}
 		steps = append(steps, step)
 		selected = selected || step.State == "selected"
 	}
 	for _, key := range def.Access.EnvKeys {
 		if env[key] != "" {
 			state := "selected"
-			if selected {
+			if selected || blocked {
 				state = "shadowed"
 			}
-			steps = append(steps, AuthStep{Kind: "env:" + key, Source: "env $" + key, Detail: "set (value never shown)", State: state})
-			selected = true
+			detail := "set (value never shown)"
+			if blocked && !selected {
+				detail = "set, blocked by the failed/signed-out subscription (pass it explicitly to use it)"
+			}
+			steps = append(steps, AuthStep{Kind: "env:" + key, Source: "env $" + key, Detail: detail, State: state})
+			selected = selected || !blocked
 		} else {
 			steps = append(steps, AuthStep{Kind: "env:" + key, Source: "env $" + key, Detail: "not set", State: "absent"})
 		}

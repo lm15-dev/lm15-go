@@ -627,8 +627,14 @@ func loadCredential(policy AccessPolicy, explicit CredentialProvider, credential
 // HasStoredCredential is the offline probe (files, never the network) for
 // the router's oauth-unless-explicit chain.
 func HasStoredCredential(policy AccessPolicy) bool {
+	return StoredCredentialState(policy) == "usable"
+}
+
+// StoredCredentialState is "usable", "unusable", "logged_out" or "absent"
+// for policy's stored login (AUTH-1 oauth-unless-explicit, R3). Files only.
+func StoredCredentialState(policy AccessPolicy) string {
 	if policy.Provider == "xai" {
-		return UsableXaiCredential("")
+		return XaiStoredState("")
 	}
-	return false
+	return "absent"
 }

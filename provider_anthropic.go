@@ -447,13 +447,20 @@ func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSO
 		}
 		messages = append(messages, wm)
 	}
-	if useCache {
-		if cacheCfg.Key != "" {
-			// MAP-13: a best-effort routing hint by definition; no home here.
-			if err := scope.dropped("config.cache.key", "the Messages API has no cache affinity key (OpenAI's prompt_cache_key); marks on blocks are its mechanism and were placed", cacheCfg.Key); err != nil {
-				return nil, err
-			}
+	if cacheCfg != nil && cacheCfg.Key != "" {
+		// MAP-13: a best-effort routing hint by definition; no home on this
+		// wire, whether or not the server takes marks.
+		if err := scope.dropped("config.cache.key", "the Messages API has no cache affinity key (OpenAI's prompt_cache_key); marks on blocks are its mechanism", cacheCfg.Key); err != nil {
+			return nil, err
 		}
+	}
+	if cacheCfg != nil && cacheCfg.Retention == "long" && compat.CacheControl != "anthropic" {
+		// MAP-13: the TTL rides a cache mark, and this server takes none.
+		if err := scope.dropped("config.cache.retention", "this server caches implicitly and has no cache-control TTL", "long"); err != nil {
+			return nil, err
+		}
+	}
+	if useCache {
 		if cacheCfg.Resource != "" {
 			// MAP-13 rule 4(b): the program references a stored object that
 			// does not exist on this provider.

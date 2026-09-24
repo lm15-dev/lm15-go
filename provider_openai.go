@@ -191,9 +191,24 @@ func hasExplicitBreakpoint(req *Request, cacheControl string, breakpoint *int) b
 }
 
 // cacheCommonPayload adds the shared MAP-6 fields for both OpenAI dialects.
-func cacheCommonPayload(req *Request, payload JSONObject, cacheControl, provider string, breakpoint *int) error {
+func cacheCommonPayload(req *Request, payload JSONObject, cacheControl, provider string, breakpoint *int, scope *adaptScope) error {
 	cfg := req.Config.Cache
-	if cfg == nil || (cacheControl != "openai" && cacheControl != "openai_implicit") {
+	if cfg == nil {
+		return nil
+	}
+	if cacheControl != "openai" && cacheControl != "openai_implicit" {
+		// MAP-13: the key and the lifetime have no home on a server without
+		// OpenAI's cache fields; dropped and recorded.
+		if cfg.Key != "" {
+			if err := scope.dropped("config.cache.key", "this server has no cache affinity field; implicit caching still applies", cfg.Key); err != nil {
+				return err
+			}
+		}
+		if cfg.Retention == "long" {
+			if err := scope.dropped("config.cache.retention", "this server has no in-request cache lifetime knob; implicit caching still applies", "long"); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
 	if cacheControl == "openai_implicit" {
@@ -820,7 +835,7 @@ func (l *OpenAILM) payload(req *Request, stream bool, scope *adaptScope) (JSONOb
 			}
 		}
 	}
-	if err := cacheCommonPayload(req, payload, compat.CacheControl, l.provider, breakpoint); err != nil {
+	if err := cacheCommonPayload(req, payload, compat.CacheControl, l.provider, breakpoint, scope); err != nil {
 		return nil, err
 	}
 	if compat.Routing != nil {

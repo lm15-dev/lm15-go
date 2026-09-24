@@ -661,7 +661,7 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool, scope *adaptScope) (JS
 			}
 		}
 	}
-	if err := cacheCommonPayload(req, payload, compat.CacheControl, l.provider, breakpoint); err != nil {
+	if err := cacheCommonPayload(req, payload, compat.CacheControl, l.provider, breakpoint, scope); err != nil {
 		return nil, err
 	}
 	if compat.Routing != nil {

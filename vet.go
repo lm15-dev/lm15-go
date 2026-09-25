@@ -51,6 +51,7 @@ func init() {
 		"batch_op_parse":        vetBatchOpParse,
 		"cache_op_build":        vetCacheOpBuild,
 		"cache_op_parse":        vetCacheOpParse,
+		"managed_run":           vetManagedRun,
 	}
 }
 

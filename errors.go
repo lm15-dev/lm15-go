@@ -55,6 +55,9 @@ const (
 	KindMissingCredential  ErrorKind = "MissingCredentialError" // router subclass of NotConfiguredError
 	KindCredentialLockWait ErrorKind = "CredentialLockTimeout"  // auth subclass of LockTimeoutError
 	KindDeviceCodeExpired  ErrorKind = "DeviceCodeExpiredError" // authkit subclass of AuthError
+	// KindAuthOperation: a managed-auth lifecycle operation failed locally
+	// (spec/auth-managed.md AUTH-24). Root-level, never retried.
+	KindAuthOperation ErrorKind = "AuthOperationError"
 )
 
 var errorParent = map[ErrorKind]ErrorKind{
@@ -80,6 +83,7 @@ var errorParent = map[ErrorKind]ErrorKind{
 	KindMissingCredential:  KindNotConfigured,
 	KindCredentialLockWait: KindLockTimeout,
 	KindDeviceCodeExpired:  KindAuth,
+	KindAuthOperation:      KindLM15Error,
 }
 
 // most-specific-class-first, like the reference's _CLASS_TO_CODE.
@@ -106,6 +110,7 @@ var kindDefaultCode = map[ErrorKind]string{
 	KindCollectionLimit:    CodeCollectionLimit,
 	KindProvider:           CodeProvider,
 	KindDeviceCodeExpired:  CodeAuth,
+	KindAuthOperation:      CodeAuthOperation,
 }
 
 var codeToKind = map[string]ErrorKind{
@@ -126,6 +131,7 @@ var codeToKind = map[string]ErrorKind{
 	CodeStreamAssembly:     KindStreamAssembly,
 	CodeCollectionLimit:    KindCollectionLimit,
 	CodeProvider:           KindProvider,
+	CodeAuthOperation:      KindAuthOperation,
 }
 
 // IsA reports whether kind is parent or a descendant of it.
@@ -212,6 +218,18 @@ type Error struct {
 	// LockTimeoutError.
 	Path     string
 	LockPath string
+
+	// AuthOperationError (AUTH-24): programs match on Reason; CommitState
+	// says whether the store changed; Recovery is guidance for a person,
+	// never an instruction to retry. The ids are safe references.
+	Reason       string
+	Stage        string
+	CommitState  string
+	Recovery     string
+	Operation    string
+	ConnectionID string
+	AttemptID    string
+	MethodID     string
 
 	cause error
 }

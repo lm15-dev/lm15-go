@@ -2,6 +2,7 @@ package lm15
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"iter"
@@ -153,17 +154,34 @@ type RouterConfig struct {
 	MaxConnections int
 	Adaptations    string
 	Providers      []ProviderDefinition
+	// Auth is managed authentication (AUTH-15 mode B): its saved connections
+	// supply the credential when no explicit APIKeys / Credentials entry
+	// does. With it, environment keys, other tools' login files and the
+	// machine's cloud identity are never consulted: a missing, expired,
+	// rejected or signed-out connection is a typed AuthOperationError, never
+	// a silent switch to a metered key. Keyless local servers still work
+	// without a connection. It also routes the connection-only providers
+	// (kimi-code, github-copilot).
+	Auth *Auth
 }
 
 // definitions is the provider table this config routes with: the registry
 // plus the declared providers.
 func (c RouterConfig) definitions() map[string]ProviderDefinition {
-	if len(c.Providers) == 0 {
+	if len(c.Providers) == 0 && c.Auth == nil {
 		return Providers
 	}
-	out := make(map[string]ProviderDefinition, len(Providers)+len(c.Providers))
+	out := make(map[string]ProviderDefinition, len(Providers)+len(c.Providers)+2)
 	for k, v := range Providers {
 		out[k] = v
+	}
+	if c.Auth != nil {
+		// A managed router also routes the connection-only doors: declared
+		// providers, added only here because only a managed Auth can hold
+		// their credential.
+		for _, d := range DeclaredLoginProviders {
+			out[d.ID] = d
+		}
 	}
 	for _, d := range c.Providers {
 		out[d.ID] = d
@@ -671,6 +689,9 @@ func buildLM(res Resolution, config RouterConfig, transport Transport) (LM, erro
 		opts = append(opts, WithBaseURL(baseURL))
 	}
 	policy := def.CredentialPolicy()
+	if config.Auth != nil {
+		return buildManagedLM(res, config, def, opts, baseURL)
+	}
 	if def.Bound() {
 		opts = append(opts, WithAccess(def.Access))
 		switch {
@@ -774,6 +795,162 @@ func buildLM(res Resolution, config RouterConfig, transport Transport) (LM, erro
 		return nil, missingCredential(res.Provider, def.Access.EnvKeys, "API key")
 	}
 	return constructWithOrigin(def, append(opts, WithAPIKey(apiKey)), origin)
+}
+
+// buildManagedLM is AUTH-15 mode B. Order: an explicit APIKeys entry; an
+// explicit named cloud identity; the scope's saved connection (its credential
+// resolved and renewed per request); a keyless local server's placeholder.
+// Never an environment key, another tool's login file or the machine's cloud chain.
+func buildManagedLM(res Resolution, config RouterConfig, def ProviderDefinition, opts []Option, baseURL string) (LM, error) {
+	auth := config.Auth
+	source, err := apiKeysSource(config, res.Provider)
+	if err != nil {
+		return nil, err
+	}
+	var apiKey CredentialLike
+	if source != "" {
+		apiKey = config.APIKeys[source]
+	}
+	named := credentialsEntry(config, res.Provider)
+	origin := ""
+	access := def.Access
+	if apiKey == nil && named == "" {
+		connection, shape, err := auth.Selection(res.Provider)
+		switch {
+		case err == nil:
+			if shape.Named != "" {
+				named = shape.Named
+			} else {
+				provider := res.Provider
+				apiKey = CredentialFunc(func(ctx context.Context) (Credential, error) {
+					got, err := auth.RequestAuth(ctx, provider, nil)
+					if err != nil {
+						return nil, err
+					}
+					if got.CredentialKind == "bearer" {
+						return BearerToken{Value: got.Credential}, nil
+					}
+					return APIKey{Value: got.Credential}, nil
+				})
+				if shape.AccountID != "" {
+					opts = append(opts, WithAccountID(shape.AccountID))
+				}
+				if shape.BaseURL != "" && baseURL == "" && !def.Hosted() {
+					opts = append(opts, WithBaseURL(shape.BaseURL))
+				}
+				if !def.Hosted() {
+					access.Headers = mergeHeaders(access.Headers, shape.Headers)
+				}
+			}
+			origin = "managed connection " + connection.ID + " (" + connection.Label + ")"
+		case isReason(err, "login_required") && def.PlaceholderKey != "":
+			status, serr := auth.Status(res.Provider)
+			if serr != nil || status.LoggedOut {
+				return nil, err
+			}
+			apiKey = def.PlaceholderKey
+			origin = "the local server's placeholder key"
+		case isReason(err, "login_required") && def.Hosted():
+			e := authOperation(res.Provider+": no saved connection in this scope; the machine's cloud identity is not used under a managed Auth — save a named identity (Auth.Configure with the cloud method) or pass RouterConfig.Credentials explicitly", "login_required", "resolution", "not_committed", "select_connection")
+			e.Provider = res.Provider
+			return nil, e
+		default:
+			return nil, err
+		}
+	}
+	if def.Bound() || def.Declared {
+		opts = append(opts, WithAccess(access))
+		switch {
+		case def.CompatValue != nil:
+			opts = append(opts, WithOpenAIChatCompat(*def.CompatValue))
+		case def.Compat != "":
+			opts = append(opts, WithCompatPreset(def.Compat))
+		}
+	}
+	if def.Hosted() {
+		env := config.env()
+		ctx := OnlineChainContext(env)
+		var given map[string]string
+		for key, s := range config.Settings {
+			if config.providerID(CanonicalProvider(key)) == res.Provider {
+				given = s
+			}
+		}
+		settings, err := resolveSettingsWithEndpoint(def.Access.Host, given, env, res.Provider, ProfileSettings(def.Access, ctx), baseURL)
+		if err != nil {
+			return nil, err
+		}
+		ctx.Settings = settings
+		if apiKey == nil && named != "" {
+			provider, err := NamedCredentialProviderFor(def.Access, ctx, named)
+			if err != nil {
+				return nil, err
+			}
+			apiKey = provider
+		}
+		if apiKey == nil {
+			e := authOperation(res.Provider+": no credential for this cloud door under a managed Auth", "login_required", "resolution", "not_committed", "select_connection")
+			e.Provider = res.Provider
+			return nil, e
+		}
+		return constructWithOrigin(def, append(opts, WithAPIKey(apiKey), WithSettings(settings)), origin)
+	}
+	if apiKey == nil {
+		e := authOperation(res.Provider+": no saved connection in this scope; sign in with Auth.Login or Connect", "login_required", "resolution", "not_committed", "restart_login")
+		e.Provider = res.Provider
+		return nil, e
+	}
+	return constructWithOrigin(def, append(opts, WithAPIKey(apiKey)), origin)
+}
+
+func isReason(err error, reason string) bool {
+	var e *Error
+	return errors.As(err, &e) && e.Kind == KindAuthOperation && e.Reason == reason
+}
+
+func mergeHeaders(static [][2]string, extra map[string]string) [][2]string {
+	out := append([][2]string{}, static...)
+	keys := make([]string, 0, len(extra))
+	for k := range extra {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if strings.EqualFold(k, "chatgpt-account-id") {
+			continue // the Codex adapter sends it from the account id
+		}
+		taken := false
+		for _, h := range out {
+			if strings.EqualFold(h[0], k) {
+				taken = true
+			}
+		}
+		if !taken {
+			out = append(out, [2]string{k, extra[k]})
+		}
+	}
+	return out
+}
+
+// DeclaredLoginProviders are the routes that exist only for a managed
+// connection (lm15-python lm15/login/declared.py): kimi-code (Anthropic
+// Messages at api.kimi.com/coding) and github-copilot (Chat Completions at
+// the account's Copilot host). No contract wire receipt, so no registry row
+// (a row is a support claim, AUTH-26); a router routes them only with a
+// managed Auth.
+var DeclaredLoginProviders = []ProviderDefinition{
+	{
+		ID: "kimi-code", Dialect: DialectAnthropic, Declared: true,
+		Access: AccessPolicy{Provider: "kimi-code", Supports: EndpointSupport{Complete: true, Stream: true}, AuthModes: []string{"bearer"}, AuthScheme: []string{"bearer"}, BaseURL: "https://api.kimi.com/coding"},
+		Note:   "Kimi Code subscription over the Anthropic Messages wire (managed login only; no lm15 wire receipt yet)",
+	},
+	{
+		ID: "github-copilot", Dialect: DialectOpenAIChat, Declared: true,
+		Access: AccessPolicy{Provider: "github-copilot", Supports: EndpointSupport{Complete: true, Stream: true, Models: true}, AuthModes: []string{"bearer"}, AuthScheme: []string{"bearer"},
+			Headers: copilotHeaders, BaseURL: copilotDefaultAPIBase},
+		CompatValue: &OpenAIChatCompat{InstructionRole: "system", MaxTokensField: "max_completion_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort"},
+		Note:        "GitHub Copilot over the Chat Completions wire (managed login only; the account's host comes from the token; no lm15 wire receipt yet)",
+	},
 }
 
 // PlanningKey is the placeholder credential a planning LM carries.

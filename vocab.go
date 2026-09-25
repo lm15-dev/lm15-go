@@ -107,13 +107,14 @@ const (
 	CodeStreamAssembly     = "stream_assembly"
 	CodeCollectionLimit    = "collection_limit"
 	CodeProvider           = "provider"
+	CodeAuthOperation      = "auth_operation"
 )
 
 // ErrorCodes is the ErrorCode vocabulary in declaration order.
 var ErrorCodes = []string{
 	CodeAuth, CodeBilling, CodeRateLimit, CodeInvalidRequest, CodeContextLength, CodeTimeout, CodeServer,
 	CodeUnsupportedModel, CodeUnsupportedFeature, CodeNotConfigured, CodeUnknownModel, CodeAmbiguousModel,
-	CodeTransport, CodeLockTimeout, CodeStreamAssembly, CodeCollectionLimit, CodeProvider,
+	CodeTransport, CodeLockTimeout, CodeStreamAssembly, CodeCollectionLimit, CodeProvider, CodeAuthOperation,
 }
 
 // StreamEventTypes is the StreamEventType vocabulary.

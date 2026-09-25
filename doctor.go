@@ -111,6 +111,10 @@ type ExplainOptions struct {
 	BaseURL string
 	// Now overrides the clock used for expiry details.
 	Now func() time.Time
+	// Auth is a managed Auth (AUTH-15 mode B): the walk is the managed
+	// router's — explicit entry, named identity, the saved connection;
+	// environment keys shown and not consulted. Store reads only, no renewal.
+	Auth *Auth
 }
 
 func expiryDetail(cred LocalOAuthCredential, now time.Time) string {
@@ -193,6 +197,9 @@ func ExplainAuth(provider string, opts ExplainOptions) (AuthReport, error) {
 		now = opts.Now()
 	}
 	config := RouterConfig{Env: opts.Env, APIKeys: opts.APIKeys}
+	if opts.Auth != nil {
+		return explainManaged(canonical, def, config, opts)
+	}
 	if def.Access.CloudChain() || def.Hosted() {
 		return explainCloud(canonical, def, config, opts)
 	}
@@ -376,4 +383,77 @@ func explainCloud(canonical string, def ProviderDefinition, config RouterConfig,
 		report.NamedMeaning = NamedMeaningFor(def.Access, opts.Credential)
 	}
 	return report, nil
+}
+
+// explainManaged is AUTH-15 mode B, rung by rung: the explicit entry, the
+// named cloud identity, the scope's saved connection; environment keys shown
+// and marked not consulted. Store reads only, no renewal (AUTH-7).
+func explainManaged(provider string, def ProviderDefinition, config RouterConfig, opts ExplainOptions) (AuthReport, error) {
+	var steps []AuthStep
+	selected := false
+	source, err := apiKeysSource(config, provider)
+	if err != nil {
+		return AuthReport{}, err
+	}
+	if source != "" {
+		label := "explicit api_keys entry"
+		if CanonicalProvider(source) != provider {
+			label += fmt.Sprintf(" (via %q, shared env-key declarations)", source)
+		}
+		steps = append(steps, AuthStep{Kind: "api_keys", Source: label, Detail: "provided (value never shown)", State: "selected"})
+		selected = true
+	} else {
+		steps = append(steps, AuthStep{Kind: "api_keys", Source: "explicit api_keys entry", Detail: "not provided", State: "absent"})
+	}
+	if opts.Credential != "" {
+		state := "selected"
+		if selected {
+			state = "shadowed"
+		}
+		steps = append(steps, AuthStep{Kind: "named_cloud", Source: fmt.Sprintf("named credential %q", opts.Credential), Detail: "explicit", State: state})
+		selected = true
+	}
+	status, err := opts.Auth.Status(provider)
+	if err != nil {
+		return AuthReport{}, err
+	}
+	if c := status.Connection; c != nil {
+		detail := c.Label + " (" + status.Usability
+		if status.ExpiresAt != "" {
+			detail += ", expires " + status.ExpiresAt
+		}
+		detail += ")"
+		state := "absent"
+		switch {
+		case selected:
+			state = "shadowed"
+		case status.Ready():
+			state = "selected"
+		}
+		steps = append(steps, AuthStep{Kind: "connection", Source: "saved connection " + c.ID, Detail: detail, State: state})
+		selected = selected || state == "selected"
+	} else {
+		detail := "none saved in this scope"
+		if status.LoggedOut {
+			detail = "signed out (marker present)"
+		}
+		steps = append(steps, AuthStep{Kind: "connection", Source: "saved connection in " + opts.Auth.Store().Description(), Detail: detail, State: "absent"})
+	}
+	env := config.env()
+	for _, key := range def.Access.EnvKeys {
+		if env[key] != "" {
+			steps = append(steps, AuthStep{Kind: "env:" + key, Source: "env $" + key, Detail: "set, not consulted under a managed Auth (pass it explicitly to use it)", State: "shadowed"})
+		} else {
+			steps = append(steps, AuthStep{Kind: "env:" + key, Source: "env $" + key, Detail: "not set", State: "absent"})
+		}
+	}
+	if def.PlaceholderKey != "" && !status.LoggedOut {
+		state := "selected"
+		if selected {
+			state = "shadowed"
+		}
+		steps = append(steps, AuthStep{Kind: "placeholder", Source: "local-server placeholder key", Detail: "preset default for keyless " + provider + " servers", State: state})
+		selected = true
+	}
+	return AuthReport{Provider: provider, Steps: steps, Configured: selected}, nil
 }

@@ -121,7 +121,7 @@ func TestManagedRouterRoutesTheConnectionOnlyProviders(t *testing.T) {
 	now := auth.now()
 	doc := JSONObject{
 		"github-copilot": map[string]any{"type": "oauth", "access": "tid=1;proxy-ep=proxy.business.githubcopilot.com;tok", "refresh": "gh", "expires": now + 3_600_000, "issued_at": now, "lifetime_s": 3600.0},
-		"_lm15": map[string]any{"version": 1, "slots": map[string]any{"github-copilot": map[string]any{"generation": "1", "connection_id": "cn_copilotcopilot01", "revision": "1", "kind": "account", "method_id": "device", "instance_id": "public", "label": "GitHub Copilot", "created_at": "2026-09-25T00:00:00Z", "routes": []any{"github-copilot"}, "settings": map[string]any{}, "state": "ready", "renewal": "remint"}}},
+		"_lm15":          map[string]any{"version": 1, "slots": map[string]any{"github-copilot": map[string]any{"generation": "1", "connection_id": "cn_copilotcopilot01", "revision": "1", "kind": "account", "method_id": "device", "instance_id": "public", "label": "GitHub Copilot", "created_at": "2026-09-25T00:00:00Z", "routes": []any{"github-copilot"}, "settings": map[string]any{}, "state": "ready", "renewal": "remint"}}},
 	}
 	if _, err := mutateStore(ctx, auth.Store(), func(JSONObject) (JSONObject, error) { return doc, nil }); err != nil {
 		t.Fatal(err)

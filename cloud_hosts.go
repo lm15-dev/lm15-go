@@ -262,13 +262,13 @@ func finishRequest(policy AccessPolicy, settings map[string]string, baseURL stri
 		}
 		out.url = strings.TrimRight(baseURL, "/") + strings.ReplaceAll(path, "{model}", quoteSafe(model, ":@"))
 	}
-	if payload, ok := spec.payload.(JSONObject); ok {
+	if payload, ok := asObject(spec.payload); ok {
 		copied := copyObject(payload)
 		if host.EffectiveModelIn() == "path" {
-			delete(copied, "model")
+			copied.Delete("model")
 		}
 		if v := host.EffectiveAnthropicVersionIn(); strings.HasPrefix(v, "body:") {
-			copied["anthropic_version"] = strings.TrimPrefix(v, "body:")
+			copied.Set("anthropic_version", strings.TrimPrefix(v, "body:"))
 			var kept [][2]string
 			for _, h := range out.headers {
 				if !strings.EqualFold(h[0], "anthropic-version") {

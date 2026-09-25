@@ -4,31 +4,29 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 )
 
-// JSONObject is an opaque JSON object (tool input, extensions, provider_data,
-// continuation data, ...). Contents are user or provider data and round-trip
-// verbatim: lm15 validates them (INV-001) and never rewrites them (INV-002).
-type JSONObject = map[string]any
-
-// DecodeJSON parses JSON into Go values with numbers kept as json.Number, so
-// an opaque payload re-encodes exactly as it arrived (1 stays 1, 1.0 stays
-// 1.0). Every wire body and every canonical JSON document lm15 reads goes
-// through here.
+// DecodeJSON parses JSON into Go values: objects as JSONObject in the order
+// their keys arrived, lists as []any, numbers as json.Number, so an opaque
+// payload re-encodes exactly as it arrived (key order kept, 1 stays 1, 1.0
+// stays 1.0). Every wire body and every canonical JSON document lm15 reads
+// goes through here.
 func DecodeJSON(data []byte) (any, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
-	var out any
-	if err := dec.Decode(&out); err != nil {
+	out, err := decodeValue(dec)
+	if err != nil {
 		return nil, err
 	}
 	// Trailing garbage after the first value is not a JSON document.
-	if dec.More() {
+	if _, err := dec.Token(); err != io.EOF {
 		return nil, fmt.Errorf("trailing data after JSON value")
 	}
 	return out, nil
@@ -40,33 +38,54 @@ func DecodeJSONObject(data []byte) (JSONObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	obj, ok := v.(map[string]any)
+	obj, ok := asObject(v)
 	if !ok {
 		return nil, fmt.Errorf("expected a JSON object, got %s", jsonTypeName(v))
 	}
 	return obj, nil
 }
 
-// EncodeJSON serializes a canonical dict compactly (no HTML escaping, as
-// every other port does). Text that is not valid Unicode — a lone
-// surrogate U+D800..U+DFFF, or any other invalid UTF-8 — has no UTF-8
-// form and can reach no provider; it is refused here, before the wire, as
-// the input error it is (INV-055), never silently replaced by U+FFFD.
+// EncodeJSON serializes a value compactly (no HTML escaping, as every other
+// port does), writing each JSONObject's keys in member order. Text that is
+// not valid Unicode — a lone surrogate U+D800..U+DFFF, or any other invalid
+// UTF-8 — has no UTF-8 form and can reach no provider; it is refused here,
+// before the wire, as the input error it is (INV-055), never silently
+// replaced by U+FFFD.
 func EncodeJSON(v any) ([]byte, error) {
-	if err := checkUnicode(reflect.ValueOf(v), 0); err != nil {
+	if err := checkUnicodeValue(v, 0); err != nil {
 		return nil, err
 	}
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(v); err != nil {
-		return nil, err
+	return appendJSON(nil, v, 0)
+}
+
+// checkUnicodeValue walks JSONObjects and lists directly and everything
+// else reflectively (INV-055).
+func checkUnicodeValue(v any, depth int) error {
+	if depth > 512 {
+		return nil
 	}
-	out := buf.Bytes()
-	if n := len(out); n > 0 && out[n-1] == '\n' {
-		out = out[:n-1]
+	switch x := jsonView(v).(type) {
+	case JSONObject:
+		for _, m := range x {
+			if err := checkUnicodeString(m.Key); err != nil {
+				return err
+			}
+			if err := checkUnicodeValue(m.Value, depth+1); err != nil {
+				return err
+			}
+		}
+		return nil
+	case []any:
+		for _, item := range x {
+			if err := checkUnicodeValue(item, depth+1); err != nil {
+				return err
+			}
+		}
+		return nil
+	case string:
+		return checkUnicodeString(x)
 	}
-	return out, nil
+	return checkUnicode(reflect.ValueOf(v), depth)
 }
 
 // checkUnicode walks strings inside a JSON-shaped value (INV-055).
@@ -81,10 +100,16 @@ func checkUnicode(rv reflect.Value, depth int) error {
 		if rv.IsNil() {
 			return nil
 		}
+		if rv.Kind() == reflect.Interface {
+			return checkUnicodeValue(rv.Elem().Interface(), depth+1)
+		}
 		return checkUnicode(rv.Elem(), depth+1)
 	case reflect.Slice, reflect.Array:
 		if rv.Kind() == reflect.Slice && rv.Type().Elem().Kind() == reflect.Uint8 {
 			return nil // raw bytes (json.RawMessage) are the caller's
+		}
+		if obj, ok := asObject(rv.Interface()); ok {
+			return checkUnicodeValue(obj, depth)
 		}
 		for i := 0; i < rv.Len(); i++ {
 			if err := checkUnicode(rv.Index(i), depth+1); err != nil {
@@ -153,7 +178,7 @@ func (f jsonFloat) MarshalJSON() ([]byte, error) {
 
 // jsonTypeName names a decoded JSON value's type the way error messages do.
 func jsonTypeName(v any) string {
-	switch v.(type) {
+	switch jsonView(v).(type) {
 	case nil:
 		return "null"
 	case bool:
@@ -164,7 +189,7 @@ func jsonTypeName(v any) string {
 		return "number"
 	case []any:
 		return "list"
-	case map[string]any:
+	case JSONObject, map[string]any:
 		return "dict"
 	}
 	return reflect.TypeOf(v).String()
@@ -173,9 +198,10 @@ func jsonTypeName(v any) string {
 // ─── Strict JSON values (INV-001) ────────────────────────────────────
 
 // ValidateJSONValue reports whether v is made only of JSON containers and
-// scalars: nil, bool, string, json.Number, Go integers, finite floats, and
-// slices / string-keyed maps of those (reflectively, so []string and
-// map[string]int are accepted). Structs and other types are rejected.
+// scalars: nil, bool, string, json.Number, Go integers, finite floats,
+// JSONObjects with unique keys, and slices / string-keyed maps of those
+// (reflectively, so []string and map[string]int are accepted; a map has no
+// key order and is written sorted). Structs and other types are rejected.
 func ValidateJSONValue(v any) error {
 	return validateJSONReflect(reflect.ValueOf(v), 0)
 }
@@ -185,6 +211,18 @@ func validateJSONReflect(rv reflect.Value, depth int) error {
 		return fmt.Errorf("JSON value nests too deeply")
 	}
 	if !rv.IsValid() {
+		return nil
+	}
+	if rv.Type() == jsonObjectType {
+		obj := rv.Interface().(JSONObject)
+		if k, dup := duplicateKey(obj); dup {
+			return fmt.Errorf("the key %q appears twice in one JSON object", k)
+		}
+		for _, m := range obj {
+			if err := validateJSONReflect(reflect.ValueOf(m.Value), depth+1); err != nil {
+				return err
+			}
+		}
 		return nil
 	}
 	switch rv.Kind() {
@@ -233,6 +271,8 @@ func validateJSONReflect(rv reflect.Value, depth int) error {
 	return fmt.Errorf("%s is not a JSON value", rv.Type())
 }
 
+var jsonObjectType = reflect.TypeOf(JSONObject(nil))
+
 func checkJSONObject(value JSONObject, field string, required bool) error {
 	if value == nil {
 		if required {
@@ -259,7 +299,7 @@ func normalizeExtensions(ext JSONObject) (JSONObject, error) {
 // isEmptyJSON is the omission test for a typed object's own field: null,
 // "", [], {} are omitted at that object's top level only.
 func isEmptyJSON(v any) bool {
-	switch x := v.(type) {
+	switch x := jsonView(v).(type) {
 	case nil:
 		return true
 	case string:
@@ -269,6 +309,8 @@ func isEmptyJSON(v any) bool {
 	case []string:
 		return len(x) == 0
 	case []JSONObject:
+		return len(x) == 0
+	case JSONObject:
 		return len(x) == 0
 	case map[string]any:
 		return len(x) == 0
@@ -285,21 +327,28 @@ func isEmptyJSON(v any) bool {
 	return false
 }
 
-// dict builds a canonical JSON object from key/value pairs, applying the
-// omission rule to every pair (the keys marked always-emitted are added
-// afterwards by the caller with put).
-type dict map[string]any
+// dict builds a canonical JSON object from key/value pairs in the order the
+// reference writes them, applying the omission rule to every pair (the keys
+// marked always-emitted are added by the caller with put). Every method
+// returns the grown dict: a call whose result is dropped adds nothing, so
+// statement-form calls assign (d = d.omit(...)).
+type dict JSONObject
 
 func (d dict) put(key string, value any) dict {
-	d[key] = value
-	return d
+	for i := range d {
+		if d[i].Key == key {
+			d[i].Value = value
+			return d
+		}
+	}
+	return append(d, Member{Key: key, Value: value})
 }
 
 func (d dict) omit(key string, value any) dict {
-	if !isEmptyJSON(value) {
-		d[key] = deref(value)
+	if isEmptyJSON(value) {
+		return d
 	}
-	return d
+	return d.put(key, deref(value))
 }
 
 // omitNull drops only nil (delta serializers: empty strings are emitted).
@@ -310,8 +359,7 @@ func (d dict) omitNull(key string, value any) dict {
 	if rv := reflect.ValueOf(value); rv.Kind() == reflect.Pointer && rv.IsNil() {
 		return d
 	}
-	d[key] = deref(value)
-	return d
+	return d.put(key, deref(value))
 }
 
 func deref(v any) any {
@@ -404,8 +452,8 @@ func jsonFloat64(v any, field string) (float64, error) {
 	return 0, typeErrorf("%s must be numeric", field)
 }
 
-func optInt(d map[string]any, key string) (*int, error) {
-	v, ok := d[key]
+func optInt(d JSONObject, key string) (*int, error) {
+	v, ok := d.Lookup(key)
 	if !ok || v == nil {
 		return nil, nil
 	}
@@ -416,8 +464,8 @@ func optInt(d map[string]any, key string) (*int, error) {
 	return &i, nil
 }
 
-func optFloat(d map[string]any, key string) (*float64, error) {
-	v, ok := d[key]
+func optFloat(d JSONObject, key string) (*float64, error) {
+	v, ok := d.Lookup(key)
 	if !ok || v == nil {
 		return nil, nil
 	}
@@ -428,8 +476,8 @@ func optFloat(d map[string]any, key string) (*float64, error) {
 	return &f, nil
 }
 
-func optBool(d map[string]any, key string) (*bool, error) {
-	v, ok := d[key]
+func optBool(d JSONObject, key string) (*bool, error) {
+	v, ok := d.Lookup(key)
 	if !ok || v == nil {
 		return nil, nil
 	}
@@ -441,8 +489,8 @@ func optBool(d map[string]any, key string) (*bool, error) {
 }
 
 // optString reads an optional string; null or absent → "", a non-string → error.
-func optString(d map[string]any, key string) (string, error) {
-	v, ok := d[key]
+func optString(d JSONObject, key string) (string, error) {
+	v, ok := d.Lookup(key)
 	if !ok || v == nil {
 		return "", nil
 	}
@@ -454,8 +502,8 @@ func optString(d map[string]any, key string) (string, error) {
 }
 
 // optStringPtr reads an optional string keeping "" distinct from absent.
-func optStringPtr(d map[string]any, key string) (*string, error) {
-	v, ok := d[key]
+func optStringPtr(d JSONObject, key string) (*string, error) {
+	v, ok := d.Lookup(key)
 	if !ok || v == nil {
 		return nil, nil
 	}
@@ -467,8 +515,8 @@ func optStringPtr(d map[string]any, key string) (*string, error) {
 }
 
 // reqString reads a required string key.
-func reqString(d map[string]any, key string) (string, error) {
-	v, ok := d[key]
+func reqString(d JSONObject, key string) (string, error) {
+	v, ok := d.Lookup(key)
 	if !ok {
 		return "", keyError(key)
 	}
@@ -479,20 +527,20 @@ func reqString(d map[string]any, key string) (string, error) {
 	return s, nil
 }
 
-func optObject(d map[string]any, key string) (JSONObject, error) {
-	v, ok := d[key]
+func optObject(d JSONObject, key string) (JSONObject, error) {
+	v, ok := d.Lookup(key)
 	if !ok || v == nil {
 		return nil, nil
 	}
-	m, ok := v.(map[string]any)
+	m, ok := asObject(v)
 	if !ok {
 		return nil, typeErrorf("%s must be a JSON object", key)
 	}
 	return m, nil
 }
 
-func optList(d map[string]any, key string) ([]any, error) {
-	v, ok := d[key]
+func optList(d JSONObject, key string) ([]any, error) {
+	v, ok := d.Lookup(key)
 	if !ok || v == nil {
 		return nil, nil
 	}
@@ -530,8 +578,8 @@ func stringList(v any, field string) ([]string, error) {
 // Provider bodies are read leniently: a missing or mistyped key is "absent",
 // the way the reference's dict.get chains behave. These never error.
 
-func wireObj(v any) map[string]any {
-	m, _ := v.(map[string]any)
+func wireObj(v any) JSONObject {
+	m, _ := asObject(v)
 	return m
 }
 
@@ -598,7 +646,7 @@ func wireFloat(v any, fallback float64) float64 {
 
 // truthy mirrors Python truthiness for wire values.
 func truthy(v any) bool {
-	switch x := v.(type) {
+	switch x := jsonView(v).(type) {
 	case nil:
 		return false
 	case bool:
@@ -613,6 +661,8 @@ func truthy(v any) bool {
 	case int:
 		return x != 0
 	case []any:
+		return len(x) > 0
+	case JSONObject:
 		return len(x) > 0
 	case map[string]any:
 		return len(x) > 0
@@ -633,12 +683,11 @@ func firstStr(values ...any) string {
 	return ""
 }
 
-// copyObject shallow-copies a JSON object.
-func copyObject(m map[string]any) map[string]any {
-	out := make(map[string]any, len(m))
-	for k, v := range m {
-		out[k] = v
-	}
+// copyObject shallow-copies a JSON object, keeping its order (a nil
+// object copies to an empty one, as the map-based copy did).
+func copyObject(m JSONObject) JSONObject {
+	out := make(JSONObject, len(m))
+	copy(out, m)
 	return out
 }
 
@@ -650,7 +699,8 @@ func toAnyList[T any](items []T, f func(T) any) []any {
 	return out
 }
 
-// jsonEqual compares two JSON values structurally (numbers by value).
+// jsonEqual compares two JSON values structurally: numbers by value, and
+// objects as JSON defines them, regardless of key order.
 func jsonEqual(a, b any) bool {
 	return bytes.Equal(canonicalBytes(a), canonicalBytes(b))
 }
@@ -664,7 +714,7 @@ func canonicalBytes(v any) []byte {
 }
 
 func normalizeNumbers(v any) any {
-	switch x := v.(type) {
+	switch x := jsonView(v).(type) {
 	case json.Number:
 		if i, err := x.Int64(); err == nil {
 			return i
@@ -677,12 +727,15 @@ func normalizeNumbers(v any) any {
 			out[i] = normalizeNumbers(item)
 		}
 		return out
-	case map[string]any:
-		out := make(map[string]any, len(x))
-		for k, item := range x {
-			out[k] = normalizeNumbers(item)
+	case JSONObject:
+		out := make(JSONObject, len(x))
+		for i, m := range x {
+			out[i] = Member{Key: m.Key, Value: normalizeNumbers(m.Value)}
 		}
+		sort.SliceStable(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 		return out
+	case map[string]any:
+		return normalizeNumbers(ObjectFromMap(x))
 	}
 	return v
 }

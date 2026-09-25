@@ -120,8 +120,8 @@ func TestManagedRouterRoutesTheConnectionOnlyProviders(t *testing.T) {
 	auth := MemoryAuth()
 	now := auth.now()
 	doc := JSONObject{
-		"github-copilot": map[string]any{"type": "oauth", "access": "tid=1;proxy-ep=proxy.business.githubcopilot.com;tok", "refresh": "gh", "expires": now + 3_600_000, "issued_at": now, "lifetime_s": 3600.0},
-		"_lm15":          map[string]any{"version": 1, "slots": map[string]any{"github-copilot": map[string]any{"generation": "1", "connection_id": "cn_copilotcopilot01", "revision": "1", "kind": "account", "method_id": "device", "instance_id": "public", "label": "GitHub Copilot", "created_at": "2026-09-25T00:00:00Z", "routes": []any{"github-copilot"}, "settings": map[string]any{}, "state": "ready", "renewal": "remint"}}},
+		{"github-copilot", JSONObject{{"type", "oauth"}, {"access", "tid=1;proxy-ep=proxy.business.githubcopilot.com;tok"}, {"refresh", "gh"}, {"expires", now + 3_600_000}, {"issued_at", now}, {"lifetime_s", 3600.0}}},
+		{"_lm15", JSONObject{{"version", 1}, {"slots", JSONObject{{"github-copilot", JSONObject{{"generation", "1"}, {"connection_id", "cn_copilotcopilot01"}, {"revision", "1"}, {"kind", "account"}, {"method_id", "device"}, {"instance_id", "public"}, {"label", "GitHub Copilot"}, {"created_at", "2026-09-25T00:00:00Z"}, {"routes", []any{"github-copilot"}}, {"settings", JSONObject{}}, {"state", "ready"}, {"renewal", "remint"}}}}}}},
 	}
 	if _, err := mutateStore(ctx, auth.Store(), func(JSONObject) (JSONObject, error) { return doc, nil }); err != nil {
 		t.Fatal(err)
@@ -287,11 +287,11 @@ func TestFileStoreSharesTheLayoutAndNeverOverwritesAnUnreadableFile(t *testing.T
 	if _, err := auth.Logout(ctx, "openai"); err != nil {
 		t.Fatal(err)
 	}
-	var after map[string]any
+	var after JSONObject
 	data, _ := os.ReadFile(path)
 	_ = json.NewDecoder(bytes.NewReader(data)).Decode(&after)
-	slot := after["_lm15"].(map[string]any)["slots"].(map[string]any)["openai"].(map[string]any)
-	if slot["logged_out"] != true || after["openai"] != nil {
+	slot := after.Get("_lm15").(JSONObject).Get("slots").(JSONObject).Get("openai").(JSONObject)
+	if slot.Get("logged_out") != true || after.Get("openai") != nil {
 		t.Fatalf("after logout: %s", data)
 	}
 	_ = os.WriteFile(path, []byte("{broken"), 0o600)

@@ -57,7 +57,7 @@ func ingestStr(v any, where string) (string, error) {
 }
 
 func ingestObject(v any, where string) (JSONObject, error) {
-	m, ok := v.(map[string]any)
+	m, ok := asObject(v)
 	if !ok {
 		return nil, typeErrorf("%s must be a JSON object, got %s", where, jsonTypeName(v))
 	}
@@ -70,7 +70,7 @@ func ingestOnlyKeys(provider string, obj JSONObject, allowed []string, where str
 		allowedSet[k] = true
 	}
 	var extra []string
-	for k := range obj {
+	for k := range obj.All() {
 		if !allowedSet[k] {
 			extra = append(extra, k)
 		}
@@ -101,18 +101,18 @@ func ingestImageBlock(provider string, block JSONObject, where string) (ImagePar
 	if err := ingestOnlyKeys(provider, block, []string{"type", "image_url", "prompt_cache_breakpoint"}, where); err != nil {
 		return ImagePart{}, err
 	}
-	spec, err := ingestObject(block["image_url"], where+".image_url")
+	spec, err := ingestObject(block.Get("image_url"), where+".image_url")
 	if err != nil {
 		return ImagePart{}, err
 	}
 	if err := ingestOnlyKeys(provider, spec, []string{"url", "detail"}, where+".image_url"); err != nil {
 		return ImagePart{}, err
 	}
-	url, err := ingestStr(spec["url"], where+".image_url.url")
+	url, err := ingestStr(spec.Get("url"), where+".image_url.url")
 	if err != nil {
 		return ImagePart{}, err
 	}
-	detail := stringOnly(spec["detail"])
+	detail := stringOnly(spec.Get("detail"))
 	if strings.HasPrefix(url, "data:") {
 		mediaType, payload, err := ingestDataURI(url, where+".image_url.url")
 		if err != nil {
@@ -136,7 +136,7 @@ func ingestTextBlock(provider string, block JSONObject, where string) (TextPart,
 	if err := ingestOnlyKeys(provider, block, []string{"type", "text", "prompt_cache_breakpoint"}, where); err != nil {
 		return TextPart{}, err
 	}
-	text, err := ingestStr(block["text"], where+".text")
+	text, err := ingestStr(block.Get("text"), where+".text")
 	if err != nil {
 		return TextPart{}, err
 	}
@@ -144,7 +144,7 @@ func ingestTextBlock(provider string, block JSONObject, where string) (TextPart,
 }
 
 func ingestHasBreakpoint(block JSONObject, where string) (bool, error) {
-	mark, present := block["prompt_cache_breakpoint"]
+	mark, present := block.Lookup("prompt_cache_breakpoint")
 	if !present || mark == nil {
 		return false, nil
 	}
@@ -152,11 +152,11 @@ func ingestHasBreakpoint(block JSONObject, where string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if len(obj) != 1 || obj["mode"] != "explicit" {
+	if len(obj) != 1 || obj.Get("mode") != "explicit" {
 		return false, valueErrorf("%s.prompt_cache_breakpoint must be {\"mode\": \"explicit\"}", where)
 	}
-	if block["type"] != "text" {
-		return false, valueErrorf("%s: a prompt_cache_breakpoint rides on a text block, not %q", where, wireStr(block["type"]))
+	if block.Get("type") != "text" {
+		return false, valueErrorf("%s: a prompt_cache_breakpoint rides on a text block, not %q", where, wireStr(block.Get("type")))
 	}
 	return true, nil
 }
@@ -177,7 +177,7 @@ func ingestContentBlocks(provider string, content any, role, where string) ([]Pa
 		if err != nil {
 			return nil, false, err
 		}
-		kind := wireStr(block["type"])
+		kind := wireStr(block.Get("type"))
 		marked, err := ingestHasBreakpoint(block, blockWhere)
 		if err != nil {
 			return nil, false, err
@@ -203,14 +203,14 @@ func ingestContentBlocks(provider string, content any, role, where string) ([]Pa
 			if err := ingestOnlyKeys(provider, block, []string{"type", "input_audio", "prompt_cache_breakpoint"}, blockWhere); err != nil {
 				return nil, false, err
 			}
-			spec, err := ingestObject(block["input_audio"], blockWhere+".input_audio")
+			spec, err := ingestObject(block.Get("input_audio"), blockWhere+".input_audio")
 			if err != nil {
 				return nil, false, err
 			}
 			if err := ingestOnlyKeys(provider, spec, []string{"data", "format"}, blockWhere+".input_audio"); err != nil {
 				return nil, false, err
 			}
-			format, err := ingestStr(spec["format"], blockWhere+".input_audio.format")
+			format, err := ingestStr(spec.Get("format"), blockWhere+".input_audio.format")
 			if err != nil {
 				return nil, false, err
 			}
@@ -218,7 +218,7 @@ func ingestContentBlocks(provider string, content any, role, where string) ([]Pa
 			if !ok {
 				return nil, false, valueErrorf("%s.input_audio.format must be one of [mp3 wav]", blockWhere)
 			}
-			data, err := ingestStr(spec["data"], blockWhere+".input_audio.data")
+			data, err := ingestStr(spec.Get("data"), blockWhere+".input_audio.data")
 			if err != nil {
 				return nil, false, err
 			}
@@ -227,25 +227,25 @@ func ingestContentBlocks(provider string, content any, role, where string) ([]Pa
 			if err := ingestOnlyKeys(provider, block, []string{"type", "file", "prompt_cache_breakpoint"}, blockWhere); err != nil {
 				return nil, false, err
 			}
-			spec, err := ingestObject(block["file"], blockWhere+".file")
+			spec, err := ingestObject(block.Get("file"), blockWhere+".file")
 			if err != nil {
 				return nil, false, err
 			}
 			if err := ingestOnlyKeys(provider, spec, []string{"file_data", "file_id", "filename"}, blockWhere+".file"); err != nil {
 				return nil, false, err
 			}
-			if spec["filename"] != nil {
+			if spec.Get("filename") != nil {
 				return nil, false, ingestUnsupported(provider, blockWhere+".file.filename", "DocumentPart has no filename slot")
 			}
 			switch {
-			case spec["file_id"] != nil && spec["file_data"] == nil:
-				id, err := ingestStr(spec["file_id"], blockWhere+".file.file_id")
+			case spec.Get("file_id") != nil && spec.Get("file_data") == nil:
+				id, err := ingestStr(spec.Get("file_id"), blockWhere+".file.file_id")
 				if err != nil {
 					return nil, false, err
 				}
 				parts = append(parts, Document(WithFileID(id)))
-			case spec["file_data"] != nil && spec["file_id"] == nil:
-				raw, err := ingestStr(spec["file_data"], blockWhere+".file.file_data")
+			case spec.Get("file_data") != nil && spec.Get("file_id") == nil:
+				raw, err := ingestStr(spec.Get("file_data"), blockWhere+".file.file_data")
 				if err != nil {
 					return nil, false, err
 				}
@@ -261,7 +261,7 @@ func ingestContentBlocks(provider string, content any, role, where string) ([]Pa
 			if err := ingestOnlyKeys(provider, block, []string{"type", "refusal"}, blockWhere); err != nil {
 				return nil, false, err
 			}
-			text, err := ingestStr(block["refusal"], blockWhere+".refusal")
+			text, err := ingestStr(block.Get("refusal"), blockWhere+".refusal")
 			if err != nil {
 				return nil, false, err
 			}
@@ -275,28 +275,28 @@ func ingestContentBlocks(provider string, content any, role, where string) ([]Pa
 }
 
 func ingestEmptyContainer(v any) bool {
-	switch x := v.(type) {
+	switch x := jsonView(v).(type) {
 	case []any:
 		return len(x) == 0
-	case map[string]any:
+	case JSONObject:
 		return len(x) == 0
 	}
 	return false
 }
 
 func ingestAllEmpty(v any) bool {
-	m, ok := v.(map[string]any)
+	m, ok := asObject(v)
 	if !ok {
 		return false
 	}
-	for _, val := range m {
-		switch x := val.(type) {
+	for _, val := range m.All() {
+		switch x := jsonView(val).(type) {
 		case nil:
 		case []any:
 			if len(x) > 0 {
 				return false
 			}
-		case map[string]any:
+		case JSONObject:
 			if len(x) > 0 {
 				return false
 			}
@@ -319,13 +319,13 @@ func ingestAnnotations(provider string, raw any, contentText *string, where stri
 		if err != nil {
 			return nil, err
 		}
-		if entry["type"] != "url_citation" {
-			return nil, ingestUnsupported(provider, entryWhere+" of type "+strconv.Quote(wireStr(entry["type"])), "only url_citation annotations have a canonical part (CitationPart)")
+		if entry.Get("type") != "url_citation" {
+			return nil, ingestUnsupported(provider, entryWhere+" of type "+strconv.Quote(wireStr(entry.Get("type"))), "only url_citation annotations have a canonical part (CitationPart)")
 		}
 		if err := ingestOnlyKeys(provider, entry, []string{"type", "url_citation"}, entryWhere); err != nil {
 			return nil, err
 		}
-		spec, err := ingestObject(entry["url_citation"], entryWhere+".url_citation")
+		spec, err := ingestObject(entry.Get("url_citation"), entryWhere+".url_citation")
 		if err != nil {
 			return nil, err
 		}
@@ -333,19 +333,19 @@ func ingestAnnotations(provider string, raw any, contentText *string, where stri
 			return nil, err
 		}
 		text := ""
-		start, end := wireIntPtr(spec["start_index"]), wireIntPtr(spec["end_index"])
-		if _, sb := spec["start_index"].(bool); !sb {
-			if _, eb := spec["end_index"].(bool); !eb && contentText != nil && start != nil && end != nil && 0 <= *start && *start <= *end && *end <= len(*contentText) {
+		start, end := wireIntPtr(spec.Get("start_index")), wireIntPtr(spec.Get("end_index"))
+		if _, sb := spec.Get("start_index").(bool); !sb {
+			if _, eb := spec.Get("end_index").(bool); !eb && contentText != nil && start != nil && end != nil && 0 <= *start && *start <= *end && *end <= len(*contentText) {
 				text = (*contentText)[*start:*end]
 			}
 		}
-		url, err := ingestStr(spec["url"], entryWhere+".url_citation.url")
+		url, err := ingestStr(spec.Get("url"), entryWhere+".url_citation.url")
 		if err != nil {
 			return nil, err
 		}
 		title := ""
-		if spec["title"] != nil {
-			if title, err = ingestStr(spec["title"], entryWhere+".url_citation.title"); err != nil {
+		if spec.Get("title") != nil {
+			if title, err = ingestStr(spec.Get("title"), entryWhere+".url_citation.title"); err != nil {
 				return nil, err
 			}
 		}
@@ -367,7 +367,7 @@ func ingestToolCalls(provider string, calls any, where string) ([]Part, error) {
 			return nil, err
 		}
 		kind := "function"
-		if k, present := call["type"]; present {
+		if k, present := call.Lookup("type"); present {
 			kind = wireStr(k)
 		}
 		if kind != "function" {
@@ -376,7 +376,7 @@ func ingestToolCalls(provider string, calls any, where string) ([]Part, error) {
 		if err := ingestOnlyKeys(provider, call, []string{"id", "type", "function"}, callWhere); err != nil {
 			return nil, err
 		}
-		fn, err := ingestObject(call["function"], callWhere+".function")
+		fn, err := ingestObject(call.Get("function"), callWhere+".function")
 		if err != nil {
 			return nil, err
 		}
@@ -384,7 +384,7 @@ func ingestToolCalls(provider string, calls any, where string) ([]Part, error) {
 			return nil, err
 		}
 		var parsed any = JSONObject{}
-		if args, present := fn["arguments"]; present {
+		if args, present := fn.Lookup("arguments"); present {
 			if s, ok := args.(string); ok {
 				if s != "" {
 					parsed, err = DecodeJSON([]byte(s))
@@ -396,15 +396,15 @@ func ingestToolCalls(provider string, calls any, where string) ([]Part, error) {
 				parsed = args
 			}
 		}
-		input, ok := parsed.(map[string]any)
+		input, ok := asObject(parsed)
 		if !ok {
 			return nil, valueErrorf("%s.function.arguments must encode a JSON object", callWhere)
 		}
-		id, err := ingestStr(call["id"], callWhere+".id")
+		id, err := ingestStr(call.Get("id"), callWhere+".id")
 		if err != nil {
 			return nil, err
 		}
-		name, err := ingestStr(fn["name"], callWhere+".function.name")
+		name, err := ingestStr(fn.Get("name"), callWhere+".function.name")
 		if err != nil {
 			return nil, err
 		}
@@ -439,8 +439,8 @@ func ingestRows(provider string, rows any) (ingestMessages, error) {
 		if err != nil {
 			return out, err
 		}
-		role := wireStr(row["role"])
-		if row["name"] != nil && role != "tool" {
+		role := wireStr(row.Get("role"))
+		if row.Get("name") != nil && role != "tool" {
 			return out, ingestUnsupported(provider, where+".name", "a per-message participant name has no canonical slot")
 		}
 		switch role {
@@ -449,7 +449,7 @@ func ingestRows(provider string, rows any) (ingestMessages, error) {
 			if err := ingestOnlyKeys(provider, row, []string{"role", "content"}, where); err != nil {
 				return out, err
 			}
-			parts, marked, err := ingestContentBlocks(provider, row["content"], "system", where)
+			parts, marked, err := ingestContentBlocks(provider, row.Get("content"), "system", where)
 			if err != nil {
 				return out, err
 			}
@@ -476,7 +476,7 @@ func ingestRows(provider string, rows any) (ingestMessages, error) {
 			if err := ingestOnlyKeys(provider, row, []string{"role", "content", "name"}, where); err != nil {
 				return out, err
 			}
-			parts, marked, err := ingestContentBlocks(provider, row["content"], "user", where)
+			parts, marked, err := ingestContentBlocks(provider, row.Get("content"), "user", where)
 			if err != nil {
 				return out, err
 			}
@@ -494,19 +494,19 @@ func ingestRows(provider string, rows any) (ingestMessages, error) {
 			if err := ingestOnlyKeys(provider, row, allowed, where); err != nil {
 				return out, err
 			}
-			if row["audio"] != nil {
+			if row.Get("audio") != nil {
 				return out, ingestUnsupported(provider, where+".audio", "an assistant audio reference has no canonical part")
 			}
-			if row["function_call"] != nil {
+			if row.Get("function_call") != nil {
 				return out, ingestUnsupported(provider, where+".function_call", "the deprecated function-calling shape; use tool_calls")
 			}
 			for _, key := range ingestClientObjectKeys {
-				if v, present := row[key]; present && v != nil && !ingestEmptyContainer(v) && !ingestAllEmpty(v) {
+				if v, present := row.Lookup(key); present && v != nil && !ingestEmptyContainer(v) && !ingestAllEmpty(v) {
 					return out, ingestUnsupported(provider, where+"."+key, "a client library's own field with no canonical part; only its empty form reads as absent")
 				}
 			}
 			var parts []Part
-			if rt := row["reasoning_content"]; rt != nil {
+			if rt := row.Get("reasoning_content"); rt != nil {
 				text, err := ingestStr(rt, where+".reasoning_content")
 				if err != nil {
 					return out, err
@@ -514,7 +514,7 @@ func ingestRows(provider string, rows any) (ingestMessages, error) {
 				parts = append(parts, ThinkingPart{Text: text})
 			}
 			var contentText *string
-			if content := row["content"]; content != nil {
+			if content := row.Get("content"); content != nil {
 				textParts, marked, err := ingestContentBlocks(provider, content, "assistant", where)
 				if err != nil {
 					return out, err
@@ -527,22 +527,22 @@ func ingestRows(provider string, rows any) (ingestMessages, error) {
 					contentText = &s
 				}
 			}
-			if rt := row["refusal"]; rt != nil {
+			if rt := row.Get("refusal"); rt != nil {
 				text, err := ingestStr(rt, where+".refusal")
 				if err != nil {
 					return out, err
 				}
 				parts = append(parts, RefusalPart{Text: text})
 			}
-			if row["tool_calls"] != nil {
-				calls, err := ingestToolCalls(provider, row["tool_calls"], where)
+			if row.Get("tool_calls") != nil {
+				calls, err := ingestToolCalls(provider, row.Get("tool_calls"), where)
 				if err != nil {
 					return out, err
 				}
 				parts = append(parts, calls...)
 			}
-			if row["annotations"] != nil {
-				cits, err := ingestAnnotations(provider, row["annotations"], contentText, where)
+			if row.Get("annotations") != nil {
+				cits, err := ingestAnnotations(provider, row.Get("annotations"), contentText, where)
 				if err != nil {
 					return out, err
 				}
@@ -556,20 +556,20 @@ func ingestRows(provider string, rows any) (ingestMessages, error) {
 			if err := ingestOnlyKeys(provider, row, []string{"role", "content", "tool_call_id", "name"}, where); err != nil {
 				return out, err
 			}
-			parts, marked, err := ingestContentBlocks(provider, row["content"], "tool", where)
+			parts, marked, err := ingestContentBlocks(provider, row.Get("content"), "tool", where)
 			if err != nil {
 				return out, err
 			}
 			if marked {
 				return out, valueErrorf("%s: a prompt_cache_breakpoint cannot mark a tool message (the builder refuses the same cell)", where)
 			}
-			id, err := ingestStr(row["tool_call_id"], where+".tool_call_id")
+			id, err := ingestStr(row.Get("tool_call_id"), where+".tool_call_id")
 			if err != nil {
 				return out, err
 			}
 			name := ""
-			if row["name"] != nil {
-				if name, err = ingestStr(row["name"], where+".name"); err != nil {
+			if row.Get("name") != nil {
+				if name, err = ingestStr(row.Get("name"), where+".name"); err != nil {
 					return out, err
 				}
 			}
@@ -599,43 +599,43 @@ func ingestTools(provider string, raw any, compat ResolvedOpenAIChatCompat) ([]T
 		if err != nil {
 			return nil, err
 		}
-		kind := wireStr(entry["type"])
+		kind := wireStr(entry.Get("type"))
 		switch {
 		case kind == "function":
 			if err := ingestOnlyKeys(provider, entry, []string{"type", "function"}, where); err != nil {
 				return nil, err
 			}
-			fn, err := ingestObject(entry["function"], where+".function")
+			fn, err := ingestObject(entry.Get("function"), where+".function")
 			if err != nil {
 				return nil, err
 			}
 			if err := ingestOnlyKeys(provider, fn, []string{"name", "description", "parameters", "strict"}, where+".function"); err != nil {
 				return nil, err
 			}
-			if fn["strict"] == true {
+			if fn.Get("strict") == true {
 				return nil, ingestUnsupported(provider, where+".function.strict = true", "no per-tool strict slot (compat.strict_tools is a preset policy)")
 			}
-			name, err := ingestStr(fn["name"], where+".function.name")
+			name, err := ingestStr(fn.Get("name"), where+".function.name")
 			if err != nil {
 				return nil, err
 			}
 			tool := FunctionTool{Name: name}
-			if fn["description"] != nil {
-				if tool.Description, err = ingestStr(fn["description"], where+".function.description"); err != nil {
+			if fn.Get("description") != nil {
+				if tool.Description, err = ingestStr(fn.Get("description"), where+".function.description"); err != nil {
 					return nil, err
 				}
 			}
-			if fn["parameters"] != nil {
-				if tool.Parameters, err = ingestObject(fn["parameters"], where+".function.parameters"); err != nil {
+			if fn.Get("parameters") != nil {
+				if tool.Parameters, err = ingestObject(fn.Get("parameters"), where+".function.parameters"); err != nil {
 					return nil, err
 				}
 			}
 			tools = append(tools, tool)
 		case ingestGroqBuiltinInverse[kind] != "" && compat.BuiltinTools == "groq":
 			config := JSONObject{}
-			for k, v := range entry {
+			for k, v := range entry.All() {
 				if k != "type" {
-					config[k] = v
+					config.Set(k, v)
 				}
 			}
 			if len(config) == 0 {
@@ -655,9 +655,9 @@ func toolChoiceFromFunctionCall(raw any) (any, error) {
 	if raw == "none" || raw == "auto" {
 		return raw, nil
 	}
-	if obj, ok := raw.(map[string]any); ok {
-		if name, has := obj["name"]; has {
-			return JSONObject{"type": "function", "function": JSONObject{"name": name}}, nil
+	if obj, ok := asObject(raw); ok {
+		if name, has := obj.Lookup("name"); has {
+			return JSONObject{{"type", "function"}, {"function", JSONObject{{"name", name}}}}, nil
 		}
 	}
 	return nil, valueErrorf("function_call must be 'none', 'auto', or {name}; got %s", jsonRaw(raw))
@@ -667,26 +667,26 @@ func ingestToolChoice(provider string, raw any, parallel any) (*ToolChoice, erro
 	mode := ""
 	var allowed []string
 	if raw != nil {
-		switch x := raw.(type) {
+		switch x := jsonView(raw).(type) {
 		case string:
 			if x != "none" && x != "auto" && x != "required" {
 				return nil, valueErrorf("tool_choice must be none, auto, required, or an object")
 			}
 			mode = x
-		case map[string]any:
-			switch wireStr(x["type"]) {
+		case JSONObject:
+			switch wireStr(x.Get("type")) {
 			case "function":
 				if err := ingestOnlyKeys(provider, x, []string{"type", "function"}, "tool_choice"); err != nil {
 					return nil, err
 				}
-				fn, err := ingestObject(x["function"], "tool_choice.function")
+				fn, err := ingestObject(x.Get("function"), "tool_choice.function")
 				if err != nil {
 					return nil, err
 				}
 				if err := ingestOnlyKeys(provider, fn, []string{"name"}, "tool_choice.function"); err != nil {
 					return nil, err
 				}
-				name, err := ingestStr(fn["name"], "tool_choice.function.name")
+				name, err := ingestStr(fn.Get("name"), "tool_choice.function.name")
 				if err != nil {
 					return nil, err
 				}
@@ -695,17 +695,17 @@ func ingestToolChoice(provider string, raw any, parallel any) (*ToolChoice, erro
 				if err := ingestOnlyKeys(provider, x, []string{"type", "allowed_tools"}, "tool_choice"); err != nil {
 					return nil, err
 				}
-				spec, err := ingestObject(x["allowed_tools"], "tool_choice.allowed_tools")
+				spec, err := ingestObject(x.Get("allowed_tools"), "tool_choice.allowed_tools")
 				if err != nil {
 					return nil, err
 				}
 				if err := ingestOnlyKeys(provider, spec, []string{"mode", "tools"}, "tool_choice.allowed_tools"); err != nil {
 					return nil, err
 				}
-				if mode, err = ingestStr(spec["mode"], "tool_choice.allowed_tools.mode"); err != nil {
+				if mode, err = ingestStr(spec.Get("mode"), "tool_choice.allowed_tools.mode"); err != nil {
 					return nil, err
 				}
-				entries, ok := spec["tools"].([]any)
+				entries, ok := spec.Get("tools").([]any)
 				if !ok || len(entries) == 0 {
 					return nil, valueErrorf("tool_choice.allowed_tools.tools must be a non-empty array")
 				}
@@ -715,14 +715,14 @@ func ingestToolChoice(provider string, raw any, parallel any) (*ToolChoice, erro
 					if err != nil {
 						return nil, err
 					}
-					if entry["type"] != "function" {
-						return nil, ingestUnsupported(provider, entryWhere+" of type "+strconv.Quote(wireStr(entry["type"])), "only function tools can be allowed on this wire")
+					if entry.Get("type") != "function" {
+						return nil, ingestUnsupported(provider, entryWhere+" of type "+strconv.Quote(wireStr(entry.Get("type"))), "only function tools can be allowed on this wire")
 					}
-					fn, err := ingestObject(entry["function"], entryWhere+".function")
+					fn, err := ingestObject(entry.Get("function"), entryWhere+".function")
 					if err != nil {
 						return nil, err
 					}
-					name, err := ingestStr(fn["name"], entryWhere+".function.name")
+					name, err := ingestStr(fn.Get("name"), entryWhere+".function.name")
 					if err != nil {
 						return nil, err
 					}
@@ -731,7 +731,7 @@ func ingestToolChoice(provider string, raw any, parallel any) (*ToolChoice, erro
 			case "custom":
 				return nil, ingestUnsupported(provider, "tool_choice of type 'custom'", "custom tools have no canonical form")
 			default:
-				return nil, valueErrorf("tool_choice.type must be function or allowed_tools; got %q", wireStr(x["type"]))
+				return nil, valueErrorf("tool_choice.type must be function or allowed_tools; got %q", wireStr(x.Get("type")))
 			}
 		default:
 			return nil, valueErrorf("tool_choice must be none, auto, required, or an object")
@@ -759,56 +759,56 @@ func ingestResponseFormat(provider string, raw any) (JSONObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	switch wireStr(obj["type"]) {
+	switch wireStr(obj.Get("type")) {
 	case "text":
 		return nil, ingestOnlyKeys(provider, obj, []string{"type"}, "response_format")
 	case "json_object":
 		if err := ingestOnlyKeys(provider, obj, []string{"type"}, "response_format"); err != nil {
 			return nil, err
 		}
-		return JSONObject{"type": "json_object"}, nil
+		return JSONObject{{"type", "json_object"}}, nil
 	case "json_schema":
 		if err := ingestOnlyKeys(provider, obj, []string{"type", "json_schema"}, "response_format"); err != nil {
 			return nil, err
 		}
-		inner, err := ingestObject(obj["json_schema"], "response_format.json_schema")
+		inner, err := ingestObject(obj.Get("json_schema"), "response_format.json_schema")
 		if err != nil {
 			return nil, err
 		}
 		if err := ingestOnlyKeys(provider, inner, []string{"name", "schema", "strict", "description"}, "response_format.json_schema"); err != nil {
 			return nil, err
 		}
-		if inner["description"] != nil {
+		if inner.Get("description") != nil {
 			return nil, ingestUnsupported(provider, "response_format.json_schema.description", "the canonical response_format has no description slot (INV-050)")
 		}
-		schema, err := ingestObject(inner["schema"], "response_format.json_schema.schema")
+		schema, err := ingestObject(inner.Get("schema"), "response_format.json_schema.schema")
 		if err != nil {
 			return nil, err
 		}
-		out := JSONObject{"type": "json_schema", "schema": schema}
-		if name := inner["name"]; name != nil && name != "response" {
+		out := JSONObject{{"type", "json_schema"}, {"schema", schema}}
+		if name := inner.Get("name"); name != nil && name != "response" {
 			s, err := ingestStr(name, "response_format.json_schema.name")
 			if err != nil {
 				return nil, err
 			}
-			out["name"] = s
+			out.Set("name", s)
 		}
-		if strict := inner["strict"]; strict != nil {
+		if strict := inner.Get("strict"); strict != nil {
 			b, ok := strict.(bool)
 			if !ok {
 				return nil, typeErrorf("response_format.json_schema.strict must be a boolean")
 			}
-			out["strict"] = b
+			out.Set("strict", b)
 		}
 		return out, nil
 	}
-	return nil, valueErrorf("response_format.type must be text, json_object or json_schema; got %q", wireStr(obj["type"]))
+	return nil, valueErrorf("response_format.type must be text, json_object or json_schema; got %q", wireStr(obj.Get("type")))
 }
 
 func ingestReasoning(provider string, body JSONObject, compat ResolvedOpenAIChatCompat) (*Reasoning, JSONObject, error) {
 	present := map[string]bool{}
 	for _, k := range []string{"reasoning_effort", "reasoning", "thinking", "enable_thinking", "chat_template_kwargs", "reasoning_format"} {
-		if _, ok := body[k]; ok {
+		if _, ok := body.Lookup(k); ok {
 			present[k] = true
 		}
 	}
@@ -853,7 +853,7 @@ func ingestReasoning(provider string, body JSONObject, compat ResolvedOpenAIChat
 	effort := ""
 	off := false
 	if present["reasoning_effort"] {
-		word, err := ingestStr(body["reasoning_effort"], "reasoning_effort")
+		word, err := ingestStr(body.Get("reasoning_effort"), "reasoning_effort")
 		if err != nil {
 			return nil, nil, err
 		}
@@ -864,14 +864,14 @@ func ingestReasoning(provider string, body JSONObject, compat ResolvedOpenAIChat
 		}
 	}
 	if present["thinking"] {
-		spec, err := ingestObject(body["thinking"], "thinking")
+		spec, err := ingestObject(body.Get("thinking"), "thinking")
 		if err != nil {
 			return nil, nil, err
 		}
 		if err := ingestOnlyKeys(provider, spec, []string{"type"}, "thinking"); err != nil {
 			return nil, nil, err
 		}
-		switch spec["type"] {
+		switch spec.Get("type") {
 		case "disabled":
 			if effort != "" {
 				return nil, nil, valueErrorf("thinking.type=disabled next to a reasoning_effort level is contradictory")
@@ -882,21 +882,21 @@ func ingestReasoning(provider string, body JSONObject, compat ResolvedOpenAIChat
 				return nil, nil, ingestUnsupported(provider, "thinking.type=enabled without reasoning_effort", "lm15's dial is a level (MAP-7); set config.reasoning with an effort word")
 			}
 		default:
-			return nil, nil, valueErrorf("thinking.type must be enabled or disabled; got %q", wireStr(spec["type"]))
+			return nil, nil, valueErrorf("thinking.type must be enabled or disabled; got %q", wireStr(spec.Get("type")))
 		}
 	}
 	if present["reasoning"] {
-		spec, err := ingestObject(body["reasoning"], "reasoning")
+		spec, err := ingestObject(body.Get("reasoning"), "reasoning")
 		if err != nil {
 			return nil, nil, err
 		}
 		if err := ingestOnlyKeys(provider, spec, []string{"effort", "enabled"}, "reasoning"); err != nil {
 			return nil, nil, err
 		}
-		if spec["enabled"] == false {
+		if spec.Get("enabled") == false {
 			off = true
-		} else if spec["effort"] != nil {
-			if effort, err = ingestStr(spec["effort"], "reasoning.effort"); err != nil {
+		} else if spec.Get("effort") != nil {
+			if effort, err = ingestStr(spec.Get("effort"), "reasoning.effort"); err != nil {
 				return nil, nil, err
 			}
 		} else {
@@ -904,7 +904,7 @@ func ingestReasoning(provider string, body JSONObject, compat ResolvedOpenAIChat
 		}
 	}
 	if present["enable_thinking"] {
-		switch body["enable_thinking"] {
+		switch body.Get("enable_thinking") {
 		case false:
 			off = true
 		case true:
@@ -914,14 +914,14 @@ func ingestReasoning(provider string, body JSONObject, compat ResolvedOpenAIChat
 		}
 	}
 	if present["chat_template_kwargs"] {
-		spec, err := ingestObject(body["chat_template_kwargs"], "chat_template_kwargs")
+		spec, err := ingestObject(body.Get("chat_template_kwargs"), "chat_template_kwargs")
 		if err != nil {
 			return nil, nil, err
 		}
 		if err := ingestOnlyKeys(provider, spec, []string{"enable_thinking", "preserve_thinking"}, "chat_template_kwargs"); err != nil {
 			return nil, nil, err
 		}
-		switch spec["enable_thinking"] {
+		switch spec.Get("enable_thinking") {
 		case false:
 			off = true
 		case true:
@@ -932,12 +932,12 @@ func ingestReasoning(provider string, body JSONObject, compat ResolvedOpenAIChat
 	}
 	summary := ""
 	if present["reasoning_format"] {
-		value := body["reasoning_format"]
+		value := body.Get("reasoning_format")
 		if value != "parsed" {
 			return nil, nil, ingestUnsupported(provider, "reasoning_format = "+strconv.Quote(wireStr(value)), "only 'parsed' maps (Reasoning.summary='auto', MAP-7 rule 7)")
 		}
 		if effort == "" {
-			extensions["reasoning_format"] = value
+			extensions.Set("reasoning_format", value)
 		} else {
 			summary = "auto"
 		}
@@ -954,7 +954,7 @@ func ingestReasoning(provider string, body JSONObject, compat ResolvedOpenAIChat
 func ingestCache(provider string, body JSONObject, compat ResolvedOpenAIChatCompat, systemBreakpoint bool, breakpointIndex *int) (*CacheConfig, error) {
 	var keys []string
 	for _, k := range []string{"prompt_cache_key", "prompt_cache_retention", "prompt_cache_options"} {
-		if _, ok := body[k]; ok {
+		if _, ok := body.Lookup(k); ok {
 			keys = append(keys, k)
 		}
 	}
@@ -972,16 +972,16 @@ func ingestCache(provider string, body JSONObject, compat ResolvedOpenAIChatComp
 	if marked && compat.CacheControl != "openai" {
 		return nil, ingestUnsupported(provider, "prompt_cache_breakpoint", "this server swallows an explicit breakpoint silently (compat.cache_control=openai_implicit)")
 	}
-	key := stringOnly(body["prompt_cache_key"])
+	key := stringOnly(body.Get("prompt_cache_key"))
 	retention := ""
-	if v, ok := body["prompt_cache_retention"]; ok {
+	if v, ok := body.Lookup("prompt_cache_retention"); ok {
 		if v != "24h" {
 			return nil, ingestUnsupported(provider, "prompt_cache_retention = "+strconv.Quote(wireStr(v)), "only '24h' has a canonical value (CacheConfig.retention='long')")
 		}
 		retention = "long"
 	}
 	explicit := false
-	if v, ok := body["prompt_cache_options"]; ok {
+	if v, ok := body.Lookup("prompt_cache_options"); ok {
 		spec, err := ingestObject(v, "prompt_cache_options")
 		if err != nil {
 			return nil, err
@@ -989,16 +989,16 @@ func ingestCache(provider string, body JSONObject, compat ResolvedOpenAIChatComp
 		if err := ingestOnlyKeys(provider, spec, []string{"mode", "ttl"}, "prompt_cache_options"); err != nil {
 			return nil, err
 		}
-		if spec["ttl"] != nil {
+		if spec.Get("ttl") != nil {
 			return nil, ingestUnsupported(provider, "prompt_cache_options.ttl", "CacheConfig.retention names 24h only")
 		}
-		switch spec["mode"] {
+		switch spec.Get("mode") {
 		case "explicit":
 			explicit = true
 		case "implicit":
 			return nil, ingestUnsupported(provider, "prompt_cache_options.mode = 'implicit'", "the server default; a canonical CacheConfig names auto or off")
 		default:
-			return nil, valueErrorf("prompt_cache_options.mode must be explicit or implicit; got %q", wireStr(spec["mode"]))
+			return nil, valueErrorf("prompt_cache_options.mode must be explicit or implicit; got %q", wireStr(spec.Get("mode")))
 		}
 	}
 	if explicit && !marked {
@@ -1019,15 +1019,15 @@ func ingestCache(provider string, body JSONObject, compat ResolvedOpenAIChatComp
 func ingestConfig(provider string, body JSONObject, compat ResolvedOpenAIChatCompat, systemBreakpoint bool, breakpointIndex *int) (Config, error) {
 	var cfg Config
 	var err error
-	_, hasMCT := body["max_completion_tokens"]
-	_, hasMT := body["max_tokens"]
+	_, hasMCT := body.Lookup("max_completion_tokens")
+	_, hasMT := body.Lookup("max_tokens")
 	if hasMCT || hasMT {
-		if hasMCT && hasMT && !jsonEqual(body["max_completion_tokens"], body["max_tokens"]) {
+		if hasMCT && hasMT && !jsonEqual(body.Get("max_completion_tokens"), body.Get("max_tokens")) {
 			return cfg, valueErrorf("max_tokens and max_completion_tokens disagree")
 		}
-		v := body["max_completion_tokens"]
+		v := body.Get("max_completion_tokens")
 		if !hasMCT {
-			v = body["max_tokens"]
+			v = body.Get("max_tokens")
 		}
 		if v != nil {
 			n, err := jsonInt(v, "max_tokens")
@@ -1061,47 +1061,47 @@ func ingestConfig(provider string, body JSONObject, compat ResolvedOpenAIChatCom
 	if cfg.Store, err = optBool(body, "store"); err != nil {
 		return cfg, err
 	}
-	if cfg.Stop, err = stringList(body["stop"], "stop"); err != nil {
+	if cfg.Stop, err = stringList(body.Get("stop"), "stop"); err != nil {
 		return cfg, err
 	}
-	switch lp := body["logprobs"]; lp {
+	switch lp := body.Get("logprobs"); lp {
 	case true:
 		top := 0
-		if v, ok := body["top_logprobs"]; ok && v != nil {
+		if v, ok := body.Lookup("top_logprobs"); ok && v != nil {
 			if top, err = jsonInt(v, "top_logprobs"); err != nil {
 				return cfg, err
 			}
 		}
 		cfg.Logprobs = &top
 	case nil, false:
-		if _, ok := body["top_logprobs"]; ok {
+		if _, ok := body.Lookup("top_logprobs"); ok {
 			return cfg, valueErrorf("top_logprobs requires logprobs: true")
 		}
 	default:
 		return cfg, typeErrorf("logprobs must be a boolean")
 	}
-	if rf, ok := body["response_format"]; ok {
+	if rf, ok := body.Lookup("response_format"); ok {
 		if cfg.ResponseFormat, err = ingestResponseFormat(provider, rf); err != nil {
 			return cfg, err
 		}
 	}
-	_, hasFunctionCall := body["function_call"]
-	_, hasToolChoice := body["tool_choice"]
+	_, hasFunctionCall := body.Lookup("function_call")
+	_, hasToolChoice := body.Lookup("tool_choice")
 	if hasFunctionCall && hasToolChoice {
 		return cfg, valueErrorf("function_call and tool_choice cannot both be given")
 	}
-	rawToolChoice := body["tool_choice"]
+	rawToolChoice := body.Get("tool_choice")
 	if hasFunctionCall {
-		if rawToolChoice, err = toolChoiceFromFunctionCall(body["function_call"]); err != nil {
+		if rawToolChoice, err = toolChoiceFromFunctionCall(body.Get("function_call")); err != nil {
 			return cfg, err
 		}
 	}
-	if cfg.ToolChoice, err = ingestToolChoice(provider, rawToolChoice, body["parallel_tool_calls"]); err != nil {
+	if cfg.ToolChoice, err = ingestToolChoice(provider, rawToolChoice, body.Get("parallel_tool_calls")); err != nil {
 		return cfg, err
 	}
 	var userKeys []string
 	for _, k := range []string{"user", "safety_identifier", "user_id"} {
-		if _, ok := body[k]; ok {
+		if _, ok := body.Lookup(k); ok {
 			userKeys = append(userKeys, k)
 		}
 	}
@@ -1124,9 +1124,9 @@ func ingestConfig(provider string, body JSONObject, compat ResolvedOpenAIChatCom
 	if cfg.Cache, err = ingestCache(provider, body, compat, systemBreakpoint, breakpointIndex); err != nil {
 		return cfg, err
 	}
-	for k, v := range body {
+	for k, v := range body.All() {
 		if ingestExtensionsKeys[k] {
-			extensions[k] = v
+			extensions.Set(k, v)
 		}
 	}
 	if len(extensions) > 0 {
@@ -1139,7 +1139,7 @@ func ingestOpenAIChat(provider string, body JSONObject, compat ResolvedOpenAICha
 	if body == nil {
 		return nil, typeErrorf("a Chat Completions request body is a JSON object, got null")
 	}
-	for _, k := range sortedKeys(body) {
+	for k := range body.All() {
 		if why, refused := ingestRefusedKeys[k]; refused {
 			return nil, ingestUnsupported(provider, strconv.Quote(k), why)
 		}
@@ -1147,29 +1147,29 @@ func ingestOpenAIChat(provider string, body JSONObject, compat ResolvedOpenAICha
 			return nil, ingestUnsupported(provider, strconv.Quote(k), "no verdict for this key (lm15-contract/tools/openai-chat-ingest-verdicts.json); lm15 never drops a key silently")
 		}
 	}
-	model := stringOnly(body["model"])
+	model := stringOnly(body.Get("model"))
 	if model == "" {
 		return nil, valueErrorf("model must be a non-empty string")
 	}
-	if _, ok := body["messages"]; !ok {
+	if _, ok := body.Lookup("messages"); !ok {
 		return nil, valueErrorf("messages is required")
 	}
-	rows, err := ingestRows(provider, body["messages"])
+	rows, err := ingestRows(provider, body.Get("messages"))
 	if err != nil {
 		return nil, err
 	}
-	_, hasFunctions := body["functions"]
-	_, hasTools := body["tools"]
+	_, hasFunctions := body.Lookup("functions")
+	_, hasTools := body.Lookup("tools")
 	if hasFunctions && hasTools {
 		return nil, valueErrorf("functions and tools cannot both be given")
 	}
-	rawTools := body["tools"]
+	rawTools := body.Get("tools")
 	if hasFunctions {
-		list, ok := body["functions"].([]any)
+		list, ok := body.Get("functions").([]any)
 		if !ok {
 			return nil, typeErrorf("functions must be an array")
 		}
-		rawTools = toAnyList(list, func(fn any) any { return JSONObject{"type": "function", "function": fn} })
+		rawTools = toAnyList(list, func(fn any) any { return JSONObject{{"type", "function"}, {"function", fn}} })
 	}
 	tools, err := ingestTools(provider, rawTools, compat)
 	if err != nil {
@@ -1194,19 +1194,19 @@ func RequestFromOpenAIChat(body JSONObject, compatPreset string) (*Request, erro
 		}
 		partial = p
 	}
-	model := stringOnly(body["model"])
+	model := stringOnly(body.Get("model"))
 	return ingestOpenAIChat("openai-chat", body, ResolveOpenAIChatCompat(partial.ForModel(model)))
 }
 
 // RequestFromOpenAIChatCompat reads a body under an explicit compat value.
 func RequestFromOpenAIChatCompat(body JSONObject, compat OpenAIChatCompat) (*Request, error) {
-	model := stringOnly(body["model"])
+	model := stringOnly(body.Get("model"))
 	return ingestOpenAIChat("openai-chat", body, ResolveOpenAIChatCompat(compat.ForModel(model)))
 }
 
 func (l *OpenAIChatLM) requestFromOpenAIChat(body JSONObject) (*Request, error) {
 	compat := l.resolved
-	if model := stringOnly(body["model"]); model != "" {
+	if model := stringOnly(body.Get("model")); model != "" {
 		compat = l.compatFor(model)
 	}
 	return ingestOpenAIChat(l.provider, body, compat)

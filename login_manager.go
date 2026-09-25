@@ -172,28 +172,28 @@ func stringsOf(v any) []string {
 
 func slotFromRecord(provider string, r JSONObject) slot {
 	s := emptySlot(provider)
-	s.generation = intOf(r["generation"])
-	s.connectionID, _ = r["connection_id"].(string)
-	s.revision = intOf(r["revision"])
-	s.kind = textOf(r["kind"], "account")
-	s.methodID = textOf(r["method_id"], "")
-	s.instanceID = textOf(r["instance_id"], "public")
-	s.label = textOf(r["label"], "")
-	s.accountLabel, _ = r["account_label"].(string)
-	s.createdAt = textOf(r["created_at"], "")
-	s.routes = stringsOf(r["routes"])
-	if m, ok := r["settings"].(map[string]any); ok {
-		for k, v := range m {
+	s.generation = intOf(r.Get("generation"))
+	s.connectionID, _ = r.Get("connection_id").(string)
+	s.revision = intOf(r.Get("revision"))
+	s.kind = textOf(r.Get("kind"), "account")
+	s.methodID = textOf(r.Get("method_id"), "")
+	s.instanceID = textOf(r.Get("instance_id"), "public")
+	s.label = textOf(r.Get("label"), "")
+	s.accountLabel, _ = r.Get("account_label").(string)
+	s.createdAt = textOf(r.Get("created_at"), "")
+	s.routes = stringsOf(r.Get("routes"))
+	if m, ok := asObject(r.Get("settings")); ok {
+		for k, v := range m.All() {
 			s.settings[k] = textOf(v, "")
 		}
 	}
-	s.state = textOf(r["state"], "ready")
-	s.renewal = textOf(r["renewal"], "refresh_token")
-	s.loggedOut, _ = r["logged_out"].(bool)
-	s.renewalInFlight, _ = r["renewal_in_flight"].(map[string]any)
-	s.attempt, _ = r["attempt"].(map[string]any)
-	s.verification, _ = r["verification"].(map[string]any)
-	s.previousIDs = stringsOf(r["previous_ids"])
+	s.state = textOf(r.Get("state"), "ready")
+	s.renewal = textOf(r.Get("renewal"), "refresh_token")
+	s.loggedOut, _ = r.Get("logged_out").(bool)
+	s.renewalInFlight, _ = asObject(r.Get("renewal_in_flight"))
+	s.attempt, _ = asObject(r.Get("attempt"))
+	s.verification, _ = asObject(r.Get("verification"))
+	s.previousIDs = stringsOf(r.Get("previous_ids"))
 	return s
 }
 
@@ -207,28 +207,28 @@ func (s slot) record() JSONObject {
 		routes[i] = r
 	}
 	settings := JSONObject{}
-	for k, v := range s.settings {
-		settings[k] = v
+	for _, k := range sortedMapKeys(s.settings) {
+		settings = append(settings, Member{k, s.settings[k]})
 	}
 	r := JSONObject{
-		"generation": strconv.FormatInt(s.generation, 10), "connection_id": id, "revision": strconv.FormatInt(s.revision, 10),
-		"kind": s.kind, "method_id": s.methodID, "instance_id": s.instanceID, "label": s.label, "created_at": s.createdAt,
-		"routes": routes, "settings": settings, "state": s.state, "renewal": s.renewal,
+		{"generation", strconv.FormatInt(s.generation, 10)}, {"connection_id", id}, {"revision", strconv.FormatInt(s.revision, 10)},
+		{"kind", s.kind}, {"method_id", s.methodID}, {"instance_id", s.instanceID}, {"label", s.label}, {"created_at", s.createdAt},
+		{"routes", routes}, {"settings", settings}, {"state", s.state}, {"renewal", s.renewal},
 	}
 	if s.accountLabel != "" {
-		r["account_label"] = s.accountLabel
+		r.Set("account_label", s.accountLabel)
 	}
 	if s.loggedOut {
-		r["logged_out"] = true
+		r.Set("logged_out", true)
 	}
 	if s.renewalInFlight != nil {
-		r["renewal_in_flight"] = s.renewalInFlight
+		r.Set("renewal_in_flight", s.renewalInFlight)
 	}
 	if s.attempt != nil {
-		r["attempt"] = s.attempt
+		r.Set("attempt", s.attempt)
 	}
 	if s.verification != nil {
-		r["verification"] = s.verification
+		r.Set("verification", s.verification)
 	}
 	if len(s.previousIDs) > 0 {
 		tail := s.previousIDs
@@ -239,7 +239,7 @@ func (s slot) record() JSONObject {
 		for i, x := range tail {
 			ids[i] = x
 		}
-		r["previous_ids"] = ids
+		r.Set("previous_ids", ids)
 	}
 	return r
 }
@@ -271,18 +271,18 @@ func (s slot) connection() *Connection {
 var legacyMethods = map[string]string{"xai": "device", "claude-code": "external:claude-code-cli", "openai-codex": "external:codex-cli"}
 
 func slotsOf(document JSONObject) JSONObject {
-	meta, _ := document[storeMetaKey].(map[string]any)
-	slots, _ := meta["slots"].(map[string]any)
+	meta, _ := asObject(document.Get(storeMetaKey))
+	slots, _ := asObject(meta.Get("slots"))
 	return slots
 }
 
 func viewSlot(document JSONObject, provider string) (slot, JSONObject) {
-	material, _ := document[provider].(map[string]any)
-	if record, ok := slotsOf(document)[provider].(map[string]any); ok {
+	material, _ := asObject(document.Get(provider))
+	if record, ok := asObject(slotsOf(document).Get(provider)); ok {
 		return slotFromRecord(provider, record), material
 	}
 	if material != nil {
-		oauth := material["type"] == "oauth"
+		oauth := material.Get("type") == "oauth"
 		s := emptySlot(provider)
 		s.generation, s.connectionID, s.revision = 1, "legacy-"+provider, 1
 		s.kind, s.renewal = "api_key", "none"
@@ -301,24 +301,26 @@ func viewSlot(document JSONObject, provider string) (slot, JSONObject) {
 }
 
 func putSlot(document JSONObject, s slot, material JSONObject) JSONObject {
-	meta, ok := document[storeMetaKey].(map[string]any)
+	// Objects are values: each level is updated, then written back to its
+	// parent, in the positions a first write creates them in.
+	meta, ok := asObject(document.Get(storeMetaKey))
 	if !ok {
-		meta = JSONObject{"version": storeVersion, "slots": JSONObject{}}
-		document[storeMetaKey] = meta
+		meta = JSONObject{{"version", storeVersion}, {"slots", JSONObject{}}}
 	}
-	if _, ok := meta["version"]; !ok {
-		meta["version"] = storeVersion
+	if !meta.Has("version") {
+		meta.Set("version", storeVersion)
 	}
-	slots, ok := meta["slots"].(map[string]any)
+	slots, ok := asObject(meta.Get("slots"))
 	if !ok {
 		slots = JSONObject{}
-		meta["slots"] = slots
 	}
-	slots[s.provider] = s.record()
+	slots.Set(s.provider, s.record())
+	meta.Set("slots", slots)
+	document.Set(storeMetaKey, meta)
 	if material == nil {
-		delete(document, s.provider)
+		document.Delete(s.provider)
 	} else {
-		document[s.provider] = material
+		document.Set(s.provider, material)
 	}
 	return document
 }
@@ -343,10 +345,10 @@ func expiryOf(provider string, material JSONObject) (int64, string) {
 	if materialStr(material, "type") == "api_key" {
 		return 0, "never" // a minted key (OpenRouter) is permanent
 	}
-	if _, isBool := material["expires"].(bool); isBool {
+	if _, isBool := material.Get("expires").(bool); isBool {
 		return 0, "unknown"
 	}
-	f, ok := number(material["expires"])
+	f, ok := number(material.Get("expires"))
 	if !ok {
 		return 0, "unknown"
 	}
@@ -355,10 +357,10 @@ func expiryOf(provider string, material JSONObject) (int64, string) {
 
 func leadMs(material JSONObject) float64 {
 	lifetime := -1.0
-	if l, ok := number(material["lifetime_s"]); ok && l > 0 {
+	if l, ok := number(material.Get("lifetime_s")); ok && l > 0 {
 		lifetime = l * 1000
-	} else if issued, ok := number(material["issued_at"]); ok {
-		if expires, ok := number(material["expires"]); ok && expires != 0 {
+	} else if issued, ok := number(material.Get("issued_at")); ok {
+		if expires, ok := number(material.Get("expires")); ok && expires != 0 {
 			lifetime = expires - float64(int64(issued))
 			if lifetime < 0 {
 				lifetime = 0
@@ -451,7 +453,7 @@ func (a *Auth) Connections() ([]Connection, error) {
 		known[id] = true
 	}
 	keys := make([]string, 0, len(document))
-	for k := range document {
+	for k := range document.All() {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
@@ -467,15 +469,15 @@ func (a *Auth) Connections() ([]Connection, error) {
 	}
 	slots := slotsOf(document)
 	names := make([]string, 0, len(slots))
-	for k := range slots {
+	for k := range slots.All() {
 		names = append(names, k)
 	}
 	sort.Strings(names)
 	for _, key := range names {
-		if _, present := document[key]; present {
+		if _, present := document.Lookup(key); present {
 			continue
 		}
-		if record, ok := slots[key].(map[string]any); ok {
+		if record, ok := asObject(slots.Get(key)); ok {
 			if c := slotFromRecord(key, record).connection(); c != nil {
 				out = append(out, *c)
 			}
@@ -497,7 +499,7 @@ func (a *Auth) Status(provider string) (ConnectionStatus, error) {
 	s, material := viewSlot(document, d.ID)
 	var verification *Verification
 	if s.verification != nil {
-		verification = &Verification{Result: textOf(s.verification["result"], ""), CheckedAt: textOf(s.verification["checked_at"], ""), Check: textOf(s.verification["check"], ""), Detail: textOf(s.verification["detail"], "")}
+		verification = &Verification{Result: textOf(s.verification.Get("result"), ""), CheckedAt: textOf(s.verification.Get("checked_at"), ""), Check: textOf(s.verification.Get("check"), ""), Detail: textOf(s.verification.Get("detail"), "")}
 	}
 	c := s.connection()
 	if c == nil {
@@ -728,14 +730,14 @@ func (a *Auth) reserve(ctx context.Context, provider, attemptID, replace string,
 	now := float64(a.now()) / 1000
 	document, err := mutateStore(ctx, a.store, func(doc JSONObject) (JSONObject, error) {
 		s, material := viewSlot(doc, provider)
-		if s.attempt != nil && s.attempt["id"] != attemptID {
-			started, _ := number(s.attempt["started_at_s"])
-			budget, ok := number(s.attempt["lifetime_s"])
+		if s.attempt != nil && s.attempt.Get("id") != attemptID {
+			started, _ := number(s.attempt.Get("started_at_s"))
+			budget, ok := number(s.attempt.Get("lifetime_s"))
 			if !ok {
 				budget = attemptLifetimeMs / 1000
 			}
 			if now-started < budget {
-				return nil, opFields{reason: "login_in_progress", stage: "reservation", recovery: "inspect_attempt", provider: provider, attemptID: textOf(s.attempt["id"], "")}.err("%s: another sign-in is already in progress in this scope; finish it or cancel it (Auth.CancelLogin)", provider)
+				return nil, opFields{reason: "login_in_progress", stage: "reservation", recovery: "inspect_attempt", provider: provider, attemptID: textOf(s.attempt.Get("id"), "")}.err("%s: another sign-in is already in progress in this scope; finish it or cancel it (Auth.CancelLogin)", provider)
 			}
 		}
 		if s.connectionID != "" && replace == "" {
@@ -744,7 +746,7 @@ func (a *Auth) reserve(ctx context.Context, provider, attemptID, replace string,
 		if replace != "" && s.connectionID != replace {
 			return nil, opFields{reason: "connection_changed", stage: "reservation", recovery: "select_connection", provider: provider, connectionID: s.connectionID}.err("%s: replace=%q does not name the current connection; select again", provider, replace)
 		}
-		s.attempt = JSONObject{"id": attemptID, "expected_generation": strconv.FormatInt(s.generation, 10), "started_at_s": now, "lifetime_s": floatLexeme(lifetimeMs / 1000)}
+		s.attempt = JSONObject{{"id", attemptID}, {"expected_generation", strconv.FormatInt(s.generation, 10)}, {"started_at_s", now}, {"lifetime_s", floatLexeme(lifetimeMs / 1000)}}
 		return putSlot(doc, s, material), nil
 	})
 	if err != nil {
@@ -757,7 +759,7 @@ func (a *Auth) reserve(ctx context.Context, provider, attemptID, replace string,
 func (a *Auth) release(ctx context.Context, provider, attemptID string) {
 	_, _ = mutateStore(ctx, a.store, func(doc JSONObject) (JSONObject, error) {
 		s, material := viewSlot(doc, provider)
-		if s.attempt == nil || s.attempt["id"] != attemptID {
+		if s.attempt == nil || s.attempt.Get("id") != attemptID {
 			return nil, nil
 		}
 		s.attempt = nil
@@ -774,7 +776,7 @@ func (a *Auth) commit(ctx context.Context, provider, attemptID string, expected 
 	}
 	document, err := mutateStore(ctx, a.store, func(doc JSONObject) (JSONObject, error) {
 		s, _ := viewSlot(doc, provider)
-		if s.attempt == nil || s.attempt["id"] != attemptID {
+		if s.attempt == nil || s.attempt.Get("id") != attemptID {
 			return nil, opFields{reason: "invalid_login_state", stage: "persistence", recovery: "restart_login", provider: provider, attemptID: attemptID}.err("%s: this sign-in was cancelled before it could be saved", provider)
 		}
 		if s.generation != expected {
@@ -804,7 +806,7 @@ func (a *Auth) commit(ctx context.Context, provider, attemptID string, expected 
 		next.generation, next.connectionID, next.revision = s.generation+1, connectionID, 1
 		next.kind, next.methodID, next.label, next.accountLabel = method.Kind, method.ID, result.label, result.accountLabel
 		next.createdAt, next.routes, next.settings, next.renewal, next.previousIDs = created, routes, merged, result.renewal, previous
-		return putSlot(doc, next, copyDocument(result.material).(map[string]any)), nil
+		return putSlot(doc, next, copyDocument(result.material).(JSONObject)), nil
 	})
 	if err != nil {
 		var e *Error
@@ -985,9 +987,9 @@ func (a *Auth) resolveTarget(target string) (string, string, error) {
 		if err != nil {
 			return "", "", err
 		}
-		for key, record := range slotsOf(document) {
-			r, _ := record.(map[string]any)
-			for _, id := range stringsOf(r["previous_ids"]) {
+		for key, record := range slotsOf(document).All() {
+			r, _ := asObject(record)
+			for _, id := range stringsOf(r.Get("previous_ids")) {
 				if id == target {
 					return key, target, nil
 				}
@@ -1043,7 +1045,7 @@ func (a *Auth) Verify(ctx context.Context, provider string) (Verification, error
 		if s.connectionID == "" {
 			return nil, nil
 		}
-		s.verification = JSONObject{"result": result.Result, "checked_at": result.CheckedAt, "check": result.Check, "detail": nilIfEmpty(result.Detail)}
+		s.verification = JSONObject{{"result", result.Result}, {"checked_at", result.CheckedAt}, {"check", result.Check}, {"detail", nilIfEmpty(result.Detail)}}
 		return putSlot(doc, s, material), nil
 	})
 	return result, nil
@@ -1204,7 +1206,7 @@ func (a *Auth) renew(ctx context.Context, provider string, pinned *[2]string) (R
 		if dropMaterial {
 			keep = nil
 		}
-		return guard.Write(putSlot(copyDocument(document).(map[string]any), s, keep))
+		return guard.Write(putSlot(copyDocument(document).(JSONObject), s, keep))
 	}
 	if !renewable(s, material) {
 		if err := mark("needs_login", true, false); err != nil {
@@ -1213,8 +1215,8 @@ func (a *Auth) renew(ctx context.Context, provider string, pinned *[2]string) (R
 		return RequestAuth{}, opFields{reason: "credential_rejected", stage: "renewal", recovery: "restart_login", commit: "committed", provider: provider, connectionID: connectionID}.err("%s: the saved credential expired and cannot be renewed; sign in again", provider)
 	}
 	// Durable in-flight marker before the possibly rotating exchange.
-	s.renewalInFlight = JSONObject{"started_at": isoMs(a.now()), "revision": strconv.FormatInt(s.revision, 10)}
-	if err := guard.Write(putSlot(copyDocument(document).(map[string]any), s, material)); err != nil {
+	s.renewalInFlight = JSONObject{{"started_at", isoMs(a.now())}, {"revision", strconv.FormatInt(s.revision, 10)}}
+	if err := guard.Write(putSlot(copyDocument(document).(JSONObject), s, material)); err != nil {
 		return RequestAuth{}, err
 	}
 	flow, _ := accountFlowFor(provider)
@@ -1259,7 +1261,7 @@ func (a *Auth) renew(ctx context.Context, provider string, pinned *[2]string) (R
 	if result.accountLabel != "" {
 		s.accountLabel = result.accountLabel
 	}
-	if err := guard.Write(putSlot(copyDocument(document).(map[string]any), s, result.material)); err != nil {
+	if err := guard.Write(putSlot(copyDocument(document).(JSONObject), s, result.material)); err != nil {
 		return RequestAuth{}, err
 	}
 	return a.authFrom(ctx, provider, result.material, s)

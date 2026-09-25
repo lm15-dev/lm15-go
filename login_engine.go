@@ -206,16 +206,16 @@ func (r *httpReply) failureSummary() string {
 }
 
 func (r *httpReply) str(key string) string {
-	s, _ := r.body[key].(string)
+	s, _ := r.body.Get(key).(string)
 	return s
 }
 
 func (r *httpReply) errorCode() string {
-	switch v := r.body["error"].(type) {
+	switch v := jsonView(r.body.Get("error")).(type) {
 	case string:
 		return v
-	case map[string]any:
-		s, _ := v["code"].(string)
+	case JSONObject:
+		s, _ := v.Get("code").(string)
 		return s
 	}
 	return ""
@@ -246,14 +246,12 @@ func (c *loginContext) form(rawURL string, pairs [][2]string, headers [][2]strin
 	return c.exchange("POST", rawURL, []byte(formEncode(pairs)), "application/x-www-form-urlencoded", headers)
 }
 
-func (c *loginContext) json(rawURL string, body any, headers [][2]string) (*httpReply, error) {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetEscapeHTML(false)
-	if err := enc.Encode(body); err != nil {
+func (c *loginContext) json(rawURL string, body JSONObject, headers [][2]string) (*httpReply, error) {
+	raw, err := EncodeJSON(body)
+	if err != nil {
 		return nil, err
 	}
-	return c.exchange("POST", rawURL, bytes.TrimRight(buf.Bytes(), "\n"), "application/json", headers)
+	return c.exchange("POST", rawURL, raw, "application/json", headers)
 }
 
 func (c *loginContext) get(rawURL string, headers [][2]string) (*httpReply, error) {
@@ -337,18 +335,18 @@ func (c *loginContext) exchange(method, rawURL string, body []byte, contentType 
 		}
 		if parsed, err := decodeStrictJSON(raw); err == nil {
 			reply.responseFormat = "json"
-			if obj, ok := parsed.(map[string]any); ok {
+			if obj, ok := asObject(parsed); ok {
 				reply.body = obj
 			}
 		}
 		code := ""
-		switch v := reply.body["error"].(type) {
+		switch v := jsonView(reply.body.Get("error")).(type) {
 		case string:
 			code = v
-		case map[string]any:
-			if s, ok := v["code"].(string); ok {
+		case JSONObject:
+			if s, ok := v.Get("code").(string); ok {
 				code = s
-			} else if s, ok := v["type"].(string); ok {
+			} else if s, ok := v.Get("type").(string); ok {
 				code = s
 			}
 		}
@@ -690,21 +688,21 @@ func strictValue(dec *json.Decoder) (any, error) {
 	case json.Delim:
 		switch t {
 		case '{':
-			out := map[string]any{}
+			out := JSONObject{}
 			for dec.More() {
 				keyTok, err := dec.Token()
 				if err != nil {
 					return nil, err
 				}
 				key, _ := keyTok.(string)
-				if _, dup := out[key]; dup {
+				if out.Has(key) {
 					return nil, fmt.Errorf("duplicate member name")
 				}
 				value, err := strictValue(dec)
 				if err != nil {
 					return nil, err
 				}
-				out[key] = value
+				out = append(out, Member{key, value})
 			}
 			if _, err := dec.Token(); err != nil {
 				return nil, err

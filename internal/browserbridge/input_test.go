@@ -10,7 +10,13 @@ import (
 
 func TestBuildRejectsLocalFilesAndFixtureCredentials(t *testing.T) {
 	msg := input("openai-chat")
-	msg["canonical_request"].(lm15.JSONObject)["messages"] = []any{lm15.JSONObject{"role": "user", "parts": []any{lm15.JSONObject{"type": "image", "path": "/not-a-browser-input.png", "media_type": "image/png"}}}}
+	canonical := msg.Get("canonical_request").(lm15.JSONObject)
+	messages, err := lm15.DecodeJSON([]byte(`[{"role": "user", "parts": [{"type": "image", "path": "/not-a-browser-input.png", "media_type": "image/png"}]}]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical.Set("messages", messages)
+	msg.Set("canonical_request", canonical)
 	reply := Call(context.Background(), "build_request", JSON(msg), nil, nil)
 	if !strings.Contains(reply, "cannot read local media paths") {
 		t.Fatal(reply)

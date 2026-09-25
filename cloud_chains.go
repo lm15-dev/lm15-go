@@ -219,7 +219,7 @@ func jsonBody(raw []byte) JSONObject {
 	if err != nil {
 		return JSONObject{}
 	}
-	if obj, ok := data.(map[string]any); ok {
+	if obj, ok := asObject(data); ok {
 		return obj
 	}
 	return JSONObject{}
@@ -267,12 +267,12 @@ func expiresFrom(now time.Time, seconds any) *time.Time {
 }
 
 func bearerFromOAuth(data JSONObject, now time.Time, what string) (BearerToken, error) {
-	token := stringOnly(data["access_token"])
+	token := stringOnly(data.Get("access_token"))
 	if token == "" {
 		return BearerToken{}, chainAuthError(what + ": no valid access_token in response")
 	}
 	var expires *time.Time
-	if v := data["expires_on"]; v != nil && wireStr(v) != "" {
+	if v := data.Get("expires_on"); v != nil && wireStr(v) != "" {
 		if f, err := jsonFloat64(v, ""); err == nil {
 			t := time.Unix(int64(f), 0).UTC()
 			expires = &t
@@ -284,7 +284,7 @@ func bearerFromOAuth(data JSONObject, now time.Time, what string) (BearerToken, 
 		}
 	}
 	if expires == nil {
-		if v := data["expires_in"]; v != nil && wireStr(v) != "" {
+		if v := data.Get("expires_in"); v != nil && wireStr(v) != "" {
 			expires = expiresFrom(now, v)
 		}
 	}
@@ -400,9 +400,9 @@ func awsStatic(section map[string]string) *AwsCredentials {
 
 func awsFromResponse(d JSONObject) (AwsCredentials, error) {
 	var expires *time.Time
-	raw := d["Expiration"]
+	raw := d.Get("Expiration")
 	if raw == nil {
-		raw = d["expiration"]
+		raw = d.Get("expiration")
 	}
 	switch x := raw.(type) {
 	case string:
@@ -419,12 +419,12 @@ func awsFromResponse(d JSONObject) (AwsCredentials, error) {
 			expires = &t
 		}
 	}
-	key := firstStr(d["AccessKeyId"], d["accessKeyId"])
-	secret := firstStr(d["SecretAccessKey"], d["secretAccessKey"])
+	key := firstStr(d.Get("AccessKeyId"), d.Get("accessKeyId"))
+	secret := firstStr(d.Get("SecretAccessKey"), d.Get("secretAccessKey"))
 	if key == "" || secret == "" {
 		return AwsCredentials{}, chainAuthError("AWS credential response lacks access key id or secret access key")
 	}
-	return AwsCredentials{AccessKeyID: key, SecretAccessKey: secret, SessionToken: firstStr(d["SessionToken"], d["Token"], d["sessionToken"]), ExpiresAt: expires}, nil
+	return AwsCredentials{AccessKeyID: key, SecretAccessKey: secret, SessionToken: firstStr(d.Get("SessionToken"), d.Get("Token"), d.Get("sessionToken")), ExpiresAt: expires}, nil
 }
 
 type stsResponse struct {
@@ -652,26 +652,26 @@ func ssoAcquire(ctx *ChainContext) (Credential, error) {
 	token := jsonBody([]byte(raw))
 	now := ctx.now()
 	var expires *time.Time
-	if s := stringOnly(token["expiresAt"]); s != "" {
+	if s := stringOnly(token.Get("expiresAt")); s != "" {
 		if t, err := ParseRFC3339(s); err == nil {
 			expires = &t
 		}
 	}
-	access := stringOnly(token["accessToken"])
+	access := stringOnly(token.Get("accessToken"))
 	ssoRegion := cfg["sso_region"]
 	if ssoRegion == "" {
 		ssoRegion = "us-east-1"
 	}
 	if access == "" || (expires != nil && expires.Sub(now) <= expirySkew) {
-		if stringOnly(token["refreshToken"]) == "" || stringOnly(token["clientId"]) == "" || stringOnly(token["clientSecret"]) == "" {
+		if stringOnly(token.Get("refreshToken")) == "" || stringOnly(token.Get("clientId")) == "" || stringOnly(token.Get("clientSecret")) == "" {
 			return nil, NotConfiguredErrorf("", nil, "aws sso login", "IAM Identity Center: token expired and not refreshable; run `aws sso login`")
 		}
 		data, err := exchange(ctx, "POST", "https://oidc."+ssoRegion+".amazonaws.com/token", map[string]string{"content-type": "application/json"},
-			mustJSON(JSONObject{"clientId": token["clientId"], "clientSecret": token["clientSecret"], "grantType": "refresh_token", "refreshToken": token["refreshToken"]}), "sso-oidc CreateToken")
+			mustJSON(JSONObject{{"clientId", token.Get("clientId")}, {"clientSecret", token.Get("clientSecret")}, {"grantType", "refresh_token"}, {"refreshToken", token.Get("refreshToken")}}), "sso-oidc CreateToken")
 		if err != nil {
 			return nil, err
 		}
-		access = stringOnly(data["accessToken"])
+		access = stringOnly(data.Get("accessToken"))
 		if access == "" {
 			return nil, chainAuthError("sso-oidc CreateToken: no accessToken")
 		}
@@ -688,7 +688,7 @@ func ssoAcquire(ctx *ChainContext) (Credential, error) {
 	if status >= 400 {
 		return nil, chainAuthError(fmt.Sprintf("sso GetRoleCredentials: HTTP %d", status))
 	}
-	return awsFromResponse(wireObj(jsonBody(rawCreds)["roleCredentials"]))
+	return awsFromResponse(wireObj(jsonBody(rawCreds).Get("roleCredentials")))
 }
 
 func loginConfig(ctx *ChainContext) (string, error) {
@@ -713,11 +713,11 @@ func loginCached(ctx *ChainContext) (*AwsCredentials, error) {
 	if !ok {
 		return nil, nil
 	}
-	token := wireObj(jsonBody([]byte(raw))["accessToken"])
-	if stringOnly(token["accessKeyId"]) == "" {
+	token := wireObj(jsonBody([]byte(raw)).Get("accessToken"))
+	if stringOnly(token.Get("accessKeyId")) == "" {
 		return nil, nil
 	}
-	creds, err := awsFromResponse(JSONObject{"AccessKeyId": token["accessKeyId"], "SecretAccessKey": token["secretAccessKey"], "SessionToken": token["sessionToken"], "Expiration": token["expiresAt"]})
+	creds, err := awsFromResponse(JSONObject{{"AccessKeyId", token.Get("accessKeyId")}, {"SecretAccessKey", token.Get("secretAccessKey")}, {"SessionToken", token.Get("sessionToken")}, {"Expiration", token.Get("expiresAt")}})
 	if err != nil {
 		return nil, err
 	}
@@ -753,7 +753,7 @@ func processAcquire(ctx *ChainContext) (Credential, error) {
 		return nil, err
 	}
 	data := jsonBody([]byte(out))
-	if wireInt(data["Version"], 0) != 1 {
+	if wireInt(data.Get("Version"), 0) != 1 {
 		return nil, chainAuthError("credential_process: output Version must be 1")
 	}
 	return awsFromResponse(data)
@@ -883,7 +883,7 @@ func imdsAcquire(ctx *ChainContext) (Credential, error) {
 		return nil, nil
 	}
 	data := jsonBody(raw)
-	if code := data["Code"]; code != nil && wireStr(code) != "Success" {
+	if code := data.Get("Code"); code != nil && wireStr(code) != "Success" {
 		return nil, chainAuthError("IMDS rejected the credential request")
 	}
 	return awsFromResponse(data)
@@ -1321,15 +1321,15 @@ func azCLIAcquire(ctx *ChainContext) (Credential, error) {
 		return nil, err
 	}
 	data := jsonBody([]byte(out))
-	if data["accessToken"] == nil {
+	if data.Get("accessToken") == nil {
 		return nil, nil
 	}
-	parsed, err := bearerFromOAuth(JSONObject{"access_token": data["accessToken"], "expires_on": data["expires_on"]}, ctx.now(), "Azure CLI")
+	parsed, err := bearerFromOAuth(JSONObject{{"access_token", data.Get("accessToken")}, {"expires_on", data.Get("expires_on")}}, ctx.now(), "Azure CLI")
 	if err != nil {
 		return nil, err
 	}
-	if parsed.ExpiresAt == nil && data["expiresOn"] != nil {
-		if t, err := ParseRFC3339(wireStr(data["expiresOn"])); err == nil {
+	if parsed.ExpiresAt == nil && data.Get("expiresOn") != nil {
+		if t, err := ParseRFC3339(wireStr(data.Get("expiresOn"))); err == nil {
 			parsed.ExpiresAt = &t
 		}
 	}
@@ -1347,10 +1347,10 @@ func pwshAcquire(ctx *ChainContext) (Credential, error) {
 		return nil, err
 	}
 	data := jsonBody([]byte(out))
-	if data["Token"] == nil {
+	if data.Get("Token") == nil {
 		return nil, nil
 	}
-	return bearerFromOAuth(JSONObject{"access_token": data["Token"]}, ctx.now(), "Azure PowerShell")
+	return bearerFromOAuth(JSONObject{{"access_token", data.Get("Token")}}, ctx.now(), "Azure PowerShell")
 }
 
 func azdAcquire(ctx *ChainContext) (Credential, error) {
@@ -1362,15 +1362,15 @@ func azdAcquire(ctx *ChainContext) (Credential, error) {
 		return nil, err
 	}
 	data := jsonBody([]byte(out))
-	if data["token"] == nil {
+	if data.Get("token") == nil {
 		return nil, nil
 	}
-	parsed, err := bearerFromOAuth(JSONObject{"access_token": data["token"]}, ctx.now(), "Azure Developer CLI")
+	parsed, err := bearerFromOAuth(JSONObject{{"access_token", data.Get("token")}}, ctx.now(), "Azure Developer CLI")
 	if err != nil {
 		return nil, err
 	}
-	if data["expiresOn"] != nil {
-		if t, err := ParseRFC3339(wireStr(data["expiresOn"])); err == nil {
+	if data.Get("expiresOn") != nil {
+		if t, err := ParseRFC3339(wireStr(data.Get("expiresOn"))); err == nil {
 			parsed.ExpiresAt = &t
 		}
 	}
@@ -1459,25 +1459,25 @@ func GCPServiceAccountAssertion(ctx *ChainContext, info JSONObject, scope string
 	if scope == "" {
 		scope = gcpScope
 	}
-	key, err := rs256.LoadPrivateKey(wireStr(info["private_key"]))
+	key, err := rs256.LoadPrivateKey(wireStr(info.Get("private_key")))
 	if err != nil {
 		return "", "", NotConfiguredErrorf("", nil, "", "%s", err.Error())
 	}
 	now := ctx.now().Unix()
-	tokenURI := stringOnly(info["token_uri"])
+	tokenURI := stringOnly(info.Get("token_uri"))
 	if tokenURI == "" {
 		tokenURI = gcpTokenURL
 	}
 	var header rs256.OrderedObject
 	header.Set("alg", "RS256")
 	header.Set("typ", "JWT")
-	if kid := stringOnly(info["private_key_id"]); kid != "" {
+	if kid := stringOnly(info.Get("private_key_id")); kid != "" {
 		header.Set("kid", kid)
 	}
 	var payload rs256.OrderedObject
 	payload.Set("iat", now)
 	payload.Set("exp", now+3600)
-	payload.Set("iss", wireStr(info["client_email"]))
+	payload.Set("iss", wireStr(info.Get("client_email")))
 	payload.Set("aud", tokenURI)
 	payload.Set("scope", scope)
 	jwt, err := rs256.JWTEncode(header, payload, key)
@@ -1493,24 +1493,24 @@ func gcpCredentialFile(ctx *ChainContext, path string) (JSONObject, error) {
 	if err != nil {
 		return nil, NotConfiguredErrorf("", nil, "", "%s: not valid JSON", path)
 	}
-	obj, _ := data.(map[string]any)
+	obj, _ := asObject(data)
 	return obj, nil
 }
 
 func gcpFromInfo(ctx *ChainContext, info JSONObject, where string) (Credential, error) {
 	now := ctx.now()
-	switch wireStr(info["type"]) {
+	switch wireStr(info.Get("type")) {
 	case "authorized_user":
 		for _, k := range []string{"refresh_token", "client_id", "client_secret"} {
-			if !truthy(info[k]) {
+			if !truthy(info.Get(k)) {
 				return nil, NotConfiguredErrorf("", nil, "", "%s: authorized_user file lacks %s", where, k)
 			}
 		}
-		tokenURI := stringOnly(info["token_uri"])
+		tokenURI := stringOnly(info.Get("token_uri"))
 		if tokenURI == "" {
 			tokenURI = gcpTokenURL
 		}
-		pairs := [][2]string{{"grant_type", "refresh_token"}, {"client_id", wireStr(info["client_id"])}, {"client_secret", wireStr(info["client_secret"])}, {"refresh_token", wireStr(info["refresh_token"])}}
+		pairs := [][2]string{{"grant_type", "refresh_token"}, {"client_id", wireStr(info.Get("client_id"))}, {"client_secret", wireStr(info.Get("client_secret"))}, {"refresh_token", wireStr(info.Get("refresh_token"))}}
 		data, err := exchange(ctx, "POST", tokenURI, map[string]string{"content-type": "application/x-www-form-urlencoded"}, formBody(pairs), "Google OAuth refresh")
 		if err != nil {
 			return nil, err
@@ -1529,7 +1529,7 @@ func gcpFromInfo(ctx *ChainContext, info JSONObject, where string) (Credential, 
 	case "external_account":
 		return gcpExternalAccount(ctx, info, where)
 	case "impersonated_service_account":
-		source := wireObj(info["source_credentials"])
+		source := wireObj(info.Get("source_credentials"))
 		if source == nil {
 			return nil, NotConfiguredErrorf("", nil, "", "%s: impersonated_service_account lacks source_credentials", where)
 		}
@@ -1537,26 +1537,26 @@ func gcpFromInfo(ctx *ChainContext, info JSONObject, where string) (Credential, 
 		if err != nil {
 			return nil, err
 		}
-		return gcpImpersonate(ctx, base.(BearerToken), wireStr(info["service_account_impersonation_url"]), wireList(info["delegates"]))
+		return gcpImpersonate(ctx, base.(BearerToken), wireStr(info.Get("service_account_impersonation_url")), wireList(info.Get("delegates")))
 	}
-	return nil, NotConfiguredErrorf("", nil, "", "%s: credential type %q is not supported by lm15 (external_account_authorized_user and gdch_service_account are stated gaps)", where, wireStr(info["type"]))
+	return nil, NotConfiguredErrorf("", nil, "", "%s: credential type %q is not supported by lm15 (external_account_authorized_user and gdch_service_account are stated gaps)", where, wireStr(info.Get("type")))
 }
 
 func gcpImpersonate(ctx *ChainContext, source BearerToken, impersonationURL string, delegates []any) (Credential, error) {
 	if delegates == nil {
 		delegates = []any{}
 	}
-	body := mustJSON(JSONObject{"delegates": delegates, "scope": []any{gcpScope}, "lifetime": "3600s"})
+	body := mustJSON(JSONObject{{"delegates", delegates}, {"scope", []any{gcpScope}}, {"lifetime", "3600s"}})
 	data, err := exchange(ctx, "POST", impersonationURL, map[string]string{"content-type": "application/json", "authorization": "Bearer " + source.Value}, body, "generateAccessToken")
 	if err != nil {
 		return nil, err
 	}
-	token := stringOnly(data["accessToken"])
+	token := stringOnly(data.Get("accessToken"))
 	if token == "" {
 		return nil, chainAuthError("generateAccessToken: no accessToken")
 	}
 	var expires *time.Time
-	if s := stringOnly(data["expireTime"]); s != "" {
+	if s := stringOnly(data.Get("expireTime")); s != "" {
 		if t, err := ParseRFC3339(s); err == nil {
 			expires = &t
 		}
@@ -1565,26 +1565,26 @@ func gcpImpersonate(ctx *ChainContext, source BearerToken, impersonationURL stri
 }
 
 func gcpExternalAccount(ctx *ChainContext, info JSONObject, where string) (Credential, error) {
-	source := wireObj(info["credential_source"])
-	if _, has := source["environment_id"]; has {
+	source := wireObj(info.Get("credential_source"))
+	if _, has := source.Lookup("environment_id"); has {
 		return nil, NotConfiguredErrorf("", nil, "", "%s: external_account with an AWS credential_source is a stated gap in lm15; use a file/url/executable source or a service account", where)
 	}
 	subject := ""
 	found := false
-	format := wireObj(source["format"])
+	format := wireObj(source.Get("format"))
 	switch {
-	case truthy(source["file"]):
-		raw, ok := ctx.read(wireStr(source["file"]))
+	case truthy(source.Get("file")):
+		raw, ok := ctx.read(wireStr(source.Get("file")))
 		if !ok {
-			return nil, NotConfiguredErrorf("", nil, "", "%s: subject token file %s is unreadable", where, wireStr(source["file"]))
+			return nil, NotConfiguredErrorf("", nil, "", "%s: subject token file %s is unreadable", where, wireStr(source.Get("file")))
 		}
 		subject, found = strings.TrimSpace(raw), true
-	case truthy(source["url"]):
+	case truthy(source.Get("url")):
 		headers := map[string]string{}
-		for k, v := range wireObj(source["headers"]) {
+		for k, v := range wireObj(source.Get("headers")).All() {
 			headers[k] = wireStr(v)
 		}
-		status, _, raw, err := ctx.HTTP("GET", wireStr(source["url"]), headers, nil, 30*time.Second)
+		status, _, raw, err := ctx.HTTP("GET", wireStr(source.Get("url")), headers, nil, 30*time.Second)
 		if err != nil {
 			return nil, err
 		}
@@ -1592,37 +1592,37 @@ func gcpExternalAccount(ctx *ChainContext, info JSONObject, where string) (Crede
 			return nil, chainAuthError(fmt.Sprintf("%s: subject token url HTTP %d", where, status))
 		}
 		subject, found = strings.TrimSpace(string(raw)), true
-	case wireObj(source["executable"]) != nil:
+	case wireObj(source.Get("executable")) != nil:
 		if ctx.Run == nil {
 			return nil, NotConfiguredErrorf("", nil, "", "%s: executable credential source needs subprocess access", where)
 		}
 		if ctx.Env["GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES"] != "1" {
 			return nil, NotConfiguredErrorf("", nil, "", "%s: set GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES=1 to allow the executable source", where)
 		}
-		exe := wireObj(source["executable"])
-		timeoutMs := wireFloat(exe["timeout_millis"], 30000)
-		out, err := ctx.Run(shellSplit(wireStr(exe["command"])), time.Duration(timeoutMs)*time.Millisecond)
+		exe := wireObj(source.Get("executable"))
+		timeoutMs := wireFloat(exe.Get("timeout_millis"), 30000)
+		out, err := ctx.Run(shellSplit(wireStr(exe.Get("command"))), time.Duration(timeoutMs)*time.Millisecond)
 		if err != nil {
 			return nil, err
 		}
 		data := jsonBody([]byte(out))
-		if v, ok := data["success"].(bool); ok && !v {
+		if v, ok := data.Get("success").(bool); ok && !v {
 			return nil, chainAuthError("external account executable reported failure")
 		}
-		subject, found = firstStr(data["id_token"], data["saml_response"]), true
-		format = JSONObject{"type": "text"}
+		subject, found = firstStr(data.Get("id_token"), data.Get("saml_response")), true
+		format = JSONObject{{"type", "text"}}
 	}
 	if !found {
 		return nil, NotConfiguredErrorf("", nil, "", "%s: external_account credential_source is not file/url/executable", where)
 	}
-	if wireStr(format["type"]) == "json" {
-		subject = wireStr(jsonBody([]byte(subject))[wireStr(format["subject_token_field_name"])])
+	if wireStr(format.Get("type")) == "json" {
+		subject = wireStr(jsonBody([]byte(subject)).Get(wireStr(format.Get("subject_token_field_name"))))
 	}
 	body := mustJSON(JSONObject{
-		"grantType": "urn:ietf:params:oauth:grant-type:token-exchange", "audience": wireStr(info["audience"]), "scope": gcpScope,
-		"requestedTokenType": "urn:ietf:params:oauth:token-type:access_token", "subjectToken": subject, "subjectTokenType": wireStr(info["subject_token_type"]),
+		{"grantType", "urn:ietf:params:oauth:grant-type:token-exchange"}, {"audience", wireStr(info.Get("audience"))}, {"scope", gcpScope},
+		{"requestedTokenType", "urn:ietf:params:oauth:token-type:access_token"}, {"subjectToken", subject}, {"subjectTokenType", wireStr(info.Get("subject_token_type"))},
 	})
-	tokenURL := stringOnly(info["token_url"])
+	tokenURL := stringOnly(info.Get("token_url"))
 	if tokenURL == "" {
 		tokenURL = gcpSTSURL
 	}
@@ -1634,7 +1634,7 @@ func gcpExternalAccount(ctx *ChainContext, info JSONObject, where string) (Crede
 	if err != nil {
 		return nil, err
 	}
-	if u := stringOnly(info["service_account_impersonation_url"]); u != "" {
+	if u := stringOnly(info.Get("service_account_impersonation_url")); u != "" {
 		return gcpImpersonate(ctx, token, u, nil)
 	}
 	return token, nil
@@ -1699,7 +1699,7 @@ func gcpChain(policy AccessPolicy) []Rung {
 			if info == nil {
 				return "absent", path + " missing or unreadable"
 			}
-			t := stringOnly(info["type"])
+			t := stringOnly(info.Get("type"))
 			if t == "" {
 				t = "?"
 			}
@@ -1773,7 +1773,7 @@ func ProfileSettings(policy AccessPolicy, ctx *ChainContext) func(string) string
 					continue
 				}
 				info, _ := gcpCredentialFile(ctx, path)
-				if v := firstStr(info["quota_project_id"], info["project_id"]); v != "" {
+				if v := firstStr(info.Get("quota_project_id"), info.Get("project_id")); v != "" {
 					return v
 				}
 			}
@@ -1911,7 +1911,7 @@ func gcpTyped(rung Rung, name string) Rung {
 		if info == nil {
 			return path, ""
 		}
-		return path, wireStr(info["type"])
+		return path, wireStr(info.Get("type"))
 	}
 	mismatch := func(path, kind string) string {
 		return fmt.Sprintf("%s holds %s credentials; that is the named credential %q, not %q", path, kind, other, name)
@@ -2194,23 +2194,23 @@ func ChainCacheKey(policy AccessPolicy, ctx *ChainContext) string {
 func TokenExchangeBuild(policy AccessPolicy, rung string, inputs JSONObject, ctx *ChainContext) (JSONObject, error) {
 	switch rung {
 	case "adc-env", "adc-file", "service-account":
-		info := wireObj(inputs["credential_file"])
-		scope := stringOnly(inputs["scope"])
+		info := wireObj(inputs.Get("credential_file"))
+		scope := stringOnly(inputs.Get("scope"))
 		tokenURI, assertion, err := GCPServiceAccountAssertion(ctx, info, scope)
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"method": "POST", "url": tokenURI, "headers": JSONObject{"content-type": "application/x-www-form-urlencoded"}, "body_encoding": "form", "body": JSONObject{"grant_type": jwtBearerGrant, "assertion": assertion}}, nil
+		return JSONObject{{"method", "POST"}, {"url", tokenURI}, {"headers", JSONObject{{"content-type", "application/x-www-form-urlencoded"}}}, {"body_encoding", "form"}, {"body", JSONObject{{"grant_type", jwtBearerGrant}, {"assertion", assertion}}}}, nil
 	case "environment":
-		tokenURL, pairs, err := AzureEnvironmentRequest(ctx, stringOnly(inputs["jti"]))
+		tokenURL, pairs, err := AzureEnvironmentRequest(ctx, stringOnly(inputs.Get("jti")))
 		if err != nil {
 			return nil, err
 		}
 		body := JSONObject{}
 		for _, p := range pairs {
-			body[p[0]] = p[1]
+			body.Set(p[0], p[1])
 		}
-		return JSONObject{"method": "POST", "url": tokenURL, "headers": JSONObject{"content-type": "application/x-www-form-urlencoded"}, "body_encoding": "form", "body": body}, nil
+		return JSONObject{{"method", "POST"}, {"url", tokenURL}, {"headers", JSONObject{{"content-type", "application/x-www-form-urlencoded"}}}, {"body_encoding", "form"}, {"body", body}}, nil
 	}
 	return nil, valueErrorf("token_exchange_build: rung %q has no deterministic request", rung)
 }
@@ -2225,7 +2225,7 @@ func TokenExchangeParse(policy AccessPolicy, rung string, status int, body JSONO
 		}
 		return bearerFromOAuth(body, now, rung)
 	case "credential_process":
-		if status != 0 || wireInt(body["Version"], 0) != 1 {
+		if status != 0 || wireInt(body.Get("Version"), 0) != 1 {
 			return nil, chainAuthError("credential_process failed or returned an unsupported Version")
 		}
 		return awsFromResponse(body)

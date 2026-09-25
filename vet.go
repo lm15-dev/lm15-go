@@ -69,12 +69,12 @@ func HandleVetLine(line []byte) []byte {
 	if err != nil {
 		return mustJSON(vetErrorReply(nil, err))
 	}
-	msg, ok := raw.(map[string]any)
+	msg, ok := asObject(raw)
 	if !ok {
 		return mustJSON(vetErrorReply(nil, valueErrorf("request must be a JSON object")))
 	}
-	id := msg["id"]
-	op := wireStr(msg["op"])
+	id := msg.Get("id")
+	op := wireStr(msg.Get("op"))
 	handler, ok := VetHandlers[op]
 	if !ok {
 		return mustJSON(vetErrorReply(id, valueErrorf("unknown op: %s", op)))
@@ -90,7 +90,7 @@ func HandleVetLine(line []byte) []byte {
 	if err != nil {
 		return mustJSON(vetErrorReply(id, err))
 	}
-	return mustJSON(JSONObject{"id": id, "ok": true, "result": result})
+	return mustJSON(JSONObject{{"id", id}, {"ok", true}, {"result", result}})
 }
 
 func vetErrorReply(id any, err error) JSONObject {
@@ -99,55 +99,56 @@ func vetErrorReply(id any, err error) JSONObject {
 		extra = f.extra
 		err = f.cause
 	}
-	errObj := JSONObject{"message": err.Error()}
+	// The reference writes type, message, code, then the extras.
+	errObj := JSONObject{{"type", nil}, {"message", err.Error()}}
 	if e := AsError(err); e != nil {
-		errObj["type"] = e.ClassName()
-		errObj["message"] = e.Message
+		errObj.Set("type", e.ClassName())
+		errObj.Set("message", e.Message)
 		if e.Code != "" {
-			errObj["code"] = e.Code
+			errObj.Set("code", e.Code)
 		}
 		if e.Kind.IsA(KindStreamAssembly) && e.Partial != nil {
-			errObj["partial_response"] = ResponseToDict(e.Partial, false)
+			errObj.Set("partial_response", ResponseToDict(e.Partial, false))
 		}
 		if e.Feature != "" {
 			// MAP-13: the config path a refusal is about, so a policy layer
 			// can act on it; pinned by cases as expect_lm15.raises.feature.
-			errObj["feature"] = e.Feature
+			errObj.Set("feature", e.Feature)
 		}
 		if e.Kind.IsA(KindUnknownModel) || e.Kind.IsA(KindAmbiguousModel) {
-			errObj["model"] = e.Model
+			errObj.Set("model", e.Model)
 			if e.Kind.IsA(KindAmbiguousModel) {
-				errObj["providers"] = toAnyList(e.Providers, func(s string) any { return s })
+				errObj.Set("providers", toAnyList(e.Providers, func(s string) any { return s }))
 			}
 		}
 	} else if kind := NativeErrorKind(err); kind != "" {
-		errObj["type"] = kind
+		errObj.Set("type", kind)
 	} else {
-		errObj["type"] = fmt.Sprintf("%T", err)
+		errObj.Set("type", fmt.Sprintf("%T", err))
 	}
-	for k, v := range extra {
-		errObj[k] = v
+	for k, v := range extra.All() {
+		errObj.Set(k, v)
 	}
-	return JSONObject{"id": id, "ok": false, "error": errObj}
+	return JSONObject{{"id", id}, {"ok", false}, {"error", errObj}}
 }
 
 // ─── Adapter construction ────────────────────────────────────────────
 
 func vetCredential(msg JSONObject) (CredentialLike, error) {
-	if c := wireObj(msg["credential"]); c != nil {
+	if c := wireObj(msg.Get("credential")); c != nil {
 		return CredentialFromDict(c)
 	}
-	if k, ok := msg["api_key"]; ok {
+	if k, ok := msg.Lookup("api_key"); ok {
 		return wireStr(k), nil
 	}
 	return parseOnlyKey, nil
 }
 
 func vetClock(msg JSONObject) (func() time.Time, error) {
-	if msg["now"] == nil {
+	if msg.Get("now") == nil {
 		return nil, nil
 	}
-	fixed, err := ParseRFC3339(wireStr(msg["now"]))
+	fixed, err := ParseRFC3339(wireStr(msg.Get("now")))
 	if err != nil {
 		return nil, err
 	}
@@ -155,12 +156,12 @@ func vetClock(msg JSONObject) (func() time.Time, error) {
 }
 
 func vetSettings(msg JSONObject) map[string]string {
-	obj := wireObj(msg["settings"])
+	obj := wireObj(msg.Get("settings"))
 	if obj == nil {
 		return nil
 	}
 	out := map[string]string{}
-	for k, v := range obj {
+	for k, v := range obj.All() {
 		out[k] = wireStr(v)
 	}
 	return out
@@ -207,11 +208,11 @@ func vetAdapter(msg JSONObject, parseOnly bool) (LM, error) {
 		return nil, err
 	}
 	var opts []Option
-	if def, ok := LookupProvider(wireStr(msg["provider"])); ok && def.ID == "openai-codex" {
+	if def, ok := LookupProvider(wireStr(msg.Get("provider"))); ok && def.ID == "openai-codex" {
 		// Fixture identity belongs to the vet shim, never a real SDK caller.
 		opts = append(opts, WithAccountID("test-account"))
 	}
-	return AdapterForProvider(wireStr(msg["provider"]), cred, wireStr(msg["base_url"]), vetSettings(msg), clock, opts...)
+	return AdapterForProvider(wireStr(msg.Get("provider")), cred, wireStr(msg.Get("base_url")), vetSettings(msg), clock, opts...)
 }
 
 // NormalizeTransportRequest renders a wire request in the protocol's shape.
@@ -219,21 +220,21 @@ func NormalizeTransportRequest(req *TransportRequest) JSONObject {
 	u, params := splitURL(req.URL)
 	headers := JSONObject{}
 	for _, h := range req.Headers {
-		headers[strings.ToLower(h[0])] = h[1]
+		headers.Set(strings.ToLower(h[0]), h[1])
 	}
 	paramsObj := JSONObject{}
-	for k, v := range params {
-		paramsObj[k] = v
+	for _, k := range sortedMapKeys(params) {
+		paramsObj = append(paramsObj, Member{k, params[k]})
 	}
-	out := JSONObject{"method": req.Method, "url": u, "params": paramsObj, "headers": headers, "body": nil}
+	out := JSONObject{{"method", req.Method}, {"url", u}, {"params", paramsObj}, {"headers", headers}, {"body", nil}}
 	if len(req.Body) > 0 {
-		if strings.Contains(strings.ToLower(wireStr(headers["content-type"])), "json") {
+		if strings.Contains(strings.ToLower(wireStr(headers.Get("content-type"))), "json") {
 			if decoded, err := DecodeJSON(req.Body); err == nil {
-				out["body"] = decoded
+				out.Set("body", decoded)
 				return out
 			}
 		}
-		out["body_b64"] = base64.StdEncoding.EncodeToString(req.Body)
+		out.Set("body_b64", base64.StdEncoding.EncodeToString(req.Body))
 	}
 	return out
 }
@@ -246,27 +247,27 @@ func normalizedOrErr(req *TransportRequest, err error) (JSONObject, error) {
 }
 
 func vetBody(msg JSONObject) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(wireStr(msg["body_b64"]))
+	return base64.StdEncoding.DecodeString(wireStr(msg.Get("body_b64")))
 }
 
 func vetHeaders(msg JSONObject) [][2]string {
 	var out [][2]string
-	for _, k := range sortedKeys(wireObj(msg["headers"])) {
-		out = append(out, [2]string{k, wireStr(wireObj(msg["headers"])[k])})
+	for k, v := range wireObj(msg.Get("headers")).All() {
+		out = append(out, [2]string{k, wireStr(v)})
 	}
 	return out
 }
 
 func responseResult(resp *Response) JSONObject {
-	result := JSONObject{"canonical_response": ResponseToDict(resp, false)}
-	if unmapped, ok := resp.ProviderData["_lm15_unmapped"]; ok && unmapped != nil {
-		result["unmapped"] = unmapped
+	result := JSONObject{{"canonical_response", ResponseToDict(resp, false)}}
+	if unmapped, ok := resp.ProviderData.Lookup("_lm15_unmapped"); ok && unmapped != nil {
+		result.Set("unmapped", unmapped)
 	}
 	return result
 }
 
 func vetRequest(msg JSONObject) (*Request, error) {
-	obj := wireObj(msg["canonical_request"])
+	obj := wireObj(msg.Get("canonical_request"))
 	if obj == nil {
 		return nil, keyError("canonical_request")
 	}
@@ -281,7 +282,7 @@ func vetCapabilities(JSONObject) (JSONObject, error) {
 		ops = append(ops, k)
 	}
 	sort.Strings(ops)
-	return JSONObject{"language": "go", "ops": toAnyList(ops, func(s string) any { return s }), "impl_version": Version}, nil
+	return JSONObject{{"language", "go"}, {"ops", toAnyList(ops, func(s string) any { return s })}, {"impl_version", Version}}, nil
 }
 
 func vetBuildRequest(msg JSONObject) (JSONObject, error) {
@@ -293,7 +294,7 @@ func vetBuildRequest(msg JSONObject) (JSONObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	wire, adaptations, err := lm.Build(req, truthy(msg["stream"]))
+	wire, adaptations, err := lm.Build(req, truthy(msg.Get("stream")))
 	if err != nil {
 		return nil, err
 	}
@@ -301,11 +302,11 @@ func vetBuildRequest(msg JSONObject) (JSONObject, error) {
 	if len(adaptations) > 0 {
 		// MAP-13: the record, without the adapter's own wording (never
 		// pinned).
-		out["adaptations"] = toAnyList(adaptations, func(a Adaptation) any {
+		out.Set("adaptations", toAnyList(adaptations, func(a Adaptation) any {
 			d := AdaptationToDict(a)
-			delete(d, "reason")
+			d.Delete("reason")
 			return d
-		})
+		}))
 	}
 	return out, nil
 }
@@ -315,15 +316,15 @@ func vetIngestOpenAIChat(msg JSONObject) (JSONObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	body := wireObj(msg["body"])
+	body := wireObj(msg.Get("body"))
 	if body == nil {
-		return nil, typeErrorf("a Chat Completions request body is a JSON object, got %s", jsonTypeName(msg["body"]))
+		return nil, typeErrorf("a Chat Completions request body is a JSON object, got %s", jsonTypeName(msg.Get("body")))
 	}
 	req, err := lm.RequestFromOpenAIChat(body)
 	if err != nil {
 		return nil, err
 	}
-	return JSONObject{"canonical_request": RequestToDict(req)}, nil
+	return JSONObject{{"canonical_request", RequestToDict(req)}}, nil
 }
 
 func vetParseResponse(msg JSONObject) (JSONObject, error) {
@@ -339,7 +340,7 @@ func vetParseResponse(msg JSONObject) (JSONObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := lm.ParseResponse(req, &HTTPResponse{Status: wireInt(msg["status"], 200), Reason: "OK", Headers: [][2]string{{"content-type", "application/json"}}, Body: body})
+	resp, err := lm.ParseResponse(req, &HTTPResponse{Status: wireInt(msg.Get("status"), 200), Reason: "OK", Headers: [][2]string{{"content-type", "application/json"}}, Body: body})
 	if err != nil {
 		return nil, err
 	}
@@ -400,13 +401,13 @@ func vetReplayStream(msg JSONObject) (JSONObject, error) {
 	resp, err := MaterializeResponse(SliceSeq(events), req)
 	if err != nil {
 		if IsKind(err, KindStreamAssembly) {
-			return nil, &vetFailure{cause: err, extra: JSONObject{"events": dicts}}
+			return nil, &vetFailure{cause: err, extra: JSONObject{{"events", dicts}}}
 		}
 		return nil, err
 	}
-	result := JSONObject{"events": dicts}
-	for k, v := range responseResult(resp) {
-		result[k] = v
+	result := JSONObject{{"events", dicts}}
+	for k, v := range responseResult(resp).All() {
+		result.Set(k, v)
 	}
 	return result, nil
 }
@@ -416,12 +417,12 @@ func vetNormalizeError(msg JSONObject) (JSONObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	e := lm.NormalizeError(wireInt(msg["status"], 0), wireStr(msg["body_text"]))
+	e := lm.NormalizeError(wireInt(msg.Get("status"), 0), wireStr(msg.Get("body_text")))
 	var providerCode any
 	if e.ProviderCode != "" {
 		providerCode = e.ProviderCode
 	}
-	return JSONObject{"class": e.ClassName(), "code": e.Code, "provider_code": providerCode, "message": e.Message}, nil
+	return JSONObject{{"class", e.ClassName()}, {"code", e.Code}, {"provider_code", providerCode}, {"message", e.Message}}, nil
 }
 
 // SerdeKinds maps the protocol's serde kinds to (from_dict, to_dict).
@@ -468,12 +469,12 @@ var SerdeKinds = map[string]struct {
 }
 
 func serdeRoundtrip(msg JSONObject) (JSONObject, error) {
-	kind := wireStr(msg["kind"])
+	kind := wireStr(msg.Get("kind"))
 	entry, ok := SerdeKinds[kind]
 	if !ok {
 		return nil, valueErrorf("unknown kind: %s", kind)
 	}
-	value, ok := msg["value"].(map[string]any)
+	value, ok := asObject(msg.Get("value"))
 	if !ok {
 		return nil, typeErrorf("value must be a JSON object")
 	}
@@ -489,7 +490,7 @@ func vetSerdeRoundtrip(msg JSONObject) (JSONObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	return JSONObject{"value": out}, nil
+	return JSONObject{{"value", out}}, nil
 }
 
 func vetValidate(msg JSONObject) (JSONObject, error) {
@@ -497,19 +498,19 @@ func vetValidate(msg JSONObject) (JSONObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	return JSONObject{"ok": true, "normalized": out}, nil
+	return JSONObject{{"ok", true}, {"normalized", out}}, nil
 }
 
 func vetResolveModel(msg JSONObject) (JSONObject, error) {
 	env := map[string]string{}
-	for k, v := range wireObj(msg["env"]) {
+	for k, v := range wireObj(msg.Get("env")).All() {
 		env[k] = wireStr(v)
 	}
 	var registry *ModelRegistry
-	if _, has := msg["catalog"]; has {
+	if _, has := msg.Lookup("catalog"); has {
 		registry = NewModelRegistry()
-		for _, entry := range wireList(msg["catalog"]) {
-			obj, ok := entry.(map[string]any)
+		for _, entry := range wireList(msg.Get("catalog")) {
+			obj, ok := asObject(entry)
 			if !ok {
 				return nil, typeErrorf("catalog entries must be objects")
 			}
@@ -522,11 +523,11 @@ func vetResolveModel(msg JSONObject) (JSONObject, error) {
 			}
 		}
 	}
-	res, err := Resolve(wireStr(msg["model"]), RouterConfig{Registry: registry, Env: env})
+	res, err := Resolve(wireStr(msg.Get("model")), RouterConfig{Registry: registry, Env: env})
 	if err != nil {
 		return nil, err
 	}
-	return JSONObject{"provider": res.Provider, "model": res.Model, "source": res.Source}, nil
+	return JSONObject{{"provider", res.Provider}, {"model", res.Model}, {"source", res.Source}}, nil
 }
 
 func vetBuildModelsRequest(msg JSONObject) (JSONObject, error) {
@@ -546,14 +547,14 @@ func vetParseModelsResponse(msg JSONObject) (JSONObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	if status := wireInt(msg["status"], 200); status >= 400 {
+	if status := wireInt(msg.Get("status"), 200); status >= 400 {
 		return nil, lm.NormalizeError(status, string(body))
 	}
 	models, err := hooks(lm).modelsFromBody(string(body))
 	if err != nil {
 		return nil, err
 	}
-	return JSONObject{"models": toAnyList(models, func(m ModelInfo) any { return ModelInfoToDict(m) })}, nil
+	return JSONObject{{"models", toAnyList(models, func(m ModelInfo) any { return ModelInfoToDict(m) })}}, nil
 }
 
 // hooks exposes the dialect hooks of a constructed adapter.
@@ -564,8 +565,8 @@ func vetGenerationBuild(msg JSONObject) (JSONObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	gr := wireObj(msg["generation_request"])
-	switch wireStr(msg["kind"]) {
+	gr := wireObj(msg.Get("generation_request"))
+	switch wireStr(msg.Get("kind")) {
 	case "image":
 		req, err := ImageGenerationRequestFromDict(gr)
 		if err != nil {
@@ -579,7 +580,7 @@ func vetGenerationBuild(msg JSONObject) (JSONObject, error) {
 		}
 		return normalizedOrErr(hooks(lm).speechGenerateRequest(&req))
 	}
-	return nil, valueErrorf("unknown generation kind: %s", wireStr(msg["kind"]))
+	return nil, valueErrorf("unknown generation kind: %s", wireStr(msg.Get("kind")))
 }
 
 func vetGenerationParse(msg JSONObject) (JSONObject, error) {
@@ -591,13 +592,13 @@ func vetGenerationParse(msg JSONObject) (JSONObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	status := wireInt(msg["status"], 200)
+	status := wireInt(msg.Get("status"), 200)
 	if status >= 400 {
 		return nil, lm.NormalizeError(status, string(body))
 	}
 	resp := &HTTPResponse{Status: status, Reason: "OK", Headers: vetHeaders(msg), Body: body}
-	gr := wireObj(msg["generation_request"])
-	switch wireStr(msg["kind"]) {
+	gr := wireObj(msg.Get("generation_request"))
+	switch wireStr(msg.Get("kind")) {
 	case "image":
 		req, err := ImageGenerationRequestFromDict(gr)
 		if err != nil {
@@ -619,11 +620,11 @@ func vetGenerationParse(msg JSONObject) (JSONObject, error) {
 		}
 		return SpeechGenerationResponseToDict(out), nil
 	}
-	return nil, valueErrorf("unknown generation kind: %s", wireStr(msg["kind"]))
+	return nil, valueErrorf("unknown generation kind: %s", wireStr(msg.Get("kind")))
 }
 
 func vetLimit(msg JSONObject) int {
-	if v, ok := msg["limit"]; ok && v != nil {
+	if v, ok := msg.Lookup("limit"); ok && v != nil {
 		return wireInt(v, 20)
 	}
 	return 20
@@ -635,21 +636,21 @@ func vetFileOpBuild(msg JSONObject) (JSONObject, error) {
 		return nil, err
 	}
 	h := hooks(lm)
-	switch op := wireStr(msg["file_op"]); op {
+	switch op := wireStr(msg.Get("file_op")); op {
 	case "upload":
-		req, err := FileUploadRequestFromDict(wireObj(msg["upload_request"]))
+		req, err := FileUploadRequestFromDict(wireObj(msg.Get("upload_request")))
 		if err != nil {
 			return nil, err
 		}
 		return normalizedOrErr(h.fileUploadRequest(&req))
 	case "get":
-		return normalizedOrErr(h.fileGetRequest(wireStr(msg["file_id"])))
+		return normalizedOrErr(h.fileGetRequest(wireStr(msg.Get("file_id"))))
 	case "list":
-		return normalizedOrErr(h.fileListRequest(vetLimit(msg), stringOnly(msg["cursor"])))
+		return normalizedOrErr(h.fileListRequest(vetLimit(msg), stringOnly(msg.Get("cursor"))))
 	case "delete":
-		return normalizedOrErr(h.fileDeleteRequest(wireStr(msg["file_id"])))
+		return normalizedOrErr(h.fileDeleteRequest(wireStr(msg.Get("file_id"))))
 	case "download":
-		return normalizedOrErr(h.fileDownloadRequest(wireStr(msg["file_id"])))
+		return normalizedOrErr(h.fileDownloadRequest(wireStr(msg.Get("file_id"))))
 	default:
 		return nil, valueErrorf("unknown file_op: %s", op)
 	}
@@ -664,22 +665,22 @@ func vetFileOpParse(msg JSONObject) (JSONObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	if status := wireInt(msg["status"], 200); status >= 400 {
+	if status := wireInt(msg.Get("status"), 200); status >= 400 {
 		return nil, lm.NormalizeError(status, string(body))
 	}
-	switch kind := wireStr(msg["kind"]); kind {
+	switch kind := wireStr(msg.Get("kind")); kind {
 	case "info":
 		info, err := hooks(lm).fileInfoFromBody(string(body))
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"file": FileInfoToDict(info)}, nil
+		return JSONObject{{"file", FileInfoToDict(info)}}, nil
 	case "page":
 		page, err := hooks(lm).filePageFromListBody(string(body))
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"page": FilePageToDict(page)}, nil
+		return JSONObject{{"page", FilePageToDict(page)}}, nil
 	default:
 		return nil, valueErrorf("unknown file parse kind: %s", kind)
 	}
@@ -692,34 +693,34 @@ func vetCacheOpBuild(msg JSONObject) (JSONObject, error) {
 	}
 	h := hooks(lm)
 	var ttl *int
-	if v, ok := msg["ttl_seconds"]; ok && v != nil {
+	if v, ok := msg.Lookup("ttl_seconds"); ok && v != nil {
 		n, err := jsonInt(v, "ttl_seconds")
 		if err != nil {
 			return nil, err
 		}
 		ttl = &n
 	}
-	switch op := wireStr(msg["cache_op"]); op {
+	switch op := wireStr(msg.Get("cache_op")); op {
 	case "create":
-		prefix, err := RequestFromDict(wireObj(msg["prefix_request"]))
+		prefix, err := RequestFromDict(wireObj(msg.Get("prefix_request")))
 		if err != nil {
 			return nil, err
 		}
 		if err := checkCachePrefix(prefix, ttl); err != nil {
 			return nil, err
 		}
-		return normalizedOrErr(h.cacheCreateRequest(prefix, ttl, stringOnly(msg["label"])))
+		return normalizedOrErr(h.cacheCreateRequest(prefix, ttl, stringOnly(msg.Get("label"))))
 	case "get":
-		return normalizedOrErr(h.cacheGetRequest(wireStr(msg["cache_id"])))
+		return normalizedOrErr(h.cacheGetRequest(wireStr(msg.Get("cache_id"))))
 	case "list":
-		return normalizedOrErr(h.cacheListRequest(vetLimit(msg), stringOnly(msg["cursor"])))
+		return normalizedOrErr(h.cacheListRequest(vetLimit(msg), stringOnly(msg.Get("cursor"))))
 	case "delete":
-		return normalizedOrErr(h.cacheDeleteRequest(wireStr(msg["cache_id"])))
+		return normalizedOrErr(h.cacheDeleteRequest(wireStr(msg.Get("cache_id"))))
 	case "update":
 		if ttl == nil {
 			return nil, keyError("ttl_seconds")
 		}
-		return normalizedOrErr(h.cacheUpdateRequest(wireStr(msg["cache_id"]), *ttl))
+		return normalizedOrErr(h.cacheUpdateRequest(wireStr(msg.Get("cache_id")), *ttl))
 	default:
 		return nil, valueErrorf("unknown cache_op: %s", op)
 	}
@@ -734,29 +735,29 @@ func vetCacheOpParse(msg JSONObject) (JSONObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	if status := wireInt(msg["status"], 200); status >= 400 {
+	if status := wireInt(msg.Get("status"), 200); status >= 400 {
 		return nil, lm.NormalizeError(status, string(body))
 	}
-	switch kind := wireStr(msg["kind"]); kind {
+	switch kind := wireStr(msg.Get("kind")); kind {
 	case "info":
 		info, err := hooks(lm).cacheInfoFromBody(string(body))
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"cache": CacheInfoToDict(info)}, nil
+		return JSONObject{{"cache", CacheInfoToDict(info)}}, nil
 	case "page":
 		page, err := hooks(lm).cachePageFromListBody(string(body))
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"page": CachePageToDict(page)}, nil
+		return JSONObject{{"page", CachePageToDict(page)}}, nil
 	default:
 		return nil, valueErrorf("unknown cache parse kind: %s", kind)
 	}
 }
 
 func requestsList(reqs []*TransportRequest) JSONObject {
-	return JSONObject{"requests": toAnyList(reqs, func(r *TransportRequest) any { return NormalizeTransportRequest(r) })}
+	return JSONObject{{"requests", toAnyList(reqs, func(r *TransportRequest) any { return NormalizeTransportRequest(r) })}}
 }
 
 func vetVideoOpBuild(msg JSONObject) (JSONObject, error) {
@@ -765,9 +766,9 @@ func vetVideoOpBuild(msg JSONObject) (JSONObject, error) {
 		return nil, err
 	}
 	h := hooks(lm)
-	switch action := wireStr(msg["action"]); action {
+	switch action := wireStr(msg.Get("action")); action {
 	case "submit":
-		req, err := VideoGenerationRequestFromDict(wireObj(msg["video_request"]))
+		req, err := VideoGenerationRequestFromDict(wireObj(msg.Get("video_request")))
 		if err != nil {
 			return nil, err
 		}
@@ -777,13 +778,13 @@ func vetVideoOpBuild(msg JSONObject) (JSONObject, error) {
 		}
 		return requestsList([]*TransportRequest{wire}), nil
 	case "status":
-		wire, err := h.videoStatusRequest(wireStr(msg["video_id"]))
+		wire, err := h.videoStatusRequest(wireStr(msg.Get("video_id")))
 		if err != nil {
 			return nil, err
 		}
 		return requestsList([]*TransportRequest{wire}), nil
 	case "result_fetch":
-		wire, err := h.videoResultFetch(wireObj(msg["status_body"]))
+		wire, err := h.videoResultFetch(wireObj(msg.Get("status_body")))
 		if err != nil {
 			return nil, err
 		}
@@ -792,7 +793,7 @@ func vetVideoOpBuild(msg JSONObject) (JSONObject, error) {
 		}
 		return requestsList([]*TransportRequest{wire}), nil
 	case "list":
-		wire, err := h.videoListRequest(vetLimit(msg), stringOnly(msg["model"]))
+		wire, err := h.videoListRequest(vetLimit(msg), stringOnly(msg.Get("model")))
 		if err != nil {
 			return nil, err
 		}
@@ -808,20 +809,20 @@ func vetVideoOpParse(msg JSONObject) (JSONObject, error) {
 		return nil, err
 	}
 	h := hooks(lm)
-	switch kind := wireStr(msg["kind"]); kind {
+	switch kind := wireStr(msg.Get("kind")); kind {
 	case "job":
 		body, err := vetBody(msg)
 		if err != nil {
 			return nil, err
 		}
-		if status := wireInt(msg["status"], 200); status >= 400 {
+		if status := wireInt(msg.Get("status"), 200); status >= 400 {
 			return nil, lm.NormalizeError(status, string(body))
 		}
-		job, err := h.videoJobFromBody(string(body), stringOnly(msg["video_id"]))
+		job, err := h.videoJobFromBody(string(body), stringOnly(msg.Get("video_id")))
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"job": VideoJobToDict(job)}, nil
+		return JSONObject{{"job", VideoJobToDict(job)}}, nil
 	case "list":
 		body, err := vetBody(msg)
 		if err != nil {
@@ -831,21 +832,21 @@ func vetVideoOpParse(msg JSONObject) (JSONObject, error) {
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"jobs": toAnyList(jobs, func(j VideoJobInfo) any { return VideoJobToDict(j) })}, nil
+		return JSONObject{{"jobs", toAnyList(jobs, func(j VideoJobInfo) any { return VideoJobToDict(j) })}}, nil
 	case "part":
 		var fetched *HTTPResponse
-		if msg["fetched_b64"] != nil {
-			raw, err := base64.StdEncoding.DecodeString(wireStr(msg["fetched_b64"]))
+		if msg.Get("fetched_b64") != nil {
+			raw, err := base64.StdEncoding.DecodeString(wireStr(msg.Get("fetched_b64")))
 			if err != nil {
 				return nil, err
 			}
 			fetched = &HTTPResponse{Status: 200, Reason: "OK", Headers: vetHeaders(msg), Body: raw}
 		}
-		part, err := h.videoPart(wireObj(msg["status_body"]), fetched)
+		part, err := h.videoPart(wireObj(msg.Get("status_body")), fetched)
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"part": PartToDict(part)}, nil
+		return JSONObject{{"part", PartToDict(part)}}, nil
 	default:
 		return nil, valueErrorf("unknown video parse kind: %s", kind)
 	}
@@ -857,9 +858,9 @@ func vetBatchOpBuild(msg JSONObject) (JSONObject, error) {
 		return nil, err
 	}
 	h := hooks(lm)
-	switch action := wireStr(msg["action"]); action {
+	switch action := wireStr(msg.Get("action")); action {
 	case "upload":
-		req, err := BatchRequestFromDict(wireObj(msg["batch_request"]))
+		req, err := BatchRequestFromDict(wireObj(msg.Get("batch_request")))
 		if err != nil {
 			return nil, err
 		}
@@ -872,23 +873,23 @@ func vetBatchOpBuild(msg JSONObject) (JSONObject, error) {
 		}
 		return requestsList([]*TransportRequest{wire}), nil
 	case "submit":
-		req, err := BatchRequestFromDict(wireObj(msg["batch_request"]))
+		req, err := BatchRequestFromDict(wireObj(msg.Get("batch_request")))
 		if err != nil {
 			return nil, err
 		}
-		wire, err := h.batchSubmitRequest(&req, wireObj(msg["upload_body"]), nil)
+		wire, err := h.batchSubmitRequest(&req, wireObj(msg.Get("upload_body")), nil)
 		if err != nil {
 			return nil, err
 		}
 		return requestsList([]*TransportRequest{wire}), nil
 	case "status":
-		wire, err := h.batchStatusRequest(wireStr(msg["batch_id"]))
+		wire, err := h.batchStatusRequest(wireStr(msg.Get("batch_id")))
 		if err != nil {
 			return nil, err
 		}
 		return requestsList([]*TransportRequest{wire}), nil
 	case "cancel":
-		wire, err := h.batchCancelRequest(wireStr(msg["batch_id"]))
+		wire, err := h.batchCancelRequest(wireStr(msg.Get("batch_id")))
 		if err != nil {
 			return nil, err
 		}
@@ -900,7 +901,7 @@ func vetBatchOpBuild(msg JSONObject) (JSONObject, error) {
 		}
 		return requestsList([]*TransportRequest{wire}), nil
 	case "result_fetches":
-		fetches, err := h.batchResultFetches(wireObj(msg["status_body"]))
+		fetches, err := h.batchResultFetches(wireObj(msg.Get("status_body")))
 		if err != nil {
 			return nil, err
 		}
@@ -916,20 +917,20 @@ func vetBatchOpParse(msg JSONObject) (JSONObject, error) {
 		return nil, err
 	}
 	h := hooks(lm)
-	switch kind := wireStr(msg["kind"]); kind {
+	switch kind := wireStr(msg.Get("kind")); kind {
 	case "job":
 		body, err := vetBody(msg)
 		if err != nil {
 			return nil, err
 		}
-		if status := wireInt(msg["status"], 200); status >= 400 {
+		if status := wireInt(msg.Get("status"), 200); status >= 400 {
 			return nil, lm.NormalizeError(status, string(body))
 		}
 		job, err := h.batchJobFromBody(string(body))
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"job": BatchJobToDict(job)}, nil
+		return JSONObject{{"job", BatchJobToDict(job)}}, nil
 	case "list":
 		body, err := vetBody(msg)
 		if err != nil {
@@ -939,21 +940,21 @@ func vetBatchOpParse(msg JSONObject) (JSONObject, error) {
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"jobs": toAnyList(jobs, func(j BatchJobInfo) any { return BatchJobToDict(j) })}, nil
+		return JSONObject{{"jobs", toAnyList(jobs, func(j BatchJobInfo) any { return BatchJobToDict(j) })}}, nil
 	case "entries":
 		var fetched []string
-		for _, b := range wireList(msg["fetched_b64"]) {
+		for _, b := range wireList(msg.Get("fetched_b64")) {
 			raw, err := base64.StdEncoding.DecodeString(wireStr(b))
 			if err != nil {
 				return nil, err
 			}
 			fetched = append(fetched, string(raw))
 		}
-		entries, err := h.batchEntries(wireObj(msg["status_body"]), fetched)
+		entries, err := h.batchEntries(wireObj(msg.Get("status_body")), fetched)
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"entries": toAnyList(entries, func(e BatchEntry) any { return BatchEntryToDict(e) })}, nil
+		return JSONObject{{"entries", toAnyList(entries, func(e BatchEntry) any { return BatchEntryToDict(e) })}}, nil
 	default:
 		return nil, valueErrorf("unknown batch parse kind: %s", kind)
 	}
@@ -965,14 +966,14 @@ func vetReplayLive(msg JSONObject) (JSONObject, error) {
 		return nil, err
 	}
 	h := hooks(lm)
-	config, err := LiveConfigFromDict(wireObj(msg["live_config"]))
+	config, err := LiveConfigFromDict(wireObj(msg.Get("live_config")))
 	if err != nil {
 		return nil, err
 	}
 	encoder := h.liveEncoder(&config)
 	clientFrames := []any{}
-	for _, raw := range wireList(msg["client_events"]) {
-		obj, ok := raw.(map[string]any)
+	for _, raw := range wireList(msg.Get("client_events")) {
+		obj, ok := asObject(raw)
 		if !ok {
 			return nil, typeErrorf("client_events must contain objects")
 		}
@@ -987,7 +988,7 @@ func vetReplayLive(msg JSONObject) (JSONObject, error) {
 		clientFrames = append(clientFrames, toAnyList(frames, func(f JSONObject) any { return f }))
 	}
 	events := []any{}
-	for _, b64 := range wireList(msg["server_frames_b64"]) {
+	for _, b64 := range wireList(msg.Get("server_frames_b64")) {
 		raw, err := base64.StdEncoding.DecodeString(wireStr(b64))
 		if err != nil {
 			return nil, err
@@ -1002,26 +1003,26 @@ func vetReplayLive(msg JSONObject) (JSONObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	return JSONObject{"setup_frames": toAnyList(setup, func(f JSONObject) any { return f }), "client_frames": clientFrames, "events": events}, nil
+	return JSONObject{{"setup_frames", toAnyList(setup, func(f JSONObject) any { return f })}, {"client_frames", clientFrames}, {"events", events}}, nil
 }
 
 func vetExplainAuth(msg JSONObject) (JSONObject, error) {
-	provider := wireStr(msg["provider"])
-	sentinel := wireStr(msg["sentinel"])
+	provider := wireStr(msg.Get("provider"))
+	sentinel := wireStr(msg.Get("sentinel"))
 	env := map[string]string{}
-	for k, v := range wireObj(msg["env"]) {
+	for k, v := range wireObj(msg.Get("env")).All() {
 		env[k] = wireStr(v)
 	}
 	opts := ExplainOptions{Env: env}
-	if providers := wireList(msg["api_keys_providers"]); len(providers) > 0 {
+	if providers := wireList(msg.Get("api_keys_providers")); len(providers) > 0 {
 		opts.APIKeys = map[string]CredentialLike{}
 		for _, p := range providers {
 			opts.APIKeys[wireStr(p)] = sentinel
 		}
 	}
-	if files := wireObj(msg["files"]); files != nil {
+	if files := wireObj(msg.Get("files")); files != nil {
 		opts.Files = map[string]string{}
-		for k, v := range files {
+		for k, v := range files.All() {
 			opts.Files[k] = wireStr(v)
 		}
 	}
@@ -1029,9 +1030,9 @@ func vetExplainAuth(msg JSONObject) (JSONObject, error) {
 		opts.Home = env["HOME"]
 	}
 	opts.Settings = vetSettings(msg)
-	opts.Credential = wireStr(msg["credential"])
-	opts.BaseURL = wireStr(msg["base_url"])
-	if cp := msg["credentials_path"]; cp != nil {
+	opts.Credential = wireStr(msg.Get("credential"))
+	opts.BaseURL = wireStr(msg.Get("base_url"))
+	if cp := msg.Get("credentials_path"); cp != nil {
 		switch provider {
 		case "claude-code":
 			opts.ClaudeCredentialsPath = wireStr(cp)
@@ -1045,63 +1046,63 @@ func vetExplainAuth(msg JSONObject) (JSONObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	steps := toAnyList(report.Steps, func(s AuthStep) any { return JSONObject{"kind": s.Kind, "state": s.State} })
+	steps := toAnyList(report.Steps, func(s AuthStep) any { return JSONObject{{"kind", s.Kind}, {"state", s.State}} })
 	text := report.Describe()
-	out := JSONObject{"configured": report.Configured, "steps": steps, "report_text": strings.Join([]string{text, fmt.Sprintf("%+v", report.Steps), text}, "\n")}
+	out := JSONObject{{"configured", report.Configured}, {"steps", steps}, {"report_text", strings.Join([]string{text, fmt.Sprintf("%+v", report.Steps), text}, "\n")}}
 	if report.BaseURL != "" {
-		out["base_url"] = report.BaseURL
+		out.Set("base_url", report.BaseURL)
 	}
 	return out, nil
 }
 
 func vetTokenExchangeBuild(msg JSONObject) (JSONObject, error) {
-	def, ok := LookupProvider(wireStr(msg["provider"]))
+	def, ok := LookupProvider(wireStr(msg.Get("provider")))
 	if !ok {
-		return nil, valueErrorf("unknown provider: %s", wireStr(msg["provider"]))
+		return nil, valueErrorf("unknown provider: %s", wireStr(msg.Get("provider")))
 	}
-	inputs := wireObj(msg["input"])
+	inputs := wireObj(msg.Get("input"))
 	if inputs == nil {
-		inputs = wireObj(msg["credential"])
+		inputs = wireObj(msg.Get("credential"))
 	}
 	if inputs == nil {
 		inputs = JSONObject{}
 	}
 	env := map[string]string{}
-	for k, v := range wireObj(inputs["env"]) {
+	for k, v := range wireObj(inputs.Get("env")).All() {
 		env[k] = wireStr(v)
 	}
 	var files map[string]string
-	if pem := stringOnly(inputs["certificate_pem"]); pem != "" && env["AZURE_CLIENT_CERTIFICATE_PATH"] != "" {
-		files = map[string]string{env["AZURE_CLIENT_CERTIFICATE_PATH"]: pem + "\n" + stringOnly(inputs["private_key_pem"])}
+	if pem := stringOnly(inputs.Get("certificate_pem")); pem != "" && env["AZURE_CLIENT_CERTIFICATE_PATH"] != "" {
+		files = map[string]string{env["AZURE_CLIENT_CERTIFICATE_PATH"]: pem + "\n" + stringOnly(inputs.Get("private_key_pem"))}
 	}
-	fixed, err := ParseRFC3339(wireStr(msg["now"]))
+	fixed, err := ParseRFC3339(wireStr(msg.Get("now")))
 	if err != nil {
 		return nil, err
 	}
 	settings := map[string]string{}
-	settingsSrc := wireObj(inputs["settings"])
+	settingsSrc := wireObj(inputs.Get("settings"))
 	if settingsSrc == nil {
-		settingsSrc = wireObj(msg["settings"])
+		settingsSrc = wireObj(msg.Get("settings"))
 	}
-	for k, v := range settingsSrc {
+	for k, v := range settingsSrc.All() {
 		settings[k] = wireStr(v)
 	}
 	ctx := &ChainContext{Env: env, Files: files, Now: func() time.Time { return fixed }, Settings: settings}
-	return TokenExchangeBuild(def.Access, wireStr(msg["rung"]), inputs, ctx)
+	return TokenExchangeBuild(def.Access, wireStr(msg.Get("rung")), inputs, ctx)
 }
 
 func vetTokenExchangeParse(msg JSONObject) (JSONObject, error) {
-	def, ok := LookupProvider(wireStr(msg["provider"]))
+	def, ok := LookupProvider(wireStr(msg.Get("provider")))
 	if !ok {
-		return nil, valueErrorf("unknown provider: %s", wireStr(msg["provider"]))
+		return nil, valueErrorf("unknown provider: %s", wireStr(msg.Get("provider")))
 	}
-	fixed, err := ParseRFC3339(wireStr(msg["now"]))
+	fixed, err := ParseRFC3339(wireStr(msg.Get("now")))
 	if err != nil {
 		return nil, err
 	}
-	body := wireObj(msg["body"])
-	if body == nil && msg["body_b64"] != nil {
-		raw, err := base64.StdEncoding.DecodeString(wireStr(msg["body_b64"]))
+	body := wireObj(msg.Get("body"))
+	if body == nil && msg.Get("body_b64") != nil {
+		raw, err := base64.StdEncoding.DecodeString(wireStr(msg.Get("body_b64")))
 		if err != nil {
 			return nil, err
 		}
@@ -1113,22 +1114,22 @@ func vetTokenExchangeParse(msg JSONObject) (JSONObject, error) {
 		body = JSONObject{}
 	}
 	status := 200
-	if v, ok := msg["status"]; ok && v != nil {
+	if v, ok := msg.Lookup("status"); ok && v != nil {
 		status = wireInt(v, 200)
 	}
 	ctx := &ChainContext{Env: map[string]string{}, Now: func() time.Time { return fixed }}
-	cred, err := TokenExchangeParse(def.Access, wireStr(msg["rung"]), status, body, ctx)
+	cred, err := TokenExchangeParse(def.Access, wireStr(msg.Get("rung")), status, body, ctx)
 	if err != nil {
 		if e := AsError(err); e != nil {
-			return JSONObject{"ok": false, "error": JSONObject{"class": e.ClassName(), "code": e.Code}}, nil
+			return JSONObject{{"ok", false}, {"error", JSONObject{{"class", e.ClassName()}, {"code", e.Code}}}}, nil
 		}
 		return nil, err
 	}
-	return JSONObject{"ok": true, "credential": CredentialToDict(cred)}, nil
+	return JSONObject{{"ok", true}, {"credential", CredentialToDict(cred)}}, nil
 }
 
 func vetSigV4Sign(msg JSONObject) (JSONObject, error) {
-	cred, err := CredentialFromDict(wireObj(msg["credential"]))
+	cred, err := CredentialFromDict(wireObj(msg.Get("credential")))
 	if err != nil {
 		return nil, err
 	}
@@ -1136,9 +1137,9 @@ func vetSigV4Sign(msg JSONObject) (JSONObject, error) {
 	if !ok {
 		return nil, typeErrorf("credential must be aws")
 	}
-	req := wireObj(msg["request"])
+	req := wireObj(msg.Get("request"))
 	headers := map[string]string{}
-	for k, v := range wireObj(req["headers"]) {
+	for k, v := range wireObj(req.Get("headers")).All() {
 		lk := strings.ToLower(k)
 		if lk == "host" || lk == "x-amz-date" || lk == "x-amz-security-token" {
 			continue
@@ -1153,14 +1154,14 @@ func vetSigV4Sign(msg JSONObject) (JSONObject, error) {
 			headers[k] = wireStr(v)
 		}
 	}
-	now, err := ParseRFC3339(wireStr(msg["now"]))
+	now, err := ParseRFC3339(wireStr(msg.Get("now")))
 	if err != nil {
 		return nil, err
 	}
-	sig := SigV4Sign(wireStr(req["method"]), wireStr(req["url"]), headers, []byte(wireStr(req["body"])), aws, wireStr(msg["region"]), wireStr(msg["service"]), now)
+	sig := SigV4Sign(wireStr(req.Get("method")), wireStr(req.Get("url")), headers, []byte(wireStr(req.Get("body"))), aws, wireStr(msg.Get("region")), wireStr(msg.Get("service")), now)
 	hdrs := JSONObject{}
-	for k, v := range sig.Headers {
-		hdrs[k] = v
+	for _, k := range sortedMapKeys(sig.Headers) {
+		hdrs = append(hdrs, Member{k, sig.Headers[k]})
 	}
-	return JSONObject{"canonical_request": sig.CanonicalRequest, "string_to_sign": sig.StringToSign, "authorization": sig.Authorization, "headers": hdrs}, nil
+	return JSONObject{{"canonical_request", sig.CanonicalRequest}, {"string_to_sign", sig.StringToSign}, {"authorization", sig.Authorization}, {"headers", hdrs}}, nil
 }

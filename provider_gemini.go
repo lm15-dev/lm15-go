@@ -88,16 +88,16 @@ func (l *GeminiLM) errorDetail(providerCode, message string) ErrorDetail {
 }
 
 func (l *GeminiLM) inbandError(data JSONObject) *Error {
-	if pf := wireObj(data["promptFeedback"]); pf != nil {
-		if reason := wireStr(pf["blockReason"]); reason != "" && reason != "BLOCK_REASON_UNSPECIFIED" {
+	if pf := wireObj(data.Get("promptFeedback")); pf != nil {
+		if reason := wireStr(pf.Get("blockReason")); reason != "" && reason != "BLOCK_REASON_UNSPECIFIED" {
 			return l.providerError(KindInvalidRequest, "Prompt blocked: "+reason, 0, "promptFeedback", "")
 		}
 	}
-	candidates := wireList(data["candidates"])
+	candidates := wireList(data.Get("candidates"))
 	if len(candidates) > 0 {
 		if c := wireObj(candidates[0]); c != nil {
-			if fr := wireStr(c["finishReason"]); geminiCandidateFinishErrors[fr] {
-				msg := wireStr(c["finishMessage"])
+			if fr := wireStr(c.Get("finishReason")); geminiCandidateFinishErrors[fr] {
+				msg := wireStr(c.Get("finishMessage"))
 				if msg == "" {
 					msg = "Candidate blocked: " + fr
 				}
@@ -116,10 +116,10 @@ func (l *GeminiLM) normalizeError(status int, body string) *Error {
 	obj := wireObj(data)
 	var msg, errStatus string
 	if obj != nil {
-		switch e := obj["error"].(type) {
-		case map[string]any:
-			msg = wireStr(e["message"])
-			errStatus = wireStr(e["status"])
+		switch e := jsonView(obj.Get("error")).(type) {
+		case JSONObject:
+			msg = wireStr(e.Get("message"))
+			errStatus = wireStr(e.Get("status"))
 		case nil:
 		default:
 			msg = wireStr(e)
@@ -169,12 +169,12 @@ func geminiNumber(v float64) any {
 }
 
 func containsKey(v any, key string) bool {
-	switch x := v.(type) {
-	case map[string]any:
-		if _, ok := x[key]; ok {
+	switch x := jsonView(v).(type) {
+	case JSONObject:
+		if _, ok := x.Lookup(key); ok {
 			return true
 		}
-		for _, item := range x {
+		for _, item := range x.All() {
 			if containsKey(item, key) {
 				return true
 			}
@@ -190,15 +190,15 @@ func containsKey(v any, key string) bool {
 }
 
 func geminiResponseFormat(f JSONObject) JSONObject {
-	if f["type"] == "json_object" {
-		return JSONObject{"responseMimeType": "application/json"}
+	if f.Get("type") == "json_object" {
+		return JSONObject{{"responseMimeType", "application/json"}}
 	}
-	schema := f["schema"]
+	schema := f.Get("schema")
 	field := "responseSchema"
 	if containsKey(schema, "additionalProperties") {
 		field = "responseJsonSchema"
 	}
-	return JSONObject{"responseMimeType": "application/json", field: schema}
+	return JSONObject{{"responseMimeType", "application/json"}, {field, schema}}
 }
 
 func modalityTokens(details any, modality string) *int {
@@ -209,8 +209,8 @@ func modalityTokens(details any, modality string) *int {
 	sum := 0
 	found := false
 	for _, e := range list {
-		if obj := wireObj(e); obj != nil && wireStr(obj["modality"]) == modality {
-			sum += wireInt(obj["tokenCount"], 0)
+		if obj := wireObj(e); obj != nil && wireStr(obj.Get("modality")) == modality {
+			sum += wireInt(obj.Get("tokenCount"), 0)
 			found = true
 		}
 	}
@@ -227,7 +227,7 @@ func geminiUsage(usage JSONObject, outputKeys ...string) Usage {
 	zero := 0
 	output := &zero
 	for _, k := range outputKeys {
-		if v, ok := usage[k]; ok {
+		if v, ok := usage.Lookup(k); ok {
 			output = wireIntPtr(v)
 			if output == nil {
 				output = &zero
@@ -235,32 +235,32 @@ func geminiUsage(usage JSONObject, outputKeys ...string) Usage {
 			break
 		}
 	}
-	input := wireIntPtr(usage["promptTokenCount"])
+	input := wireIntPtr(usage.Get("promptTokenCount"))
 	if input == nil {
 		z := 0
 		input = &z
 	}
-	outputDetails := usage["candidatesTokensDetails"]
+	outputDetails := usage.Get("candidatesTokensDetails")
 	if outputDetails == nil {
-		outputDetails = usage["responseTokensDetails"]
+		outputDetails = usage.Get("responseTokensDetails")
 	}
 	return Usage{
 		InputTokens:       input,
 		OutputTokens:      output,
-		TotalTokens:       wireIntPtr(usage["totalTokenCount"]),
-		CacheReadTokens:   wireIntPtr(usage["cachedContentTokenCount"]),
-		ReasoningTokens:   wireIntPtr(usage["thoughtsTokenCount"]),
-		InputAudioTokens:  modalityTokens(usage["promptTokensDetails"], "AUDIO"),
+		TotalTokens:       wireIntPtr(usage.Get("totalTokenCount")),
+		CacheReadTokens:   wireIntPtr(usage.Get("cachedContentTokenCount")),
+		ReasoningTokens:   wireIntPtr(usage.Get("thoughtsTokenCount")),
+		InputAudioTokens:  modalityTokens(usage.Get("promptTokensDetails"), "AUDIO"),
 		OutputAudioTokens: modalityTokens(outputDetails, "AUDIO"),
 	}.Normalize()
 }
 
 func thoughtSignatureState(part JSONObject) []ContinuationState {
-	sig, ok := part["thoughtSignature"]
+	sig, ok := part.Lookup("thoughtSignature")
 	if !ok || sig == nil {
 		return nil
 	}
-	return []ContinuationState{{Provider: "gemini", Kind: "thought_signature", Data: JSONObject{"value": wireStr(sig)}}}
+	return []ContinuationState{{Provider: "gemini", Kind: "thought_signature", Data: JSONObject{{"value", wireStr(sig)}}}}
 }
 
 func geminiFinish(reason string, hasToolCall bool) string {
@@ -277,7 +277,7 @@ func geminiFinish(reason string, hasToolCall bool) string {
 }
 
 func geminiBatchStatus(data JSONObject) string {
-	state := strings.ToUpper(wireStr(wireObj(data["metadata"])["state"]))
+	state := strings.ToUpper(wireStr(wireObj(data.Get("metadata")).Get("state")))
 	mapping := map[string]string{
 		"BATCH_STATE_PENDING": BatchQueued, "BATCH_STATE_RUNNING": BatchRunning, "BATCH_STATE_CANCELLING": BatchCancelling,
 		"BATCH_STATE_SUCCEEDED": BatchCompleted, "BATCH_STATE_FAILED": BatchFailed, "BATCH_STATE_CANCELLED": BatchCancelled, "BATCH_STATE_EXPIRED": BatchExpired,
@@ -285,7 +285,7 @@ func geminiBatchStatus(data JSONObject) string {
 	if s, ok := mapping[state]; ok {
 		return s
 	}
-	if truthy(data["done"]) {
+	if truthy(data.Get("done")) {
 		return BatchCompleted
 	}
 	return BatchQueued
@@ -296,8 +296,8 @@ func geminiTokenLogprobs(result any) []TokenLogprob {
 	if lr == nil {
 		return nil
 	}
-	chosen := wireList(lr["chosenCandidates"])
-	topSteps := wireList(lr["topCandidates"])
+	chosen := wireList(lr.Get("chosenCandidates"))
+	topSteps := wireList(lr.Get("topCandidates"))
 	var out []TokenLogprob
 	for i, c := range chosen {
 		cand := wireObj(c)
@@ -306,22 +306,22 @@ func geminiTokenLogprobs(result any) []TokenLogprob {
 		}
 		var top []TopLogprob
 		if i < len(topSteps) {
-			for _, a := range wireList(wireObj(topSteps[i])["candidates"]) {
+			for _, a := range wireList(wireObj(topSteps[i]).Get("candidates")) {
 				if alt := wireObj(a); alt != nil {
-					top = append(top, TopLogprob{Token: wireStr(alt["token"]), Logprob: wireFloat(alt["logProbability"], 0), TokenID: wireIntPtr(alt["tokenId"])})
+					top = append(top, TopLogprob{Token: wireStr(alt.Get("token")), Logprob: wireFloat(alt.Get("logProbability"), 0), TokenID: wireIntPtr(alt.Get("tokenId"))})
 				}
 			}
 		}
-		out = append(out, TokenLogprob{Token: wireStr(cand["token"]), Logprob: wireFloat(cand["logProbability"], 0), TokenID: wireIntPtr(cand["tokenId"]), Top: top})
+		out = append(out, TokenLogprob{Token: wireStr(cand.Get("token")), Logprob: wireFloat(cand.Get("logProbability"), 0), TokenID: wireIntPtr(cand.Get("tokenId")), Top: top})
 	}
 	return out
 }
 
 func geminiSegmentText(segment JSONObject, full string) string {
-	if t := stringOnly(segment["text"]); t != "" {
+	if t := stringOnly(segment.Get("text")); t != "" {
 		return t
 	}
-	start, end := wireIntPtr(segment["startIndex"]), wireIntPtr(segment["endIndex"])
+	start, end := wireIntPtr(segment.Get("startIndex")), wireIntPtr(segment.Get("endIndex"))
 	if start != nil && end != nil && 0 <= *start && *start < *end && *end <= len(full) {
 		return full[*start:*end]
 	}
@@ -329,12 +329,12 @@ func geminiSegmentText(segment JSONObject, full string) string {
 }
 
 func geminiCitations(candidate JSONObject, full string) []Part {
-	grounding := wireObj(candidate["groundingMetadata"])
+	grounding := wireObj(candidate.Get("groundingMetadata"))
 	if grounding == nil {
 		return nil
 	}
-	chunks := wireList(grounding["groundingChunks"])
-	supports, ok := grounding["groundingSupports"].([]any)
+	chunks := wireList(grounding.Get("groundingChunks"))
+	supports, ok := grounding.Get("groundingSupports").([]any)
 	if !ok {
 		return nil
 	}
@@ -345,8 +345,8 @@ func geminiCitations(candidate JSONObject, full string) []Part {
 		if support == nil {
 			continue
 		}
-		cited := geminiSegmentText(wireObj(support["segment"]), full)
-		indices, ok := support["groundingChunkIndices"].([]any)
+		cited := geminiSegmentText(wireObj(support.Get("segment")), full)
+		indices, ok := support.Get("groundingChunkIndices").([]any)
 		if !ok {
 			continue
 		}
@@ -356,15 +356,15 @@ func geminiCitations(candidate JSONObject, full string) []Part {
 			if idx != nil && *idx >= 0 && *idx < len(chunks) {
 				chunk = wireObj(chunks[*idx])
 			}
-			source := wireObj(chunk["web"])
+			source := wireObj(chunk.Get("web"))
 			if source == nil {
-				source = wireObj(chunk["retrievedContext"])
+				source = wireObj(chunk.Get("retrievedContext"))
 			}
 			if source == nil {
-				source = wireObj(chunk["googleSearch"])
+				source = wireObj(chunk.Get("googleSearch"))
 			}
-			url := firstStr(source["uri"], source["url"])
-			title := firstStr(source["title"], source["name"])
+			url := firstStr(source.Get("uri"), source.Get("url"))
+			title := firstStr(source.Get("title"), source.Get("name"))
 			key := [3]string{url, title, cited}
 			if seen[key] || (url == "" && title == "" && cited == "") {
 				continue
@@ -404,15 +404,15 @@ func (l *GeminiLM) functionResponse(part ToolResultPart, names map[string]string
 	var response JSONObject
 	switch {
 	case part.IsError:
-		response = JSONObject{"error": text}
+		response = JSONObject{{"error", text}}
 	case len(mediaParts) > 0 && len(textParts) == 0:
 		response = JSONObject{}
 	default:
-		response = JSONObject{"result": text}
+		response = JSONObject{{"result", text}}
 	}
-	fr := JSONObject{"name": name, "response": response}
+	fr := JSONObject{{"name", name}, {"response", response}}
 	if part.ID != "" {
-		fr["id"] = part.ID
+		fr.Set("id", part.ID)
 	}
 	if len(mediaParts) > 0 {
 		var blocks []any
@@ -423,39 +423,39 @@ func (l *GeminiLM) functionResponse(part ToolResultPart, names map[string]string
 			}
 			blocks = append(blocks, b)
 		}
-		fr["parts"] = blocks
+		fr.Set("parts", blocks)
 	}
-	return JSONObject{"functionResponse": fr}, nil
+	return JSONObject{{"functionResponse", fr}}, nil
 }
 
 func (l *GeminiLM) part(p Part, names map[string]string) (JSONObject, error) {
 	switch x := p.(type) {
 	case TextPart:
-		out := JSONObject{"text": x.Text}
-		if thought := ContinuationData(x.Continuation, "gemini", "thought_signature"); thought != nil && truthy(thought["value"]) {
-			out["thoughtSignature"] = thought["value"]
+		out := JSONObject{{"text", x.Text}}
+		if thought := ContinuationData(x.Continuation, "gemini", "thought_signature"); thought != nil && truthy(thought.Get("value")) {
+			out.Set("thoughtSignature", thought.Get("value"))
 		}
 		return out, nil
 	case DataPart:
 		// 2026-09-19 D3: a data part on a text wire is its compact JSON.
-		return JSONObject{"text": DataPartText(x)}, nil
+		return JSONObject{{"text", DataPartText(x)}}, nil
 	case ToolCallPart:
-		fc := JSONObject{"name": x.Name, "args": x.Input}
+		fc := JSONObject{{"name", x.Name}, {"args", x.Input}}
 		if x.ID != "" {
-			fc["id"] = x.ID
+			fc.Set("id", x.ID)
 		}
-		out := JSONObject{"functionCall": fc}
-		if thought := ContinuationData(x.Continuation, "gemini", "thought_signature"); thought != nil && truthy(thought["value"]) {
-			out["thoughtSignature"] = thought["value"]
+		out := JSONObject{{"functionCall", fc}}
+		if thought := ContinuationData(x.Continuation, "gemini", "thought_signature"); thought != nil && truthy(thought.Get("value")) {
+			out.Set("thoughtSignature", thought.Get("value"))
 		}
 		return out, nil
 	case ToolResultPart:
 		return l.functionResponse(x, names)
 	case ThinkingPart:
-		out := JSONObject{"text": x.Text}
-		if thought := ContinuationData(x.Continuation, "gemini", "thought_signature"); thought != nil && truthy(thought["value"]) {
-			out["thought"] = true
-			out["thoughtSignature"] = thought["value"]
+		out := JSONObject{{"text", x.Text}}
+		if thought := ContinuationData(x.Continuation, "gemini", "thought_signature"); thought != nil && truthy(thought.Get("value")) {
+			out.Set("thought", true)
+			out.Set("thoughtSignature", thought.Get("value"))
 		}
 		return out, nil
 	}
@@ -466,18 +466,18 @@ func (l *GeminiLM) part(p Part, names map[string]string) (JSONObject, error) {
 		}
 		switch {
 		case m.URL != "":
-			return JSONObject{"fileData": JSONObject{"mimeType": mime, "fileUri": m.URL}}, nil
+			return JSONObject{{"fileData", JSONObject{{"mimeType", mime}, {"fileUri", m.URL}}}}, nil
 		case m.FileID != "":
-			return JSONObject{"fileData": JSONObject{"mimeType": mime, "fileUri": m.FileID}}, nil
+			return JSONObject{{"fileData", JSONObject{{"mimeType", mime}, {"fileUri", m.FileID}}}}, nil
 		default:
 			b64, err := m.Base64()
 			if err != nil {
 				return nil, err
 			}
-			return JSONObject{"inlineData": JSONObject{"mimeType": mime, "data": b64}}, nil
+			return JSONObject{{"inlineData", JSONObject{{"mimeType", mime}, {"data", b64}}}}, nil
 		}
 	}
-	return JSONObject{"text": partText(p)}, nil
+	return JSONObject{{"text", partText(p)}}, nil
 }
 
 func (l *GeminiLM) message(msg Message, names map[string]string) (JSONObject, error) {
@@ -486,7 +486,7 @@ func (l *GeminiLM) message(msg Message, names map[string]string) (JSONObject, er
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"role": "user", "parts": []any{JSONObject{"text": "[developer]\n" + text}}}, nil
+		return JSONObject{{"role", "user"}, {"parts", []any{JSONObject{{"text", "[developer]\n" + text}}}}}, nil
 	}
 	role := "user"
 	if msg.Role == RoleAssistant {
@@ -500,7 +500,7 @@ func (l *GeminiLM) message(msg Message, names map[string]string) (JSONObject, er
 		}
 		parts = append(parts, b)
 	}
-	return JSONObject{"role": role, "parts": parts}, nil
+	return JSONObject{{"role", role}, {"parts", parts}}, nil
 }
 
 func callNames(messages []Message) map[string]string {
@@ -529,7 +529,7 @@ func (l *GeminiLM) toolConfigPayload(req *Request, scope *adaptScope) (JSONObjec
 		}
 	}
 	mode := map[string]string{"none": "NONE", "required": "ANY", "auto": "AUTO"}[tc.EffectiveMode()]
-	cfg := JSONObject{"mode": mode}
+	cfg := JSONObject{{"mode", mode}}
 	if len(tc.Allowed) > 0 {
 		var builtins []string
 		for _, name := range tc.Allowed {
@@ -541,12 +541,12 @@ func (l *GeminiLM) toolConfigPayload(req *Request, scope *adaptScope) (JSONObjec
 			// MAP-13 rule 4(b): the program depends on the forced tool running.
 			return nil, UnsupportedFeature(l.provider, "config.tool_choice.allowed", "gemini: cannot force builtin tools %v — functionCallingConfig addresses function declarations only; googleSearch/codeExecution have no tool_choice form (OpenAI Responses and Anthropic carry builtin forcing)", builtins)
 		}
-		cfg["allowedFunctionNames"] = toAnyList(tc.Allowed, func(s string) any { return s })
+		cfg.Set("allowedFunctionNames", toAnyList(tc.Allowed, func(s string) any { return s }))
 		if tc.EffectiveMode() == "auto" {
-			cfg["mode"] = "VALIDATED"
+			cfg.Set("mode", "VALIDATED")
 		}
 	}
-	return JSONObject{"functionCallingConfig": cfg}, nil
+	return JSONObject{{"functionCallingConfig", cfg}}, nil
 }
 
 func (l *GeminiLM) cacheResource(cacheID string) string {
@@ -599,46 +599,46 @@ func (l *GeminiLM) payload(req *Request, scope *adaptScope) (JSONObject, error) 
 	if contents == nil {
 		contents = []any{}
 	}
-	payload := JSONObject{"contents": contents}
+	payload := JSONObject{{"contents", contents}}
 	if resource != "" {
-		payload["cachedContent"] = l.cacheResource(resource)
+		payload.Set("cachedContent", l.cacheResource(resource))
 	}
 	if req.System != nil && resource == "" {
 		text, err := systemText(req.System, l.provider)
 		if err != nil {
 			return nil, err
 		}
-		payload["systemInstruction"] = JSONObject{"parts": []any{JSONObject{"text": text}}}
+		payload.Set("systemInstruction", JSONObject{{"parts", []any{JSONObject{{"text", text}}}}})
 	}
 	gen := JSONObject{}
 	if cfg.Temperature != nil {
-		gen["temperature"] = geminiNumber(*cfg.Temperature)
+		gen.Set("temperature", geminiNumber(*cfg.Temperature))
 	}
 	if cfg.MaxTokens != nil {
-		gen["maxOutputTokens"] = *cfg.MaxTokens
+		gen.Set("maxOutputTokens", *cfg.MaxTokens)
 	}
 	if cfg.TopP != nil {
-		gen["topP"] = geminiNumber(*cfg.TopP)
+		gen.Set("topP", geminiNumber(*cfg.TopP))
 	}
 	if cfg.TopK != nil {
-		gen["topK"] = *cfg.TopK
+		gen.Set("topK", *cfg.TopK)
 	}
 	if len(cfg.Stop) > 0 {
-		gen["stopSequences"] = toAnyList(cfg.Stop, func(s string) any { return s })
+		gen.Set("stopSequences", toAnyList(cfg.Stop, func(s string) any { return s }))
 	}
 	if cfg.Seed != nil {
-		gen["seed"] = *cfg.Seed
+		gen.Set("seed", *cfg.Seed)
 	}
 	if cfg.FrequencyPenalty != nil {
-		gen["frequencyPenalty"] = geminiNumber(*cfg.FrequencyPenalty)
+		gen.Set("frequencyPenalty", geminiNumber(*cfg.FrequencyPenalty))
 	}
 	if cfg.PresencePenalty != nil {
-		gen["presencePenalty"] = geminiNumber(*cfg.PresencePenalty)
+		gen.Set("presencePenalty", geminiNumber(*cfg.PresencePenalty))
 	}
 	if cfg.Logprobs != nil {
-		gen["responseLogprobs"] = true
+		gen.Set("responseLogprobs", true)
 		if *cfg.Logprobs > 0 {
-			gen["logprobs"] = *cfg.Logprobs
+			gen.Set("logprobs", *cfg.Logprobs)
 		}
 	}
 	if len(cfg.ResponseFormat) > 0 {
@@ -651,13 +651,13 @@ func (l *GeminiLM) payload(req *Request, scope *adaptScope) (JSONObject, error) 
 		}
 		format := cfg.ResponseFormat
 		if found := RequestJudgments(req); len(found) > 0 {
-			if schema, ok := format["schema"].(map[string]any); ok {
+			if schema, ok := asObject(format.Get("schema")); ok {
 				format = copyObject(format)
-				format["schema"] = geminiSchema(schema, found)
+				format.Set("schema", geminiSchema(schema, found))
 			}
 		}
-		for k, v := range geminiResponseFormat(format) {
-			gen[k] = v
+		for k, v := range geminiResponseFormat(format).All() {
+			gen.Set(k, v)
 		}
 	}
 	if r := cfg.Reasoning; r != nil {
@@ -675,7 +675,7 @@ func (l *GeminiLM) payload(req *Request, scope *adaptScope) (JSONObject, error) 
 			r.Effort = "minimal"
 		}
 		if r.IsOff() {
-			gen["thinkingConfig"] = JSONObject{"thinkingBudget": 0}
+			gen.Set("thinkingConfig", JSONObject{{"thinkingBudget", 0}})
 		} else {
 			if r.Summary == "concise" || r.Summary == "detailed" {
 				if err := scope.substituted("config.reasoning.summary", "GenerateContent has includeThoughts only, no detail levels; 'auto' shows the thoughts", r.Summary, "auto"); err != nil {
@@ -685,11 +685,11 @@ func (l *GeminiLM) payload(req *Request, scope *adaptScope) (JSONObject, error) 
 			}
 			thinking := JSONObject{}
 			if r.Summary != "" {
-				thinking["includeThoughts"] = true
+				thinking.Set("includeThoughts", true)
 			}
 			switch {
 			case r.ThinkingBudget != nil:
-				thinking["thinkingBudget"] = *r.ThinkingBudget
+				thinking.Set("thinkingBudget", *r.ThinkingBudget)
 			case levelClass:
 				effort := r.Effort
 				if effort == "xhigh" || effort == "max" {
@@ -698,33 +698,33 @@ func (l *GeminiLM) payload(req *Request, scope *adaptScope) (JSONObject, error) 
 					}
 					effort = "high"
 				}
-				thinking["thinkingLevel"] = effort
+				thinking.Set("thinkingLevel", effort)
 			default:
-				thinking["thinkingBudget"] = EffortThinkingBudgets[r.Effort]
+				thinking.Set("thinkingBudget", EffortThinkingBudgets[r.Effort])
 			}
-			gen["thinkingConfig"] = thinking
+			gen.Set("thinkingConfig", thinking)
 		}
 	}
 	if len(gen) > 0 {
-		payload["generationConfig"] = gen
+		payload.Set("generationConfig", gen)
 	}
 	if len(req.Tools) > 0 && resource == "" {
 		var declarations []any
 		var tools []any
 		for _, t := range req.Tools {
 			if ft, ok := t.(FunctionTool); ok {
-				declarations = append(declarations, JSONObject{"name": ft.Name, "description": nilIfEmpty(ft.Description), "parameters": ft.EffectiveParameters()})
+				declarations = append(declarations, JSONObject{{"name", ft.Name}, {"description", nilIfEmpty(ft.Description)}, {"parameters", ft.EffectiveParameters()}})
 			}
 		}
 		if len(declarations) > 0 {
-			tools = append(tools, JSONObject{"functionDeclarations": declarations})
+			tools = append(tools, JSONObject{{"functionDeclarations", declarations}})
 		}
 		for _, t := range req.Tools {
 			if bt, ok := t.(BuiltinTool); ok {
 				tools = append(tools, geminiBuiltin(bt))
 			}
 		}
-		payload["tools"] = tools
+		payload.Set("tools", tools)
 	}
 	if resource == "" {
 		tc, err := l.toolConfigPayload(req, scope)
@@ -732,30 +732,20 @@ func (l *GeminiLM) payload(req *Request, scope *adaptScope) (JSONObject, error) 
 			return nil, err
 		}
 		if tc != nil {
-			payload["toolConfig"] = tc
+			payload.Set("toolConfig", tc)
 		}
 	}
-	switch wireStr(ext["output"]) {
+	switch wireStr(ext.Get("output")) {
 	case "image":
-		genCfg := wireObj(payload["generationConfig"])
-		if genCfg == nil {
-			genCfg = JSONObject{}
-			payload["generationConfig"] = genCfg
-		}
-		genCfg["responseModalities"] = []any{"IMAGE"}
+		setIn(&payload, []any{"IMAGE"}, "generationConfig", "responseModalities")
 	case "audio":
-		genCfg := wireObj(payload["generationConfig"])
-		if genCfg == nil {
-			genCfg = JSONObject{}
-			payload["generationConfig"] = genCfg
-		}
-		genCfg["responseModalities"] = []any{"AUDIO"}
+		setIn(&payload, []any{"AUDIO"}, "generationConfig", "responseModalities")
 	}
 	if cfg.Store != nil {
-		payload["store"] = *cfg.Store
+		payload.Set("store", *cfg.Store)
 	}
 	if cfg.ServiceTier != "" {
-		payload["serviceTier"] = cfg.ServiceTier
+		payload.Set("serviceTier", cfg.ServiceTier)
 	}
 	if cfg.UserID != "" {
 		// MAP-13 (decision 2026-09-14 §4.5): attribution has no field here
@@ -765,9 +755,9 @@ func (l *GeminiLM) payload(req *Request, scope *adaptScope) (JSONObject, error) 
 			return nil, err
 		}
 	}
-	for k, v := range ext {
+	for k, v := range ext.All() {
 		if k != "prompt_caching" && k != "output" {
-			payload[k] = v
+			payload.Set(k, v)
 		}
 	}
 	return payload, nil
@@ -782,7 +772,7 @@ func geminiBuiltin(t BuiltinTool) JSONObject {
 	if cfg == nil {
 		cfg = JSONObject{}
 	}
-	return JSONObject{key: cfg}
+	return JSONObject{{key, cfg}}
 }
 
 func (l *GeminiLM) buildRequest(req *Request, stream bool, scope *adaptScope) (*TransportRequest, error) {
@@ -816,49 +806,49 @@ func (l *GeminiLM) parseCandidateParts(partsPayload []any, unmapped *[]JSONObjec
 			}
 			continue
 		}
-		_, hasText := part["text"]
+		_, hasText := part.Lookup("text")
 		switch {
-		case truthy(part["thought"]) && hasText:
-			parts = append(parts, ThinkingPart{Text: wireStr(part["text"]), Continuation: thoughtSignatureState(part)})
+		case truthy(part.Get("thought")) && hasText:
+			parts = append(parts, ThinkingPart{Text: wireStr(part.Get("text")), Continuation: thoughtSignatureState(part)})
 		case hasText:
-			parts = append(parts, TextPart{Text: wireStr(part["text"]), Continuation: thoughtSignatureState(part)})
-		case wireObj(part["functionCall"]) != nil:
-			fc := wireObj(part["functionCall"])
+			parts = append(parts, TextPart{Text: wireStr(part.Get("text")), Continuation: thoughtSignatureState(part)})
+		case wireObj(part.Get("functionCall")) != nil:
+			fc := wireObj(part.Get("functionCall"))
 			var continuation []ContinuationState
-			sig := part["thoughtSignature"]
+			sig := part.Get("thoughtSignature")
 			if sig == nil {
-				sig = fc["thoughtSignature"]
+				sig = fc.Get("thoughtSignature")
 			}
 			if sig != nil {
-				continuation = []ContinuationState{{Provider: "gemini", Kind: "thought_signature", Data: JSONObject{"value": wireStr(sig)}}}
+				continuation = []ContinuationState{{Provider: "gemini", Kind: "thought_signature", Data: JSONObject{{"value", wireStr(sig)}}}}
 			}
-			if !truthy(fc["name"]) {
+			if !truthy(fc.Get("name")) {
 				return nil, unnamedToolCallError(l.provider, path)
 			}
-			id := wireStr(fc["id"])
-			if id == "" || fc["id"] == nil {
+			id := wireStr(fc.Get("id"))
+			if id == "" || fc.Get("id") == nil {
 				id = "tool_call_" + strconv.Itoa(len(parts))
 			}
-			args := wireObj(fc["args"])
+			args := wireObj(fc.Get("args"))
 			if args == nil {
 				args = JSONObject{}
 			}
-			parts = append(parts, ToolCallPart{ID: id, Name: wireStr(fc["name"]), Input: args, Continuation: continuation})
-		case wireObj(part["inlineData"]) != nil:
-			inline := wireObj(part["inlineData"])
-			mime := wireStr(inline["mimeType"])
+			parts = append(parts, ToolCallPart{ID: id, Name: wireStr(fc.Get("name")), Input: args, Continuation: continuation})
+		case wireObj(part.Get("inlineData")) != nil:
+			inline := wireObj(part.Get("inlineData"))
+			mime := wireStr(inline.Get("mimeType"))
 			if mime == "" {
 				mime = "application/octet-stream"
 			}
-			data := wireStr(inline["data"])
+			data := wireStr(inline.Get("data"))
 			if data == "" {
 				continue
 			}
 			parts = append(parts, mediaPartFor(mime, Media{MediaType: mime, Data: data}))
-		case wireObj(part["fileData"]) != nil:
-			fd := wireObj(part["fileData"])
-			uri := wireStr(fd["fileUri"])
-			mime := wireStr(fd["mimeType"])
+		case wireObj(part.Get("fileData")) != nil:
+			fd := wireObj(part.Get("fileData"))
+			uri := wireStr(fd.Get("fileUri"))
+			mime := wireStr(fd.Get("mimeType"))
 			if mime == "" {
 				mime = "application/octet-stream"
 			}
@@ -893,7 +883,7 @@ func mediaPartFor(mime string, m Media) Part {
 
 func hasAnyKey(m JSONObject, keys []string) bool {
 	for _, k := range keys {
-		if _, ok := m[k]; ok {
+		if _, ok := m.Lookup(k); ok {
 			return true
 		}
 	}
@@ -909,12 +899,12 @@ func (l *GeminiLM) parseResponse(req *Request, resp *HTTPResponse) (*Response, e
 		return nil, e
 	}
 	var candidate JSONObject
-	if cands := wireList(data["candidates"]); len(cands) > 0 {
+	if cands := wireList(data.Get("candidates")); len(cands) > 0 {
 		candidate = wireObj(cands[0])
 	}
-	content := wireObj(candidate["content"])
+	content := wireObj(candidate.Get("content"))
 	var unmapped []JSONObject
-	parts, err := l.parseCandidateParts(wireList(content["parts"]), &unmapped, "candidates[0].content.parts")
+	parts, err := l.parseCandidateParts(wireList(content.Get("parts")), &unmapped, "candidates[0].content.parts")
 	if err != nil {
 		return nil, err
 	}
@@ -929,18 +919,18 @@ func (l *GeminiLM) parseResponse(req *Request, resp *HTTPResponse) (*Response, e
 		parts = []Part{TextPart{}}
 	}
 	return &Response{
-		ID:           wireStr(data["responseId"]),
+		ID:           wireStr(data.Get("responseId")),
 		Model:        req.Model,
 		Message:      Message{Role: RoleAssistant, Parts: ReplaceTextWithData(parts, RequestJudgments(req))},
-		FinishReason: geminiFinish(wireStr(candidate["finishReason"]), hasToolCall(parts)),
-		Usage:        geminiUsage(wireObj(data["usageMetadata"]), "candidatesTokenCount", "responseTokenCount"),
-		Logprobs:     geminiTokenLogprobs(candidate["logprobsResult"]),
+		FinishReason: geminiFinish(wireStr(candidate.Get("finishReason")), hasToolCall(parts)),
+		Usage:        geminiUsage(wireObj(data.Get("usageMetadata")), "candidatesTokenCount", "responseTokenCount"),
+		Logprobs:     geminiTokenLogprobs(candidate.Get("logprobsResult")),
 		ProviderData: attachUnmapped(data, unmapped),
 	}, nil
 }
 
 func (l *GeminiLM) usageFromPayload(payload JSONObject) Usage {
-	return geminiUsage(wireObj(payload["usageMetadata"]), "candidatesTokenCount", "responseTokenCount")
+	return geminiUsage(wireObj(payload.Get("usageMetadata")), "candidatesTokenCount", "responseTokenCount")
 }
 
 func (l *GeminiLM) parseStreamEvents(_ *Request, ev sse.Event) ([]StreamEvent, error) {
@@ -955,75 +945,75 @@ func (l *GeminiLM) parseStreamEvents(_ *Request, ev sse.Event) ([]StreamEvent, e
 	if payload == nil {
 		return nil, nil
 	}
-	if errRaw, ok := payload["error"]; ok {
+	if errRaw, ok := payload.Lookup("error"); ok {
 		e := wireObj(errRaw)
-		code := firstStr(e["status"], e["code"])
+		code := firstStr(e.Get("status"), e.Get("code"))
 		if code == "" {
 			code = "provider"
 		}
-		return []StreamEvent{StreamErrorEvent{Error: l.errorDetail(code, wireStr(e["message"]))}}, nil
+		return []StreamEvent{StreamErrorEvent{Error: l.errorDetail(code, wireStr(e.Get("message")))}}, nil
 	}
 	if inband := l.inbandError(payload); inband != nil {
 		return []StreamEvent{StreamErrorEvent{Error: ErrorDetail{Code: inband.Code, ProviderCode: "inband_finish_reason", Message: inband.Error()}}}, nil
 	}
 	var events []StreamEvent
 	var candidate JSONObject
-	if cands := wireList(payload["candidates"]); len(cands) > 0 {
+	if cands := wireList(payload.Get("candidates")); len(cands) > 0 {
 		candidate = wireObj(cands[0])
 	}
 	yielded := false
 	sawTool := false
 	finish := ""
 	if candidate != nil {
-		content := wireObj(candidate["content"])
-		chunkLogprobs := geminiTokenLogprobs(candidate["logprobsResult"])
-		for idx, raw := range wireList(content["parts"]) {
+		content := wireObj(candidate.Get("content"))
+		chunkLogprobs := geminiTokenLogprobs(candidate.Get("logprobsResult"))
+		for idx, raw := range wireList(content.Get("parts")) {
 			part := wireObj(raw)
 			if part == nil {
 				continue
 			}
 			i := idx
 			signatureDelta := func(sig any) StreamEvent {
-				return StreamDeltaEvent{Delta: ContinuationDelta{Provider: "gemini", Kind: "thought_signature", Data: JSONObject{"value": wireStr(sig)}, PartIndex: &i}}
+				return StreamDeltaEvent{Delta: ContinuationDelta{Provider: "gemini", Kind: "thought_signature", Data: JSONObject{{"value", wireStr(sig)}}, PartIndex: &i}}
 			}
-			_, hasText := part["text"]
+			_, hasText := part.Lookup("text")
 			switch {
-			case truthy(part["thought"]) && hasText:
+			case truthy(part.Get("thought")) && hasText:
 				yielded = true
-				events = append(events, StreamDeltaEvent{Delta: ThinkingDelta{Text: wireStr(part["text"]), PartIndex: idx}})
-				if part["thoughtSignature"] != nil {
-					events = append(events, signatureDelta(part["thoughtSignature"]))
+				events = append(events, StreamDeltaEvent{Delta: ThinkingDelta{Text: wireStr(part.Get("text")), PartIndex: idx}})
+				if part.Get("thoughtSignature") != nil {
+					events = append(events, signatureDelta(part.Get("thoughtSignature")))
 				}
 			case hasText:
 				yielded = true
-				events = append(events, StreamDeltaEvent{Delta: TextDelta{Text: wireStr(part["text"]), PartIndex: idx, Logprobs: chunkLogprobs}})
+				events = append(events, StreamDeltaEvent{Delta: TextDelta{Text: wireStr(part.Get("text")), PartIndex: idx, Logprobs: chunkLogprobs}})
 				chunkLogprobs = nil
-				if part["thoughtSignature"] != nil {
-					events = append(events, signatureDelta(part["thoughtSignature"]))
+				if part.Get("thoughtSignature") != nil {
+					events = append(events, signatureDelta(part.Get("thoughtSignature")))
 				}
-			case wireObj(part["functionCall"]) != nil:
-				fc := wireObj(part["functionCall"])
+			case wireObj(part.Get("functionCall")) != nil:
+				fc := wireObj(part.Get("functionCall"))
 				sawTool = true
 				yielded = true
-				args := fc["args"]
+				args := fc.Get("args")
 				if args == nil {
 					args = JSONObject{}
 				}
-				events = append(events, StreamDeltaEvent{Delta: ToolCallDelta{Input: jsonRaw(args), PartIndex: idx, ID: wireStr(fc["id"]), Name: wireStr(fc["name"])}})
-				sig := part["thoughtSignature"]
+				events = append(events, StreamDeltaEvent{Delta: ToolCallDelta{Input: jsonRaw(args), PartIndex: idx, ID: wireStr(fc.Get("id")), Name: wireStr(fc.Get("name"))}})
+				sig := part.Get("thoughtSignature")
 				if sig == nil {
-					sig = fc["thoughtSignature"]
+					sig = fc.Get("thoughtSignature")
 				}
 				if sig != nil {
 					events = append(events, signatureDelta(sig))
 				}
-			case wireObj(part["inlineData"]) != nil:
-				inline := wireObj(part["inlineData"])
-				mime := wireStr(inline["mimeType"])
+			case wireObj(part.Get("inlineData")) != nil:
+				inline := wireObj(part.Get("inlineData"))
+				mime := wireStr(inline.Get("mimeType"))
 				if mime == "" {
 					mime = "application/octet-stream"
 				}
-				data := wireStr(inline["data"])
+				data := wireStr(inline.Get("data"))
 				if strings.HasPrefix(mime, "audio/") {
 					yielded = true
 					events = append(events, StreamDeltaEvent{Delta: AudioDelta{Data: S(data), PartIndex: idx, MediaType: mime}})
@@ -1033,12 +1023,12 @@ func (l *GeminiLM) parseStreamEvents(_ *Request, ev sse.Event) ([]StreamEvent, e
 				}
 			}
 		}
-		finish = wireStr(candidate["finishReason"])
+		finish = wireStr(candidate.Get("finishReason"))
 	}
 	if finish != "" {
 		usage := l.usageFromPayload(payload)
 		events = append(events, StreamEndEvent{FinishReason: geminiFinish(finish, sawTool), Usage: &usage, ProviderData: payload})
-	} else if _, has := payload["usageMetadata"]; !yielded && has {
+	} else if _, has := payload.Lookup("usageMetadata"); !yielded && has {
 		usage := l.usageFromPayload(payload)
 		events = append(events, StreamEndEvent{FinishReason: FinishStop, Usage: &usage, ProviderData: payload})
 	}
@@ -1056,8 +1046,8 @@ func (l *GeminiLM) modelsFromBody(body string) ([]ModelInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return modelInfosFromEntries(data["models"], l.provider, "gemini_generate_content", func(e map[string]any) string {
-		return strings.TrimPrefix(stringOnly(e["name"]), "models/")
+	return modelInfosFromEntries(data.Get("models"), l.provider, "gemini_generate_content", func(e JSONObject) string {
+		return strings.TrimPrefix(stringOnly(e.Get("name")), "models/")
 	}), nil
 }
 
@@ -1078,7 +1068,7 @@ func geminiFileResource(fileID string) string {
 
 func (l *GeminiLM) fileUploadRequest(req *FileUploadRequest) (*TransportRequest, error) {
 	params := map[string]string{}
-	for k, v := range req.Extensions {
+	for k, v := range req.Extensions.All() {
 		if v != nil {
 			params[k] = wireStr(v)
 		}
@@ -1087,19 +1077,19 @@ func (l *GeminiLM) fileUploadRequest(req *FileUploadRequest) (*TransportRequest,
 	if err != nil {
 		return nil, err
 	}
-	ct, body := multipartRelatedBody(JSONObject{"file": JSONObject{"display_name": req.Filename}}, req.EffectiveMediaType(), content)
+	ct, body := multipartRelatedBody(JSONObject{{"file", JSONObject{{"display_name", req.Filename}}}}, req.EffectiveMediaType(), content)
 	return l.emit(emitSpec{method: "POST", url: buildURL(strings.TrimRight(l.uploadBaseURL, "/")+"/files", params), headers: [][2]string{{"X-Goog-Upload-Protocol", "multipart"}, {"Content-Type", ct}}, body: body})
 }
 
 func (l *GeminiLM) fileInfo(data JSONObject) (FileInfo, error) {
-	id := stringOnly(data["uri"])
+	id := stringOnly(data.Get("uri"))
 	if id == "" {
-		id = stringOnly(data["name"])
+		id = stringOnly(data.Get("name"))
 	}
 	if id == "" {
 		return FileInfo{}, l.providerError(KindProvider, "gemini: file object carries no uri or name", 0, "", "")
 	}
-	state := wireStr(data["state"])
+	state := wireStr(data.Get("state"))
 	readiness := "ready"
 	if strings.HasSuffix(state, "PROCESSING") {
 		readiness = "pending"
@@ -1107,13 +1097,13 @@ func (l *GeminiLM) fileInfo(data JSONObject) (FileInfo, error) {
 		readiness = "failed"
 	}
 	var downloadable *bool
-	if stringOnly(data["downloadUri"]) != "" {
+	if stringOnly(data.Get("downloadUri")) != "" {
 		downloadable = B(true)
-	} else if data["source"] == "UPLOADED" {
+	} else if data.Get("source") == "UPLOADED" {
 		downloadable = B(false)
 	}
 	var size *int
-	switch raw := data["sizeBytes"].(type) {
+	switch raw := data.Get("sizeBytes").(type) {
 	case string:
 		if i, err := strconv.Atoi(raw); err == nil {
 			size = &i
@@ -1127,8 +1117,8 @@ func (l *GeminiLM) fileInfo(data JSONObject) (FileInfo, error) {
 		}
 	}
 	return FileInfo{
-		ID: id, Filename: stringOnly(data["displayName"]), MediaType: stringOnly(data["mimeType"]), SizeBytes: size,
-		CreatedAt: isoUTC(data["createTime"]), ExpiresAt: isoUTC(data["expirationTime"]), Readiness: readiness, Downloadable: downloadable, ProviderData: data,
+		ID: id, Filename: stringOnly(data.Get("displayName")), MediaType: stringOnly(data.Get("mimeType")), SizeBytes: size,
+		CreatedAt: isoUTC(data.Get("createTime")), ExpiresAt: isoUTC(data.Get("expirationTime")), Readiness: readiness, Downloadable: downloadable, ProviderData: data,
 	}, nil
 }
 
@@ -1137,7 +1127,7 @@ func (l *GeminiLM) fileInfoFromBody(body string) (FileInfo, error) {
 	if err != nil {
 		return FileInfo{}, err
 	}
-	if f := wireObj(data["file"]); f != nil {
+	if f := wireObj(data.Get("file")); f != nil {
 		return l.fileInfo(f)
 	}
 	return l.fileInfo(data)
@@ -1161,7 +1151,7 @@ func (l *GeminiLM) filePageFromListBody(body string) (FilePage, error) {
 		return FilePage{}, err
 	}
 	var items []FileInfo
-	for _, e := range wireList(data["files"]) {
+	for _, e := range wireList(data.Get("files")) {
 		if obj := wireObj(e); obj != nil {
 			info, err := l.fileInfo(obj)
 			if err != nil {
@@ -1170,7 +1160,7 @@ func (l *GeminiLM) filePageFromListBody(body string) (FilePage, error) {
 			items = append(items, info)
 		}
 	}
-	return FilePage{Items: items, NextCursor: stringOnly(data["nextPageToken"])}, nil
+	return FilePage{Items: items, NextCursor: stringOnly(data.Get("nextPageToken"))}, nil
 }
 
 func (l *GeminiLM) fileDeleteRequest(fileID string) (*TransportRequest, error) {
@@ -1193,51 +1183,51 @@ func (l *GeminiLM) cacheCreateRequest(prefix *Request, ttlSeconds *int, label st
 		}
 		contents = append(contents, wm)
 	}
-	body := JSONObject{"model": l.modelPath(prefix.Model), "contents": contents}
+	body := JSONObject{{"model", l.modelPath(prefix.Model)}, {"contents", contents}}
 	if prefix.System != nil {
 		text, err := systemText(prefix.System, l.provider)
 		if err != nil {
 			return nil, err
 		}
-		body["systemInstruction"] = JSONObject{"parts": []any{JSONObject{"text": text}}}
+		body.Set("systemInstruction", JSONObject{{"parts", []any{JSONObject{{"text", text}}}}})
 	}
 	if len(prefix.Tools) > 0 {
 		var declarations, tools []any
 		for _, t := range prefix.Tools {
 			if ft, ok := t.(FunctionTool); ok {
-				declarations = append(declarations, JSONObject{"name": ft.Name, "description": nilIfEmpty(ft.Description), "parameters": ft.EffectiveParameters()})
+				declarations = append(declarations, JSONObject{{"name", ft.Name}, {"description", nilIfEmpty(ft.Description)}, {"parameters", ft.EffectiveParameters()}})
 			}
 		}
 		if len(declarations) > 0 {
-			tools = append(tools, JSONObject{"functionDeclarations": declarations})
+			tools = append(tools, JSONObject{{"functionDeclarations", declarations}})
 		}
 		for _, t := range prefix.Tools {
 			if bt, ok := t.(BuiltinTool); ok {
 				tools = append(tools, geminiBuiltin(bt))
 			}
 		}
-		body["tools"] = tools
+		body.Set("tools", tools)
 	}
 	if ttlSeconds != nil {
-		body["ttl"] = strconv.Itoa(*ttlSeconds) + "s"
+		body.Set("ttl", strconv.Itoa(*ttlSeconds)+"s")
 	}
 	if label != "" {
-		body["displayName"] = label
+		body.Set("displayName", label)
 	}
 	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/cachedContents", headers: [][2]string{{"Content-Type", "application/json"}}, payload: body})
 }
 
 func (l *GeminiLM) cacheInfo(data JSONObject) (CacheInfo, error) {
-	name := stringOnly(data["name"])
+	name := stringOnly(data.Get("name"))
 	if name == "" {
 		return CacheInfo{}, l.providerError(KindProvider, "gemini: cache object carries no name", 0, "", "")
 	}
-	model := strings.TrimPrefix(wireStr(data["model"]), "models/")
+	model := strings.TrimPrefix(wireStr(data.Get("model")), "models/")
 	if model == "" {
 		return CacheInfo{}, l.providerError(KindProvider, "gemini: cache object carries no model", 0, "", "")
 	}
 	var tokens *int
-	switch raw := wireObj(data["usageMetadata"])["totalTokenCount"].(type) {
+	switch raw := wireObj(data.Get("usageMetadata")).Get("totalTokenCount").(type) {
 	case string:
 		if i, err := strconv.Atoi(raw); err == nil && i >= 0 {
 			tokens = &i
@@ -1248,7 +1238,7 @@ func (l *GeminiLM) cacheInfo(data JSONObject) (CacheInfo, error) {
 			tokens = &i
 		}
 	}
-	return CacheInfo{ID: name, Model: model, Tokens: tokens, CreatedAt: isoUTC(data["createTime"]), ExpiresAt: isoUTC(data["expireTime"]), Label: stringOnly(data["displayName"]), ProviderData: data}, nil
+	return CacheInfo{ID: name, Model: model, Tokens: tokens, CreatedAt: isoUTC(data.Get("createTime")), ExpiresAt: isoUTC(data.Get("expireTime")), Label: stringOnly(data.Get("displayName")), ProviderData: data}, nil
 }
 
 func (l *GeminiLM) cacheInfoFromBody(body string) (CacheInfo, error) {
@@ -1277,7 +1267,7 @@ func (l *GeminiLM) cachePageFromListBody(body string) (CachePage, error) {
 		return CachePage{}, err
 	}
 	var items []CacheInfo
-	for _, e := range wireList(data["cachedContents"]) {
+	for _, e := range wireList(data.Get("cachedContents")) {
 		if obj := wireObj(e); obj != nil {
 			info, err := l.cacheInfo(obj)
 			if err != nil {
@@ -1286,7 +1276,7 @@ func (l *GeminiLM) cachePageFromListBody(body string) (CachePage, error) {
 			items = append(items, info)
 		}
 	}
-	return CachePage{Items: items, NextCursor: stringOnly(data["nextPageToken"])}, nil
+	return CachePage{Items: items, NextCursor: stringOnly(data.Get("nextPageToken"))}, nil
 }
 
 func (l *GeminiLM) cacheDeleteRequest(cacheID string) (*TransportRequest, error) {
@@ -1294,7 +1284,7 @@ func (l *GeminiLM) cacheDeleteRequest(cacheID string) (*TransportRequest, error)
 }
 
 func (l *GeminiLM) cacheUpdateRequest(cacheID string, ttlSeconds int) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "PATCH", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(l.cacheResource(cacheID), true), headers: [][2]string{{"Content-Type", "application/json"}}, payload: JSONObject{"ttl": strconv.Itoa(ttlSeconds) + "s"}})
+	return l.emit(emitSpec{method: "PATCH", url: strings.TrimRight(l.baseURL, "/") + "/" + pathID(l.cacheResource(cacheID), true), headers: [][2]string{{"Content-Type", "application/json"}}, payload: JSONObject{{"ttl", strconv.Itoa(ttlSeconds) + "s"}}})
 }
 
 // ─── Batch ───────────────────────────────────────────────────────────
@@ -1307,26 +1297,26 @@ func (l *GeminiLM) batchSubmitRequest(req *BatchRequest, _ JSONObject, scope *ad
 		if err != nil {
 			return nil, err
 		}
-		requests = append(requests, JSONObject{"request": p, "metadata": JSONObject{"key": strconv.Itoa(i)}})
+		requests = append(requests, JSONObject{{"request", p}, {"metadata", JSONObject{{"key", strconv.Itoa(i)}}}})
 	}
-	batch := JSONObject{"inputConfig": JSONObject{"requests": JSONObject{"requests": requests}}}
+	batch := JSONObject{{"inputConfig", JSONObject{{"requests", JSONObject{{"requests", requests}}}}}}
 	if req.Label != "" {
-		batch["displayName"] = req.Label
+		batch.Set("displayName", req.Label)
 	}
-	payload := JSONObject{"batch": batch}
-	for k, v := range req.Extensions {
-		payload[k] = v
+	payload := JSONObject{{"batch", batch}}
+	for k, v := range req.Extensions.All() {
+		payload.Set(k, v)
 	}
 	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/" + l.modelPath(model) + ":batchGenerateContent", headers: [][2]string{{"Content-Type", "application/json"}}, payload: payload, scope: scope})
 }
 
 func (l *GeminiLM) batchJobInfo(data JSONObject) (BatchJobInfo, error) {
-	name := stringOnly(data["name"])
+	name := stringOnly(data.Get("name"))
 	if name == "" {
 		return BatchJobInfo{}, l.providerError(KindProvider, "gemini: batch operation carries no name", 0, "", "")
 	}
-	metadata := wireObj(data["metadata"])
-	return BatchJobInfo{ID: name, Status: geminiBatchStatus(data), Label: stringOnly(metadata["displayName"]), CreatedAt: isoUTC(metadata["createTime"]), ProviderData: data}, nil
+	metadata := wireObj(data.Get("metadata"))
+	return BatchJobInfo{ID: name, Status: geminiBatchStatus(data), Label: stringOnly(metadata.Get("displayName")), CreatedAt: isoUTC(metadata.Get("createTime")), ProviderData: data}, nil
 }
 
 func (l *GeminiLM) batchJobFromBody(body string) (BatchJobInfo, error) {
@@ -1348,11 +1338,11 @@ func (l *GeminiLM) batchCancelRequest(batchID string) (*TransportRequest, error)
 func (l *GeminiLM) batchResultFetches(JSONObject) ([]*TransportRequest, error) { return nil, nil }
 
 func (l *GeminiLM) batchEntries(statusBody JSONObject, _ []string) ([]BatchEntry, error) {
-	response := wireObj(statusBody["response"])
+	response := wireObj(statusBody.Get("response"))
 	var inlined []any
-	switch x := response["inlinedResponses"].(type) {
-	case map[string]any:
-		inlined = wireList(x["inlinedResponses"])
+	switch x := jsonView(response.Get("inlinedResponses")).(type) {
+	case JSONObject:
+		inlined = wireList(x.Get("inlinedResponses"))
 	case []any:
 		inlined = x
 	}
@@ -1363,28 +1353,28 @@ func (l *GeminiLM) batchEntries(statusBody JSONObject, _ []string) ([]BatchEntry
 			continue
 		}
 		index := position
-		if key := wireStr(wireObj(item["metadata"])["key"]); key != "" {
+		if key := wireStr(wireObj(item.Get("metadata")).Get("key")); key != "" {
 			if i, err := strconv.Atoi(key); err == nil {
 				index = i
 			}
 		}
-		if body := wireObj(item["response"]); body != nil {
-			resp, err := l.parseResponse(batchEntryRequest(stringOnly(body["modelVersion"])), JSONResponse(200, body))
+		if body := wireObj(item.Get("response")); body != nil {
+			resp, err := l.parseResponse(batchEntryRequest(stringOnly(body.Get("modelVersion"))), JSONResponse(200, body))
 			if err != nil {
 				return nil, err
 			}
 			entries = append(entries, BatchEntry{Index: index, Outcome: "succeeded", Response: resp})
 		} else {
-			e := wireObj(item["error"])
-			msg := wireStr(e["message"])
+			e := wireObj(item.Get("error"))
+			msg := wireStr(e.Get("message"))
 			if msg == "" {
 				msg = "batch entry errored"
 			}
 			code := ""
-			if e["status"] != nil {
-				code = wireStr(e["status"])
-			} else if e["code"] != nil {
-				code = wireStr(e["code"])
+			if e.Get("status") != nil {
+				code = wireStr(e.Get("status"))
+			} else if e.Get("code") != nil {
+				code = wireStr(e.Get("code"))
 			}
 			entries = append(entries, BatchEntry{Index: index, Outcome: "errored", Error: &ErrorDetail{Code: CodeProvider, Message: msg, ProviderCode: code}})
 		}
@@ -1403,7 +1393,7 @@ func (l *GeminiLM) batchJobsFromListBody(body string) ([]BatchJobInfo, error) {
 		return nil, err
 	}
 	var out []BatchJobInfo
-	for _, e := range wireList(data["operations"]) {
+	for _, e := range wireList(data.Get("operations")) {
 		if obj := wireObj(e); obj != nil {
 			info, err := l.batchJobInfo(obj)
 			if err != nil {
@@ -1421,27 +1411,27 @@ func (l *GeminiLM) videoSubmitRequest(req *VideoGenerationRequest) (*TransportRe
 	if len(req.Images) > 0 {
 		return nil, UnsupportedFeatureErrorf(l.provider, "gemini: video input images are not mapped yet; use extensions until the mapping is live-receipted")
 	}
-	payload := JSONObject{"instances": []any{JSONObject{"prompt": req.Prompt}}}
-	for k, v := range req.Extensions {
-		payload[k] = v
+	payload := JSONObject{{"instances", []any{JSONObject{{"prompt", req.Prompt}}}}}
+	for k, v := range req.Extensions.All() {
+		payload.Set(k, v)
 	}
 	if req.Seconds != nil {
-		if _, has := payload["parameters"]; !has {
-			payload["parameters"] = JSONObject{"durationSeconds": *req.Seconds}
+		if _, has := payload.Lookup("parameters"); !has {
+			payload.Set("parameters", JSONObject{{"durationSeconds", *req.Seconds}})
 		}
 	}
 	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/" + l.modelPath(req.Model) + ":predictLongRunning", headers: [][2]string{{"Content-Type", "application/json"}}, payload: payload})
 }
 
 func (l *GeminiLM) videoJobInfo(data JSONObject) (VideoJobInfo, error) {
-	name := stringOnly(data["name"])
+	name := stringOnly(data.Get("name"))
 	if name == "" {
 		return VideoJobInfo{}, l.providerError(KindProvider, "gemini: video operation carries no name", 0, "", "")
 	}
 	status := "running"
-	if data["done"] == true {
+	if data.Get("done") == true {
 		status = "completed"
-		if wireObj(data["error"]) != nil {
+		if wireObj(data.Get("error")) != nil {
 			status = "failed"
 		}
 	}
@@ -1461,9 +1451,9 @@ func (l *GeminiLM) videoStatusRequest(videoID string) (*TransportRequest, error)
 }
 
 func (l *GeminiLM) videoResultURI(statusBody JSONObject) (string, error) {
-	gvr := wireObj(wireObj(statusBody["response"])["generateVideoResponse"])
-	if samples := wireList(gvr["generatedSamples"]); len(samples) > 0 {
-		if uri := stringOnly(wireObj(wireObj(samples[0])["video"])["uri"]); uri != "" {
+	gvr := wireObj(wireObj(statusBody.Get("response")).Get("generateVideoResponse"))
+	if samples := wireList(gvr.Get("generatedSamples")); len(samples) > 0 {
+		if uri := stringOnly(wireObj(wireObj(samples[0]).Get("video")).Get("uri")); uri != "" {
 			return uri, nil
 		}
 	}
@@ -1502,7 +1492,7 @@ func (l *GeminiLM) videoJobsFromListBody(body string) ([]VideoJobInfo, error) {
 		return nil, err
 	}
 	var out []VideoJobInfo
-	for _, e := range wireList(data["operations"]) {
+	for _, e := range wireList(data.Get("operations")) {
 		if obj := wireObj(e); obj != nil {
 			info, err := l.videoJobInfo(obj)
 			if err != nil {
@@ -1519,13 +1509,13 @@ func (l *GeminiLM) videoJobsFromListBody(body string) ([]VideoJobInfo, error) {
 func (l *GeminiLM) imageGenerationLMRequest(req *ImageGenerationRequest) *Request {
 	ext := copyObject(req.Extensions)
 	if req.Size != "" {
-		gen := copyObject(wireObj(ext["generationConfig"]))
-		imageCfg := copyObject(wireObj(gen["imageConfig"]))
-		if _, has := imageCfg["aspectRatio"]; !has {
-			imageCfg["aspectRatio"] = req.Size
+		gen := copyObject(wireObj(ext.Get("generationConfig")))
+		imageCfg := copyObject(wireObj(gen.Get("imageConfig")))
+		if _, has := imageCfg.Lookup("aspectRatio"); !has {
+			imageCfg.Set("aspectRatio", req.Size)
 		}
-		gen["imageConfig"] = imageCfg
-		ext["generationConfig"] = gen
+		gen.Set("imageConfig", imageCfg)
+		ext.Set("generationConfig", gen)
 	}
 	parts := []Part{TextPart{Text: req.Prompt}}
 	for _, img := range req.Images {
@@ -1569,13 +1559,13 @@ func (l *GeminiLM) speechGenerationLMRequest(req *SpeechGenerationRequest) (*Req
 	if req.Format != "" {
 		return nil, UnsupportedFeatureErrorf(l.provider, "gemini: speech format cannot be chosen; the wire always returns PCM")
 	}
-	gen := JSONObject{"responseModalities": []any{"AUDIO"}}
+	gen := JSONObject{{"responseModalities", []any{"AUDIO"}}}
 	if req.Voice != "" {
-		gen["speechConfig"] = JSONObject{"voiceConfig": JSONObject{"prebuiltVoiceConfig": JSONObject{"voiceName": req.Voice}}}
+		gen.Set("speechConfig", JSONObject{{"voiceConfig", JSONObject{{"prebuiltVoiceConfig", JSONObject{{"voiceName", req.Voice}}}}}})
 	}
-	ext := JSONObject{"generationConfig": gen}
-	for k, v := range req.Extensions {
-		ext[k] = v
+	ext := JSONObject{{"generationConfig", gen}}
+	for k, v := range req.Extensions.All() {
+		ext.Set(k, v)
 	}
 	return &Request{Model: req.Model, Messages: []Message{UserMessage(req.Prompt)}, Config: Config{Extensions: ext}}, nil
 }

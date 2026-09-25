@@ -292,14 +292,14 @@ func multipartRelatedBody(metadata JSONObject, mediaType string, data []byte) (s
 }
 
 // modelInfosFromEntries maps list-models entries to ModelInfo (verbatim entry in origin.provider_data).
-func modelInfosFromEntries(entries any, provider, apiFamily string, idOf func(map[string]any) string) []ModelInfo {
+func modelInfosFromEntries(entries any, provider, apiFamily string, idOf func(JSONObject) string) []ModelInfo {
 	list, ok := entries.([]any)
 	if !ok {
 		return nil
 	}
 	var out []ModelInfo
 	for _, e := range list {
-		entry, ok := e.(map[string]any)
+		entry, ok := asObject(e)
 		if !ok {
 			continue
 		}
@@ -316,10 +316,10 @@ func modelInfosFromEntries(entries any, provider, apiFamily string, idOf func(ma
 func partToOpenAIInput(p Part, provider string) (JSONObject, error) {
 	switch x := p.(type) {
 	case TextPart:
-		return JSONObject{"type": "input_text", "text": x.Text}, nil
+		return JSONObject{{"type", "input_text"}, {"text", x.Text}}, nil
 	case ImagePart:
 		if x.FileID != "" {
-			return JSONObject{"type": "input_image", "file_id": x.FileID}, nil
+			return JSONObject{{"type", "input_image"}, {"file_id", x.FileID}}, nil
 		}
 		src := x.URL
 		if src == "" {
@@ -329,17 +329,17 @@ func partToOpenAIInput(p Part, provider string) (JSONObject, error) {
 			}
 			src = uri
 		}
-		out := JSONObject{"type": "input_image", "image_url": src}
+		out := JSONObject{{"type", "input_image"}, {"image_url", src}}
 		if x.Detail != "" {
-			out["detail"] = x.Detail
+			out.Set("detail", x.Detail)
 		}
 		return out, nil
 	case AudioPart:
 		if x.URL != "" {
-			return JSONObject{"type": "input_audio", "audio_url": x.URL}, nil
+			return JSONObject{{"type", "input_audio"}, {"audio_url", x.URL}}, nil
 		}
 		if x.FileID != "" {
-			return JSONObject{"type": "input_audio", "file_id": x.FileID}, nil
+			return JSONObject{{"type", "input_audio"}, {"file_id", x.FileID}}, nil
 		}
 		media := x.MediaType
 		if media == "" {
@@ -355,14 +355,14 @@ func partToOpenAIInput(p Part, provider string) (JSONObject, error) {
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"type": "input_audio", "audio": b64, "format": media}, nil
+		return JSONObject{{"type", "input_audio"}, {"audio", b64}, {"format", media}}, nil
 	case DocumentPart, BinaryPart:
 		m, _ := MediaOf(p)
 		if m.URL != "" {
-			return JSONObject{"type": "input_file", "file_url": m.URL}, nil
+			return JSONObject{{"type", "input_file"}, {"file_url", m.URL}}, nil
 		}
 		if m.FileID != "" {
-			return JSONObject{"type": "input_file", "file_id": m.FileID}, nil
+			return JSONObject{{"type", "input_file"}, {"file_id", m.FileID}}, nil
 		}
 		mt := m.MediaType
 		if mt == "" {
@@ -380,28 +380,28 @@ func partToOpenAIInput(p Part, provider string) (JSONObject, error) {
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"type": "input_file", "filename": "file." + ext, "file_data": uri}, nil
+		return JSONObject{{"type", "input_file"}, {"filename", "file." + ext}, {"file_data", uri}}, nil
 	case VideoPart:
 		if x.URL != "" {
-			return JSONObject{"type": "input_video", "video_url": x.URL}, nil
+			return JSONObject{{"type", "input_video"}, {"video_url", x.URL}}, nil
 		}
 		if x.FileID != "" {
-			return JSONObject{"type": "input_video", "file_id": x.FileID}, nil
+			return JSONObject{{"type", "input_video"}, {"file_id", x.FileID}}, nil
 		}
 		uri, err := mediaDataURI(x.Media)
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"type": "input_video", "video_data": uri}, nil
+		return JSONObject{{"type", "input_video"}, {"video_data", uri}}, nil
 	case DataPart:
 		// 2026-09-19 D3: a data part on a text wire is its compact JSON.
-		return JSONObject{"type": "input_text", "text": DataPartText(x)}, nil
+		return JSONObject{{"type", "input_text"}, {"text", DataPartText(x)}}, nil
 	case CitationPart, ThinkingPart:
 		text, err := partsToText([]Part{p}, provider, "")
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"type": "input_text", "text": text}, nil
+		return JSONObject{{"type", "input_text"}, {"text", text}}, nil
 	}
 	head := ""
 	if provider != "" {
@@ -432,15 +432,15 @@ func toolResultOutputOpenAI(provider string, part ToolResultPart, policy string)
 	}
 	if part.IsError {
 		found := false
-		for _, b := range blocks {
-			if b["type"] == "input_text" {
-				b["text"] = "[error] " + wireStr(b["text"])
+		for i := range blocks {
+			if blocks[i].Get("type") == "input_text" {
+				blocks[i].Set("text", "[error] "+wireStr(blocks[i].Get("text")))
 				found = true
 				break
 			}
 		}
 		if !found {
-			blocks = append([]JSONObject{{"type": "input_text", "text": "[error]"}}, blocks...)
+			blocks = append([]JSONObject{{{"type", "input_text"}, {"text", "[error]"}}}, blocks...)
 		}
 	}
 	return toAnyList(blocks, func(b JSONObject) any { return b }), nil
@@ -449,16 +449,16 @@ func toolResultOutputOpenAI(provider string, part ToolResultPart, policy string)
 // anthropicSource maps a media part to an Anthropic source block.
 func anthropicSource(m Media) (JSONObject, error) {
 	if m.URL != "" {
-		return JSONObject{"type": "url", "url": m.URL}, nil
+		return JSONObject{{"type", "url"}, {"url", m.URL}}, nil
 	}
 	if m.FileID != "" {
-		return JSONObject{"type": "file", "file_id": m.FileID}, nil
+		return JSONObject{{"type", "file"}, {"file_id", m.FileID}}, nil
 	}
 	b64, err := m.Base64()
 	if err != nil {
 		return nil, valueErrorf("media part has no usable source")
 	}
-	return JSONObject{"type": "base64", "media_type": m.MediaType, "data": b64}, nil
+	return JSONObject{{"type", "base64"}, {"media_type", m.MediaType}, {"data", b64}}, nil
 }
 
 // openaiTokenLogprobs maps OpenAI-style logprob entries to TokenLogprobs.
@@ -469,31 +469,31 @@ func openaiTokenLogprobs(entries any) []TokenLogprob {
 	}
 	var out []TokenLogprob
 	for _, e := range list {
-		entry, ok := e.(map[string]any)
+		entry, ok := asObject(e)
 		if !ok {
 			continue
 		}
-		if _, has := entry["token"]; !has {
+		if _, has := entry.Lookup("token"); !has {
 			continue
 		}
-		if _, has := entry["logprob"]; !has {
+		if _, has := entry.Lookup("logprob"); !has {
 			continue
 		}
 		var top []TopLogprob
-		for _, a := range wireList(entry["top_logprobs"]) {
-			alt, ok := a.(map[string]any)
+		for _, a := range wireList(entry.Get("top_logprobs")) {
+			alt, ok := asObject(a)
 			if !ok {
 				continue
 			}
-			if _, has := alt["token"]; !has {
+			if _, has := alt.Lookup("token"); !has {
 				continue
 			}
-			if _, has := alt["logprob"]; !has {
+			if _, has := alt.Lookup("logprob"); !has {
 				continue
 			}
-			top = append(top, TopLogprob{Token: wireStr(alt["token"]), Logprob: wireFloat(alt["logprob"], 0), Bytes: intList(alt["bytes"])})
+			top = append(top, TopLogprob{Token: wireStr(alt.Get("token")), Logprob: wireFloat(alt.Get("logprob"), 0), Bytes: intList(alt.Get("bytes"))})
 		}
-		out = append(out, TokenLogprob{Token: wireStr(entry["token"]), Logprob: wireFloat(entry["logprob"], 0), Bytes: intList(entry["bytes"]), Top: top})
+		out = append(out, TokenLogprob{Token: wireStr(entry.Get("token")), Logprob: wireFloat(entry.Get("logprob"), 0), Bytes: intList(entry.Get("bytes")), Top: top})
 	}
 	return out
 }
@@ -519,8 +519,8 @@ func unnamedToolCallError(provider, path string) *Error {
 
 // parseJSONObject parses provider-emitted arguments leniently.
 func parseJSONObject(v any) JSONObject {
-	switch x := v.(type) {
-	case map[string]any:
+	switch x := jsonView(v).(type) {
+	case JSONObject:
 		return x
 	case string:
 		if x == "" {
@@ -528,12 +528,12 @@ func parseJSONObject(v any) JSONObject {
 		}
 		parsed, err := DecodeJSON([]byte(x))
 		if err != nil {
-			return JSONObject{"partial_json": x}
+			return JSONObject{{"partial_json", x}}
 		}
-		if obj, ok := parsed.(map[string]any); ok {
+		if obj, ok := asObject(parsed); ok {
 			return obj
 		}
-		return JSONObject{"value": parsed}
+		return JSONObject{{"value", parsed}}
 	}
 	return JSONObject{}
 }
@@ -545,12 +545,12 @@ func parseJSONBestEffort(raw string) JSONObject {
 	}
 	parsed, err := DecodeJSON([]byte(raw))
 	if err != nil {
-		return JSONObject{"partial_json": raw}
+		return JSONObject{{"partial_json", raw}}
 	}
-	if obj, ok := parsed.(map[string]any); ok {
+	if obj, ok := asObject(parsed); ok {
 		return obj
 	}
-	return JSONObject{"value": parsed}
+	return JSONObject{{"value", parsed}}
 }
 
 // nonJSONReplyError is INV-054: a 2xx whose body is not JSON is a

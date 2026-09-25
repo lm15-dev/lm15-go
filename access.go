@@ -459,11 +459,11 @@ func looksLikeJWT(text string) bool {
 	if err != nil {
 		return false
 	}
-	var header map[string]any
+	var header JSONObject
 	if err := json.Unmarshal(decoded, &header); err != nil {
 		return false
 	}
-	_, ok := header["alg"]
+	_, ok := header.Lookup("alg")
 	return ok
 }
 

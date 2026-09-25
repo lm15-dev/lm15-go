@@ -29,17 +29,17 @@ func vetManagedRun(msg JSONObject) (JSONObject, error) {
 		events = append(events, e)
 		mu.Unlock()
 	}
-	startF, _ := number(msg["clock_ms"])
+	startF, _ := number(msg.Get("clock_ms"))
 	start := int64(startF)
 	var elapsed float64 // ms
-	sentinel := wireStr(msg["sentinel"])
+	sentinel := wireStr(msg.Get("sentinel"))
 	env := map[string]string{}
-	for k, v := range wireObj(msg["env"]) {
+	for k, v := range wireObj(msg.Get("env")).All() {
 		env[k] = wireStr(v)
 	}
-	storePath := wireStr(msg["store_path"])
-	script := wireList(msg["http"])
-	answers := wireList(msg["ui"])
+	storePath := wireStr(msg.Get("store_path"))
+	script := wireList(msg.Get("http"))
+	answers := wireList(msg.Get("ui"))
 
 	server := &vetAuthServer{script: script, record: record}
 	ui := &vetScriptUI{answers: answers, record: record}
@@ -68,7 +68,7 @@ func vetManagedRun(msg JSONObject) (JSONObject, error) {
 		Sleep: func(_ context.Context, d time.Duration) error {
 			ms := float64(d) / float64(time.Millisecond)
 			elapsed += ms
-			record(JSONObject{"sleep_ms": int64(ms + 0.5)})
+			record(JSONObject{{"sleep_ms", int64(ms + 0.5)}})
 			return nil
 		},
 		Transport: server,
@@ -77,33 +77,33 @@ func vetManagedRun(msg JSONObject) (JSONObject, error) {
 	})
 	ctx := context.Background()
 	var outcomes []any
-	for i, raw := range wireList(msg["steps"]) {
-		record(JSONObject{"step": i})
+	for i, raw := range wireList(msg.Get("steps")) {
+		record(JSONObject{{"step", i}})
 		step, err := vetResolveRefs(wireObj(raw), outcomes)
 		if err != nil {
-			outcomes = append(outcomes, JSONObject{"ok": false, "error": JSONObject{"type": "ValueError"}})
+			outcomes = append(outcomes, JSONObject{{"ok", false}, {"error", JSONObject{{"type", "ValueError"}}}})
 			continue
 		}
-		provider := wireStr(step["provider"])
+		provider := wireStr(step.Get("provider"))
 		value, err := vetManagedStep(ctx, auth, ui, step, provider, env, sentinel, &elapsed)
 		if err != nil {
-			outcomes = append(outcomes, JSONObject{"ok": false, "error": vetManagedError(err)})
+			outcomes = append(outcomes, JSONObject{{"ok", false}, {"error", vetManagedError(err)}})
 		} else {
-			outcomes = append(outcomes, JSONObject{"ok": true, "value": value})
+			outcomes = append(outcomes, JSONObject{{"ok", true}, {"value", value}})
 		}
 	}
 	var storeOut any
 	if data, err := os.ReadFile(storePath); err == nil {
 		if doc, err := DecodeJSON(data); err == nil {
-			storeOut = JSONObject{"document": doc}
+			storeOut = JSONObject{{"document", doc}}
 		} else {
-			storeOut = JSONObject{"raw": string(data)}
+			storeOut = JSONObject{{"raw", string(data)}}
 		}
 	}
 	if outcomes == nil {
 		outcomes = []any{}
 	}
-	return JSONObject{"steps": outcomes, "events": events, "store": storeOut}, nil
+	return JSONObject{{"steps", outcomes}, {"events", events}, {"store", storeOut}}, nil
 }
 
 func vetResolveRefs(step JSONObject, outcomes []any) (JSONObject, error) {
@@ -113,41 +113,41 @@ func vetResolveRefs(step JSONObject, outcomes []any) (JSONObject, error) {
 		if i < 0 || i >= len(outcomes) {
 			return nil, errors.New("step reference out of range")
 		}
-		o, _ := outcomes[i].(JSONObject)
-		v, ok := o["value"].(JSONObject)
-		if o["ok"] != true || !ok {
+		o, _ := asObject(outcomes[i])
+		v, ok := asObject(o.Get("value"))
+		if o.Get("ok") != true || !ok {
 			return nil, errors.New("step returned no connection to refer to")
 		}
 		return v, nil
 	}
 	out := JSONObject{}
-	for k, v := range step {
-		if m, ok := v.(map[string]any); ok {
-			if n, ok := m["id_of_step"]; ok {
+	for k, v := range step.All() {
+		if m, ok := asObject(v); ok {
+			if n, ok := m.Lookup("id_of_step"); ok {
 				c, err := target(n)
 				if err != nil {
 					return nil, err
 				}
-				out[k] = c["id"]
+				out.Set(k, c.Get("id"))
 				continue
 			}
-			if n, ok := m["of_step"]; ok {
+			if n, ok := m.Lookup("of_step"); ok {
 				c, err := target(n)
 				if err != nil {
 					return nil, err
 				}
-				out[k] = []any{c["id"], c["identity_generation"]}
+				out.Set(k, []any{c.Get("id"), c.Get("identity_generation")})
 				continue
 			}
 		}
-		out[k] = v
+		out.Set(k, v)
 	}
 	return out, nil
 }
 
 func vetStrings(v any) map[string]string {
 	out := map[string]string{}
-	for k, x := range wireObj(v) {
+	for k, x := range wireObj(v).All() {
 		out[k] = wireStr(x)
 	}
 	return out
@@ -162,14 +162,14 @@ func vetConnection(c *Connection) any {
 		routes[i] = r
 	}
 	settings := JSONObject{}
-	for k, v := range c.Settings {
-		settings[k] = v
+	for _, k := range sortedMapKeys(c.Settings) {
+		settings = append(settings, Member{k, c.Settings[k]})
 	}
-	out := JSONObject{"id": c.ID, "provider": c.Provider, "instance_id": c.InstanceID, "kind": c.Kind, "method_id": c.MethodID,
-		"routes": routes, "label": c.Label, "created_at": c.CreatedAt, "identity_generation": c.IdentityGeneration,
-		"credential_revision": c.CredentialRevision, "settings": settings}
+	out := JSONObject{{"id", c.ID}, {"provider", c.Provider}, {"instance_id", c.InstanceID}, {"kind", c.Kind}, {"method_id", c.MethodID},
+		{"routes", routes}, {"label", c.Label}, {"created_at", c.CreatedAt}, {"identity_generation", c.IdentityGeneration},
+		{"credential_revision", c.CredentialRevision}, {"settings", settings}}
 	if c.AccountLabel != "" {
-		out["account_label"] = c.AccountLabel
+		out.Set("account_label", c.AccountLabel)
 	}
 	return out
 }
@@ -182,26 +182,26 @@ func vetNullable(s string) any {
 }
 
 func vetManagedStep(ctx context.Context, auth *Auth, ui AuthUI, step JSONObject, provider string, env map[string]string, sentinel string, elapsed *float64) (any, error) {
-	switch wireStr(step["do"]) {
+	switch wireStr(step.Get("do")) {
 	case "advance":
-		ms, _ := number(step["ms"])
+		ms, _ := number(step.Get("ms"))
 		*elapsed += ms
 		return nil, nil
 	case "login":
-		allow, _ := step["allow_unverified"].(bool)
-		c, err := auth.Login(ctx, provider, LoginOptions{Method: wireStr(step["method"]), UI: ui, Answers: vetStrings(step["answers"]), Settings: vetStrings(step["settings"]), Replace: wireStr(step["replace"]), AllowUnverified: allow})
+		allow, _ := step.Get("allow_unverified").(bool)
+		c, err := auth.Login(ctx, provider, LoginOptions{Method: wireStr(step.Get("method")), UI: ui, Answers: vetStrings(step.Get("answers")), Settings: vetStrings(step.Get("settings")), Replace: wireStr(step.Get("replace")), AllowUnverified: allow})
 		if err != nil {
 			return nil, err
 		}
 		return vetConnection(&c), nil
 	case "configure":
-		c, err := auth.Configure(ctx, provider, wireStr(step["method"]), vetStrings(step["answers"]), vetStrings(step["settings"]), wireStr(step["replace"]))
+		c, err := auth.Configure(ctx, provider, wireStr(step.Get("method")), vetStrings(step.Get("answers")), vetStrings(step.Get("settings")), wireStr(step.Get("replace")))
 		if err != nil {
 			return nil, err
 		}
 		return vetConnection(&c), nil
 	case "set_api_key":
-		c, err := auth.SetAPIKey(ctx, provider, wireStr(step["key"]), wireStr(step["replace"]))
+		c, err := auth.SetAPIKey(ctx, provider, wireStr(step.Get("key")), wireStr(step.Get("replace")))
 		if err != nil {
 			return nil, err
 		}
@@ -213,10 +213,10 @@ func vetManagedStep(ctx context.Context, auth *Auth, ui AuthUI, step JSONObject,
 		}
 		var verification any
 		if s.Verification != nil {
-			verification = JSONObject{"result": s.Verification.Result, "check": vetNullable(s.Verification.Check)}
+			verification = JSONObject{{"result", s.Verification.Result}, {"check", vetNullable(s.Verification.Check)}}
 		}
-		return JSONObject{"provider": s.Provider, "presence": s.Presence, "usability": s.Usability, "connection": vetConnection(s.Connection),
-			"expires_at": vetNullable(s.ExpiresAt), "logged_out": s.LoggedOut, "verification": verification}, nil
+		return JSONObject{{"provider", s.Provider}, {"presence", s.Presence}, {"usability", s.Usability}, {"connection", vetConnection(s.Connection)},
+			{"expires_at", vetNullable(s.ExpiresAt)}, {"logged_out", s.LoggedOut}, {"verification", verification}}, nil
 	case "connections":
 		list, err := auth.Connections()
 		if err != nil {
@@ -228,7 +228,7 @@ func vetManagedStep(ctx context.Context, auth *Auth, ui AuthUI, step JSONObject,
 		}
 		return out, nil
 	case "logout":
-		r, err := auth.Logout(ctx, wireStr(step["target"]))
+		r, err := auth.Logout(ctx, wireStr(step.Get("target")))
 		if err != nil {
 			return nil, err
 		}
@@ -236,12 +236,12 @@ func vetManagedStep(ctx context.Context, auth *Auth, ui AuthUI, step JSONObject,
 		for i, x := range r.Routes {
 			routes[i] = x
 		}
-		return JSONObject{"provider": r.Provider, "forgot": r.Forgot, "routes": routes, "identity_generation": r.IdentityGeneration}, nil
+		return JSONObject{{"provider", r.Provider}, {"forgot", r.Forgot}, {"routes", routes}, {"identity_generation", r.IdentityGeneration}}, nil
 	case "cancel_login":
 		return auth.CancelLogin(ctx, provider)
 	case "request_auth":
 		var pinned *[2]string
-		if p := wireList(step["pinned"]); len(p) == 2 {
+		if p := wireList(step.Get("pinned")); len(p) == 2 {
 			pinned = &[2]string{wireStr(p[0]), wireStr(p[1])}
 		}
 		r, err := auth.RequestAuth(ctx, provider, pinned)
@@ -250,13 +250,13 @@ func vetManagedStep(ctx context.Context, auth *Auth, ui AuthUI, step JSONObject,
 		}
 		var credential any
 		if r.CredentialKind != "" {
-			credential = JSONObject{"kind": r.CredentialKind, "value": r.Credential}
+			credential = JSONObject{{"kind", r.CredentialKind}, {"value", r.Credential}}
 		}
 		headers := JSONObject{}
-		for k, v := range r.Headers {
-			headers[k] = v
+		for _, k := range sortedMapKeys(r.Headers) {
+			headers = append(headers, Member{k, r.Headers[k]})
 		}
-		return JSONObject{"credential": credential, "headers": headers, "base_url": vetNullable(r.BaseURL), "account_id": vetNullable(r.AccountID), "named": vetNullable(r.Named)}, nil
+		return JSONObject{{"credential", credential}, {"headers", headers}, {"base_url", vetNullable(r.BaseURL)}, {"account_id", vetNullable(r.AccountID)}, {"named", vetNullable(r.Named)}}, nil
 	case "methods":
 		methods, err := auth.Methods(provider)
 		if err != nil {
@@ -270,13 +270,13 @@ func vetManagedStep(ctx context.Context, auth *Auth, ui AuthUI, step JSONObject,
 				for _, o := range f.Options {
 					options = append(options, o.ID)
 				}
-				fields = append(fields, JSONObject{"id": f.ID, "type": f.Type, "required": f.Required, "options": options})
+				fields = append(fields, JSONObject{{"id", f.ID}, {"type", f.Type}, {"required", f.Required}, {"options", options}})
 			}
 			delivery := []any{}
 			for _, d := range m.Delivery {
 				delivery = append(delivery, d)
 			}
-			out = append(out, JSONObject{"id": m.ID, "kind": m.Kind, "flow": m.Flow, "availability": m.Availability, "subscription": m.Subscription, "delivery": delivery, "fields": fields})
+			out = append(out, JSONObject{{"id", m.ID}, {"kind", m.Kind}, {"flow", m.Flow}, {"availability", m.Availability}, {"subscription", m.Subscription}, {"delivery", delivery}, {"fields", fields}})
 		}
 		return out, nil
 	case "providers":
@@ -287,7 +287,7 @@ func vetManagedStep(ctx context.Context, auth *Auth, ui AuthUI, step JSONObject,
 		return out, nil
 	case "explain":
 		opts := ExplainOptions{Env: env, Auth: auth}
-		if keys := wireList(step["api_keys"]); len(keys) > 0 {
+		if keys := wireList(step.Get("api_keys")); len(keys) > 0 {
 			opts.APIKeys = map[string]CredentialLike{}
 			for _, k := range keys {
 				opts.APIKeys[wireStr(k)] = sentinel + "-explicit"
@@ -299,21 +299,21 @@ func vetManagedStep(ctx context.Context, auth *Auth, ui AuthUI, step JSONObject,
 		}
 		steps := []any{}
 		for _, s := range report.Steps {
-			steps = append(steps, JSONObject{"kind": s.Kind, "state": s.State})
+			steps = append(steps, JSONObject{{"kind", s.Kind}, {"state", s.State}})
 		}
-		return JSONObject{"configured": report.Configured, "steps": steps}, nil
+		return JSONObject{{"configured", report.Configured}, {"steps", steps}}, nil
 	}
-	return nil, valueErrorf("unknown managed step %q", wireStr(step["do"]))
+	return nil, valueErrorf("unknown managed step %q", wireStr(step.Get("do")))
 }
 
 func vetManagedError(err error) JSONObject {
 	if errors.Is(err, context.Canceled) {
-		return JSONObject{"type": "cancelled"}
+		return JSONObject{{"type", "cancelled"}}
 	}
 	var e *Error
 	if errors.As(err, &e) {
 		if e.Kind == KindAuthOperation {
-			return JSONObject{"type": "AuthOperationError", "code": e.Code, "reason": e.Reason, "stage": e.Stage, "commit_state": e.CommitState, "recovery": e.Recovery}
+			return JSONObject{{"type", "AuthOperationError"}, {"code", e.Code}, {"reason", e.Reason}, {"stage", e.Stage}, {"commit_state", e.CommitState}, {"recovery", e.Recovery}}
 		}
 		kind := e.Kind
 		if kind == KindMissingCredential {
@@ -322,9 +322,9 @@ func vetManagedError(err error) JSONObject {
 		if kind == KindCredentialLockWait {
 			kind = KindLockTimeout
 		}
-		return JSONObject{"type": string(kind), "code": e.Code}
+		return JSONObject{{"type", string(kind)}, {"code", e.Code}}
 	}
-	return JSONObject{"type": "ValueError"}
+	return JSONObject{{"type", "ValueError"}}
 }
 
 // ─── The scripted auth server and UI ─────────────────────────────────
@@ -349,7 +349,7 @@ func (s *vetAuthServer) Do(ctx context.Context, req *TransportRequest) (*Transpo
 		if key == "user-agent" && strings.HasPrefix(value, "lm15/") {
 			value = "lm15"
 		}
-		headers[key] = value
+		headers.Set(key, value)
 	}
 	var body any
 	if len(req.Body) > 0 {
@@ -357,7 +357,7 @@ func (s *vetAuthServer) Do(ctx context.Context, req *TransportRequest) (*Transpo
 			form := JSONObject{}
 			values, _ := url.ParseQuery(string(req.Body))
 			for k, v := range values {
-				form[k] = v[0]
+				form.Set(k, v[0])
 			}
 			body = form
 		} else if parsed, err := DecodeJSON(req.Body); err == nil {
@@ -370,11 +370,11 @@ func (s *vetAuthServer) Do(ctx context.Context, req *TransportRequest) (*Transpo
 	if contentType != "" {
 		ct = contentType
 	}
-	s.record(JSONObject{"http": JSONObject{"method": req.Method, "url": req.URL, "content_type": ct, "headers": headers, "body": body}})
+	s.record(JSONObject{{"http", JSONObject{{"method", req.Method}, {"url", req.URL}, {"content_type", ct}, {"headers", headers}, {"body", body}}}})
 	s.mu.Lock()
 	var reply JSONObject
 	if len(s.script) > 0 {
-		reply, _ = s.script[0].(map[string]any)
+		reply, _ = asObject(s.script[0])
 		s.script = s.script[1:]
 	}
 	s.mu.Unlock()
@@ -382,28 +382,28 @@ func (s *vetAuthServer) Do(ctx context.Context, req *TransportRequest) (*Transpo
 	if reply == nil {
 		return nil, refused
 	}
-	if delay, ok := number(reply["delay_ms"]); ok && delay > 0 {
+	if delay, ok := number(reply.Get("delay_ms")); ok && delay > 0 {
 		time.Sleep(time.Duration(delay) * time.Millisecond) // real time: another process may race this exchange
 	}
-	switch wireStr(reply["network"]) {
+	switch wireStr(reply.Get("network")) {
 	case "timeout":
 		return nil, &net.OpError{Op: "read", Net: "tcp", Err: errors.New("i/o timeout")}
 	case "refused":
 		return nil, refused
 	}
 	status := 200
-	if f, ok := number(reply["status"]); ok {
+	if f, ok := number(reply.Get("status")); ok {
 		status = int(f)
 	}
-	if j, ok := reply["json"]; ok {
+	if j, ok := reply.Lookup("json"); ok {
 		data, _ := EncodeJSON(j)
 		return &TransportResponse{Status: status, Headers: [][2]string{{"content-type", "application/json"}}, Body: io.NopCloser(bytes.NewReader(data))}, nil
 	}
-	ctype := wireStr(reply["content_type"])
+	ctype := wireStr(reply.Get("content_type"))
 	if ctype == "" {
 		ctype = "text/plain"
 	}
-	return &TransportResponse{Status: status, Headers: [][2]string{{"content-type", ctype}}, Body: io.NopCloser(strings.NewReader(wireStr(reply["text"])))}, nil
+	return &TransportResponse{Status: status, Headers: [][2]string{{"content-type", ctype}}, Body: io.NopCloser(strings.NewReader(wireStr(reply.Get("text"))))}, nil
 }
 
 type vetScriptUI struct {
@@ -414,31 +414,34 @@ type vetScriptUI struct {
 }
 
 func (u *vetScriptUI) Notify(n Notice) {
-	event := JSONObject{"type": n.Type}
+	event := JSONObject{{"type", n.Type}}
 	switch n.Type {
 	case "auth_url":
 		u.mu.Lock()
 		u.lastAuthURL = n.URL
 		u.mu.Unlock()
-		event["url"] = n.URL
+		event.Set("url", n.URL)
 	case "device_code":
-		event["user_code"], event["verification_url"], event["expires_in_s"], event["interval_s"] = n.UserCode, n.VerificationURL, n.ExpiresInS, n.IntervalS
+		event.Set("user_code", n.UserCode)
+		event.Set("verification_url", n.VerificationURL)
+		event.Set("expires_in_s", n.ExpiresInS)
+		event.Set("interval_s", n.IntervalS)
 	case "progress":
-		event["stage"] = n.Stage
+		event.Set("stage", n.Stage)
 	}
-	u.record(JSONObject{"notice": event})
+	u.record(JSONObject{{"notice", event}})
 }
 
 func (u *vetScriptUI) Prompt(_ context.Context, p Prompt) (string, error) {
-	event := JSONObject{"type": p.Type, "field_id": p.FieldID}
+	event := JSONObject{{"type", p.Type}, {"field_id", p.FieldID}}
 	if p.Type == "select" {
 		options := []any{}
 		for _, o := range p.Options {
 			options = append(options, o.ID)
 		}
-		event["options"] = options
+		event.Set("options", options)
 	}
-	u.record(JSONObject{"prompt": event})
+	u.record(JSONObject{{"prompt", event}})
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	if len(u.answers) == 0 {
@@ -449,8 +452,8 @@ func (u *vetScriptUI) Prompt(_ context.Context, p Prompt) (string, error) {
 	if s, ok := answer.(string); ok {
 		return s, nil
 	}
-	m, _ := answer.(map[string]any)
-	if m == nil || m["cancel"] != nil {
+	m, _ := asObject(answer)
+	if m == nil || m.Get("cancel") != nil {
 		return "", ErrPromptCancelled
 	}
 	parsed, _ := url.Parse(u.lastAuthURL)
@@ -460,12 +463,12 @@ func (u *vetScriptUI) Prompt(_ context.Context, p Prompt) (string, error) {
 	}
 	state := query.Get("state")
 	switch {
-	case m["paste"] != nil:
-		return wireStr(m["paste"]) + "#" + state, nil
-	case m["paste_wrong_state"] != nil:
-		return wireStr(m["paste_wrong_state"]) + "#not-the-state-of-this-attempt", nil
-	case m["paste_url"] != nil:
-		return query.Get("redirect_uri") + "?" + formEncode([][2]string{{"code", wireStr(m["paste_url"])}, {"state", state}}), nil
+	case m.Get("paste") != nil:
+		return wireStr(m.Get("paste")) + "#" + state, nil
+	case m.Get("paste_wrong_state") != nil:
+		return wireStr(m.Get("paste_wrong_state")) + "#not-the-state-of-this-attempt", nil
+	case m.Get("paste_url") != nil:
+		return query.Get("redirect_uri") + "?" + formEncode([][2]string{{"code", wireStr(m.Get("paste_url"))}, {"state", state}}), nil
 	}
 	return "", ErrPromptCancelled
 }

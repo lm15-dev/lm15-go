@@ -64,7 +64,7 @@ func asciiJSONSize(v any, limit int) int {
 	n := 0
 	var walk func(v any) bool // false = stop, over the limit
 	walk = func(v any) bool {
-		switch x := v.(type) {
+		switch x := jsonView(v).(type) {
 		case nil:
 			n += 4
 		case bool:
@@ -87,10 +87,10 @@ func asciiJSONSize(v any, limit int) int {
 		case jsonFloat:
 			b, _ := x.MarshalJSON()
 			n += len(b)
-		case map[string]any:
+		case JSONObject:
 			n += 2 // {}
 			first := true
-			for k, val := range x {
+			for k, val := range x.All() {
 				if !first {
 					n++ // ,
 				}

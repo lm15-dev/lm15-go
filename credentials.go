@@ -107,24 +107,24 @@ func (a AwsCredentials) Validate() error {
 }
 
 func (k APIKey) credentialDict() JSONObject {
-	return JSONObject{"kind": "api_key", "value": k.Value}
+	return JSONObject{{"kind", "api_key"}, {"value", k.Value}}
 }
 
 func (b BearerToken) credentialDict() JSONObject {
-	out := JSONObject{"kind": "bearer_token", "value": b.Value}
+	out := JSONObject{{"kind", "bearer_token"}, {"value", b.Value}}
 	if b.ExpiresAt != nil {
-		out["expires_at"] = FormatRFC3339(*b.ExpiresAt)
+		out.Set("expires_at", FormatRFC3339(*b.ExpiresAt))
 	}
 	return out
 }
 
 func (a AwsCredentials) credentialDict() JSONObject {
-	out := JSONObject{"kind": "aws", "access_key_id": a.AccessKeyID, "secret_access_key": a.SecretAccessKey}
+	out := JSONObject{{"kind", "aws"}, {"access_key_id", a.AccessKeyID}, {"secret_access_key", a.SecretAccessKey}}
 	if a.SessionToken != "" {
-		out["session_token"] = a.SessionToken
+		out.Set("session_token", a.SessionToken)
 	}
 	if a.ExpiresAt != nil {
-		out["expires_at"] = FormatRFC3339(*a.ExpiresAt)
+		out.Set("expires_at", FormatRFC3339(*a.ExpiresAt))
 	}
 	return out
 }
@@ -136,9 +136,9 @@ func CredentialToDict(c Credential) JSONObject { return c.credentialDict() }
 
 // CredentialFromDict reads the canonical JSON form.
 func CredentialFromDict(d JSONObject) (Credential, error) {
-	kind, _ := d["kind"].(string)
+	kind, _ := d.Get("kind").(string)
 	var expires *time.Time
-	if raw, ok := d["expires_at"]; ok && raw != nil {
+	if raw, ok := d.Lookup("expires_at"); ok && raw != nil {
 		t, err := ParseRFC3339(wireStr(raw))
 		if err != nil {
 			return nil, err

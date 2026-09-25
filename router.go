@@ -1311,9 +1311,9 @@ func (r *LMRouter) RequestFromOpenAIChat(model string, messages []any, kwargs JS
 			return nil, nil, NotConfiguredErrorf("", nil, "", "%q configures the client, not the request; in lm15 it lives in %s", k, where)
 		}
 	}
-	body := JSONObject{"model": res.Requested, "messages": messages}
-	for k, v := range kwargs {
-		body[k] = v
+	body := JSONObject{{"model", res.Requested}, {"messages", messages}}
+	for k, v := range kwargs.All() {
+		body.Set(k, v)
 	}
 	lm, err := r.LM(res.Requested)
 	if err != nil {

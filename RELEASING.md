@@ -24,15 +24,18 @@ retracted, `go get` installs `main` as a pseudo-version; a module pinned to
 ## Before `v1.1.0-rc.1`
 
 The port must pass the contract at its `CONTRACT_PIN`
-(`python3 harness/check.py --shim go --direction all` in lm15-contract). At
-the 2026-09-25 pin it fails 23 cases, all where Go writes JSON object keys in
-sorted order and the recorded bytes keep insertion order: 20 Bedrock Chat /
-Mantle requests (the SigV4 signature covers the body bytes), 2 batch JSONL
-uploads, 1 image-edit multipart field order. Providers accept either order;
-a signature or an uploaded file pins the bytes. The same sorting loses a
-JSON schema's property order (the order a model fills structured output
-in): the fix is an ordered JSON object type through the decoder and the
-builders, and it is the release blocker.
+(`python3 harness/check.py --shim go --direction all` in lm15-contract).
+It does: 1,492 of 1,492 cases at the pin set on 2026-09-25, including the
+opaque key-order check added to the harness that day. The blocker this
+section used to name (JSON objects written with sorted keys, which broke 23
+byte-pinned cases and a schema's property order) was fixed by making
+`JSONObject` an ordered type through the decoder and the builders.
+
+What remains before tagging:
+
+1. Push lm15-contract first, so CI can check out the pinned commit.
+2. The live checks the contract cannot do offline: one real call per
+   provider family through the Go SDK, and a real sign-in per account flow.
 
 ## Cutting a release
 

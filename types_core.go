@@ -240,7 +240,7 @@ func (BuiltinTool) sealedTool()         {}
 
 // DefaultParameters is the schema an omitted FunctionTool.Parameters means.
 func DefaultParameters() JSONObject {
-	return JSONObject{"type": "object", "properties": JSONObject{}}
+	return JSONObject{{"type", "object"}, {"properties", JSONObject{}}}
 }
 
 // EffectiveParameters returns Parameters, or the default schema when nil.
@@ -486,7 +486,7 @@ func validateResponseFormat(value JSONObject) error {
 	if len(value) == 0 {
 		return nil
 	}
-	fmtType, _ := value["type"].(string)
+	fmtType, _ := value.Get("type").(string)
 	if fmtType != "json_object" && fmtType != "json_schema" {
 		keys := sortedKeys(value)
 		return valueErrorf("response_format must be {'type': 'json_object'} or {'type': 'json_schema', 'schema': {...}, 'name'?: str, 'strict'?: bool}; provider-native shapes go in Config.extensions (got keys %v)", keys)
@@ -496,7 +496,7 @@ func validateResponseFormat(value JSONObject) error {
 		allowed["schema"], allowed["name"], allowed["strict"] = true, true, true
 	}
 	var extra []string
-	for k := range value {
+	for k := range value.All() {
 		if !allowed[k] {
 			extra = append(extra, k)
 		}
@@ -505,15 +505,15 @@ func validateResponseFormat(value JSONObject) error {
 		return valueErrorf("response_format %q does not take keys %v; provider-native shapes go in Config.extensions", fmtType, sortStrings(extra))
 	}
 	if fmtType == "json_schema" {
-		if _, ok := value["schema"].(map[string]any); !ok {
+		if _, ok := asObject(value.Get("schema")); !ok {
 			return valueErrorf("response_format json_schema requires a 'schema' object")
 		}
-		if name, ok := value["name"]; ok {
+		if name, ok := value.Lookup("name"); ok {
 			if s, isStr := name.(string); !isStr || s == "" {
 				return valueErrorf("response_format name must be a non-empty string")
 			}
 		}
-		if strict, ok := value["strict"]; ok {
+		if strict, ok := value.Lookup("strict"); ok {
 			if _, isBool := strict.(bool); !isBool {
 				return typeErrorf("response_format strict must be a bool")
 			}
@@ -928,9 +928,9 @@ func sortStrings(s []string) []string {
 	return out
 }
 
-func sortedKeys(m map[string]any) []string {
+func sortedKeys(m JSONObject) []string {
 	keys := make([]string, 0, len(m))
-	for k := range m {
+	for k := range m.All() {
 		keys = append(keys, k)
 	}
 	return sortStrings(keys)

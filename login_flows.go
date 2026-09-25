@@ -24,17 +24,17 @@ const deviceGrant = "urn:ietf:params:oauth:grant-type:device_code"
 
 // oauthMaterial: the actual expiry and the numbers the renewal lead needs.
 func oauthMaterial(access, refresh string, expiresInS float64, nowMs int64, extra JSONObject) JSONObject {
-	m := JSONObject{"type": "oauth", "access": access}
+	m := JSONObject{{"type", "oauth"}, {"access", access}}
 	if refresh != "" {
-		m["refresh"] = refresh
+		m.Set("refresh", refresh)
 	}
-	m["issued_at"] = nowMs
+	m.Set("issued_at", nowMs)
 	if expiresInS > 0 {
-		m["lifetime_s"] = floatLexeme(expiresInS)
-		m["expires"] = int64(float64(nowMs) + expiresInS*1000)
+		m.Set("lifetime_s", floatLexeme(expiresInS))
+		m.Set("expires", int64(float64(nowMs)+expiresInS*1000))
 	}
-	for k, v := range extra {
-		m[k] = v
+	for k, v := range extra.All() {
+		m.Set(k, v)
 	}
 	return m
 }
@@ -48,7 +48,7 @@ func floatLexeme(f float64) any {
 }
 
 func materialStr(m JSONObject, key string) string {
-	s, _ := m[key].(string)
+	s, _ := m.Get(key).(string)
 	return s
 }
 
@@ -277,7 +277,7 @@ func xaiMaterial(r *httpReply, nowMs int64, previousRefresh string) (JSONObject,
 	if refresh == "" {
 		refresh = previousRefresh // xAI may omit it when it does not rotate
 	}
-	lifetime := positive(r.body["expires_in"])
+	lifetime := positive(r.body.Get("expires_in"))
 	if lifetime == 0 {
 		lifetime = 3600
 	}
@@ -296,16 +296,16 @@ func xaiLogin(c *loginContext) (flowResult, error) {
 	if deviceCode == "" || userCode == "" {
 		return flowResult{}, denied("xAI device authorization response is missing required fields")
 	}
-	target := httpsURL(start.body["verification_uri"])
+	target := httpsURL(start.body.Get("verification_uri"))
 	if target == "" {
 		return flowResult{}, denied("xAI returned an untrusted verification URL")
 	}
-	if complete, _ := start.body["verification_uri_complete"].(string); complete != "" {
+	if complete, _ := start.body.Get("verification_uri_complete").(string); complete != "" {
 		if target = httpsURL(complete); target == "" {
 			return flowResult{}, denied("xAI returned an untrusted verification URL")
 		}
 	}
-	interval, expires := positive(start.body["interval"]), positive(start.body["expires_in"])
+	interval, expires := positive(start.body.Get("interval")), positive(start.body.Get("expires_in"))
 	c.notify(Notice{Type: "device_code", UserCode: userCode, VerificationURL: target, ExpiresInS: orDefault(expires, 900), IntervalS: orDefault(interval, 5)})
 	value, err := runDeviceFlow(c, interval, expires, func() (deviceStep, error) {
 		reply, err := c.form(xaiTokenURL, [][2]string{{"grant_type", deviceGrant}, {"client_id", xaiClientID}, {"device_code", deviceCode}}, nil)
@@ -320,7 +320,7 @@ func xaiLogin(c *loginContext) (flowResult, error) {
 		case "authorization_pending":
 			return deviceStep{status: "pending"}, nil
 		case "slow_down":
-			return deviceStep{status: "slow_down", interval: positive(reply.body["interval"])}, nil
+			return deviceStep{status: "slow_down", interval: positive(reply.body.Get("interval"))}, nil
 		case "access_denied", "authorization_denied":
 			return deviceStep{status: "denied"}, nil
 		case "expired_token":
@@ -367,7 +367,7 @@ func claudeTokens(r *httpReply, nowMs int64) (JSONObject, error) {
 	if access == "" || refresh == "" {
 		return nil, denied("Claude token response is missing required fields")
 	}
-	return oauthMaterial(access, refresh, positive(r.body["expires_in"]), nowMs, nil), nil
+	return oauthMaterial(access, refresh, positive(r.body.Get("expires_in")), nowMs, nil), nil
 }
 
 func openListener(c *loginContext, path, state string, checkState bool, port int, redirectHost string) (*callbackListener, error) {
@@ -426,7 +426,7 @@ func claudeLogin(c *loginContext, hosted bool) (flowResult, error) {
 		return flowResult{}, err
 	}
 	c.notify(Notice{Type: "progress", Stage: "exchange", Message: "Exchanging the authorization code…"})
-	reply, err := c.json(claudeTokenURL, orderedBody{
+	reply, err := c.json(claudeTokenURL, JSONObject{
 		{"grant_type", "authorization_code"}, {"code", returned.code}, {"redirect_uri", redirect},
 		{"client_id", claudeClientID}, {"code_verifier", verifier}, {"state", state},
 	}, nil)
@@ -448,7 +448,7 @@ func claudeRenew(c *loginContext, material JSONObject) (flowResult, error) {
 	if refresh == "" {
 		return flowResult{}, denied("Claude credential has no refresh token")
 	}
-	reply, err := c.json(claudeTokenURL, orderedBody{{"grant_type", "refresh_token"}, {"client_id", claudeClientID}, {"refresh_token", refresh}}, nil)
+	reply, err := c.json(claudeTokenURL, JSONObject{{"grant_type", "refresh_token"}, {"client_id", claudeClientID}, {"refresh_token", refresh}}, nil)
 	if err != nil {
 		return flowResult{}, err
 	}
@@ -462,12 +462,12 @@ func claudeRenew(c *loginContext, material JSONObject) (flowResult, error) {
 // ─── ChatGPT / Codex ─────────────────────────────────────────────────
 
 func codexTokens(body JSONObject, nowMs int64) (JSONObject, error) {
-	access, _ := body["access_token"].(string)
-	refresh, _ := body["refresh_token"].(string)
+	access, _ := body.Get("access_token").(string)
+	refresh, _ := body.Get("refresh_token").(string)
 	if access == "" || refresh == "" {
 		return nil, denied("ChatGPT token response is missing required fields")
 	}
-	lifetime := positive(body["expires_in"])
+	lifetime := positive(body.Get("expires_in"))
 	if lifetime == 0 {
 		if exp := jwtExpiresAtMs(access); exp != nil {
 			if s := float64(*exp+5*60*1000-nowMs) / 1000; s > 0 {
@@ -479,9 +479,9 @@ func codexTokens(body JSONObject, nowMs int64) (JSONObject, error) {
 	if account == "" {
 		return nil, denied("ChatGPT token carries no account id")
 	}
-	extra := JSONObject{"accountId": account}
-	if id, _ := body["id_token"].(string); id != "" {
-		extra["id_token"] = id
+	extra := JSONObject{{"accountId", account}}
+	if id, _ := body.Get("id_token").(string); id != "" {
+		extra.Set("id_token", id)
 	}
 	return oauthMaterial(access, refresh, lifetime, nowMs, extra), nil
 }
@@ -526,7 +526,7 @@ func codexBrowser(c *loginContext) (flowResult, error) {
 }
 
 func codexDevice(c *loginContext) (flowResult, error) {
-	start, err := c.json(codexDeviceUserCodeURL, orderedBody{{"client_id", codexClientID}}, nil)
+	start, err := c.json(codexDeviceUserCodeURL, JSONObject{{"client_id", codexClientID}}, nil)
 	if err != nil {
 		return flowResult{}, err
 	}
@@ -540,13 +540,13 @@ func codexDevice(c *loginContext) (flowResult, error) {
 	if deviceID == "" || userCode == "" {
 		return flowResult{}, denied("ChatGPT device authorization response is missing required fields")
 	}
-	interval, _ := number(start.body["interval"])
+	interval, _ := number(start.body.Get("interval"))
 	if interval < 0 {
 		interval = 0
 	}
 	c.notify(Notice{Type: "device_code", UserCode: userCode, VerificationURL: codexDeviceVerification, ExpiresInS: codexDeviceTimeoutS, IntervalS: orDefault(interval, 5)})
 	value, err := runDeviceFlow(c, interval, codexDeviceTimeoutS, func() (deviceStep, error) {
-		reply, err := c.json(codexDeviceTokenURL, orderedBody{{"device_auth_id", deviceID}, {"user_code", userCode}}, nil)
+		reply, err := c.json(codexDeviceTokenURL, JSONObject{{"device_auth_id", deviceID}, {"user_code", userCode}}, nil)
 		if err != nil {
 			return deviceStep{}, err
 		}
@@ -588,11 +588,11 @@ func codexRenew(c *loginContext, material JSONObject) (flowResult, error) {
 		return flowResult{}, denied("ChatGPT rejected the refresh token (HTTP %d)", reply.status)
 	}
 	body := JSONObject{}
-	for k, v := range reply.body {
-		body[k] = v
+	for k, v := range reply.body.All() {
+		body.Set(k, v)
 	}
-	if s, _ := body["refresh_token"].(string); s == "" {
-		body["refresh_token"] = refresh // OpenAI may omit it when it does not rotate
+	if s, _ := body.Get("refresh_token").(string); s == "" {
+		body.Set("refresh_token", refresh) // OpenAI may omit it when it does not rotate
 	}
 	m, err := codexTokens(body, c.nowMs())
 	if err != nil {
@@ -670,8 +670,8 @@ func copilotExchange(c *loginContext, githubToken string, settings map[string]st
 		return nil, denied("Copilot token exchange failed (HTTP %d)", reply.status)
 	}
 	token := reply.str("token")
-	expiresAt, ok := number(reply.body["expires_at"])
-	if _, isString := reply.body["expires_at"].(string); token == "" || !ok || isString {
+	expiresAt, ok := number(reply.body.Get("expires_at"))
+	if _, isString := reply.body.Get("expires_at").(string); token == "" || !ok || isString {
 		return nil, denied("Copilot token response is missing required fields")
 	}
 	now := c.nowMs()
@@ -680,7 +680,7 @@ func copilotExchange(c *loginContext, githubToken string, settings map[string]st
 	if lifetime < 1 {
 		lifetime = 1
 	}
-	return JSONObject{"type": "oauth", "access": token, "refresh": githubToken, "issued_at": now, "lifetime_s": floatLexeme(lifetime), "expires": expiresMs}, nil
+	return JSONObject{{"type", "oauth"}, {"access", token}, {"refresh", githubToken}, {"issued_at", now}, {"lifetime_s", floatLexeme(lifetime)}, {"expires", expiresMs}}, nil
 }
 
 func copilotLogin(c *loginContext, settings, answers map[string]string) (flowResult, error) {
@@ -710,7 +710,7 @@ func copilotLogin(c *loginContext, settings, answers map[string]string) (flowRes
 	if httpURL(verification) == "" {
 		return flowResult{}, denied("GitHub returned an untrusted verification URL")
 	}
-	interval, expires := positive(start.body["interval"]), positive(start.body["expires_in"])
+	interval, expires := positive(start.body.Get("interval")), positive(start.body.Get("expires_in"))
 	c.notify(Notice{Type: "device_code", UserCode: userCode, VerificationURL: verification, ExpiresInS: orDefault(expires, 900), IntervalS: orDefault(interval, 5)})
 	tokenURL := "https://" + domain + "/login/oauth/access_token"
 	value, err := runDeviceFlow(c, interval, expires, func() (deviceStep, error) {
@@ -725,7 +725,7 @@ func copilotLogin(c *loginContext, settings, answers map[string]string) (flowRes
 		case "authorization_pending":
 			return deviceStep{status: "pending"}, nil
 		case "slow_down":
-			return deviceStep{status: "slow_down", interval: positive(reply.body["interval"])}, nil
+			return deviceStep{status: "slow_down", interval: positive(reply.body.Get("interval"))}, nil
 		case "expired_token":
 			return deviceStep{status: "expired"}, nil
 		case "access_denied":
@@ -764,7 +764,7 @@ func kimiTokens(r *httpReply, nowMs int64) (JSONObject, error) {
 	if access == "" || refresh == "" {
 		return nil, denied("Kimi Code token response is missing required fields")
 	}
-	return oauthMaterial(access, refresh, positive(r.body["expires_in"]), nowMs, nil), nil
+	return oauthMaterial(access, refresh, positive(r.body.Get("expires_in")), nowMs, nil), nil
 }
 
 func kimiLogin(c *loginContext, settings map[string]string) (flowResult, error) {
@@ -776,22 +776,22 @@ func kimiLogin(c *loginContext, settings map[string]string) (flowResult, error) 
 	if !start.ok {
 		return flowResult{}, denied("Kimi Code refused to start a device authorization (HTTP %d)", start.status)
 	}
-	verification := httpURL(start.body["verification_uri_complete"])
+	verification := httpURL(start.body.Get("verification_uri_complete"))
 	if verification == "" {
-		verification = httpURL(start.body["verification_uri"])
+		verification = httpURL(start.body.Get("verification_uri"))
 	}
 	deviceCode, userCode := start.str("device_code"), start.str("user_code")
 	if deviceCode == "" || userCode == "" || verification == "" {
 		return flowResult{}, denied("Kimi Code device authorization response is missing required fields")
 	}
-	interval, expires := positive(start.body["interval"]), orDefault(positive(start.body["expires_in"]), 900)
+	interval, expires := positive(start.body.Get("interval")), orDefault(positive(start.body.Get("expires_in")), 900)
 	c.notify(Notice{Type: "device_code", UserCode: userCode, VerificationURL: verification, ExpiresInS: expires, IntervalS: orDefault(interval, 5)})
 	value, err := runDeviceFlow(c, interval, expires, func() (deviceStep, error) {
 		reply, err := c.form(host+"/api/oauth/token", [][2]string{{"client_id", kimiClientID}, {"device_code", deviceCode}, {"grant_type", deviceGrant}}, nil)
 		if err != nil {
 			return deviceStep{}, err
 		}
-		if _, ok := reply.body["access_token"].(string); reply.ok && ok {
+		if _, ok := reply.body.Get("access_token").(string); reply.ok && ok {
 			m, err := kimiTokens(reply, c.nowMs())
 			return deviceStep{status: "complete", value: m}, err
 		}
@@ -799,7 +799,7 @@ func kimiLogin(c *loginContext, settings map[string]string) (flowResult, error) 
 		case "authorization_pending":
 			return deviceStep{status: "pending"}, nil
 		case "slow_down":
-			return deviceStep{status: "slow_down", interval: positive(reply.body["interval"])}, nil
+			return deviceStep{status: "slow_down", interval: positive(reply.body.Get("interval"))}, nil
 		case "expired_token":
 			return deviceStep{status: "expired"}, nil
 		case "access_denied":
@@ -843,7 +843,7 @@ func kimiRenew(c *loginContext, material JSONObject, settings map[string]string)
 
 func metaMint(c *loginContext, identity string) (JSONObject, error) {
 	c.notify(Notice{Type: "progress", Stage: "exchange", Message: "Enabling Meta Model API access…"})
-	reply, err := c.json(metaKeyMintURL, orderedBody{}, [][2]string{{"Authorization", "Bearer " + identity}, {"x-api-version", "1.0.0"}})
+	reply, err := c.json(metaKeyMintURL, JSONObject{}, [][2]string{{"Authorization", "Bearer " + identity}, {"x-api-version", "1.0.0"}})
 	if err != nil {
 		return nil, err
 	}
@@ -855,13 +855,13 @@ func metaMint(c *loginContext, identity string) (JSONObject, error) {
 	}
 	key := reply.str("api_key")
 	if key == "" {
-		if action := httpURL(reply.body["action_url"]); action != "" {
+		if action := httpURL(reply.body.Get("action_url")); action != "" {
 			return nil, denied("Meta did not issue an API key; complete setup at %s", action)
 		}
 		return nil, denied("Meta did not issue an API key")
 	}
 	now := c.nowMs()
-	return JSONObject{"type": "oauth", "access": key, "refresh": identity, "issued_at": now, "lifetime_s": floatLexeme(metaKeyLifetime), "expires": int64(float64(now) + metaKeyLifetime*1000)}, nil
+	return JSONObject{{"type", "oauth"}, {"access", key}, {"refresh", identity}, {"issued_at", now}, {"lifetime_s", floatLexeme(metaKeyLifetime)}, {"expires", int64(float64(now) + metaKeyLifetime*1000)}}, nil
 }
 
 func metaLogin(c *loginContext) (flowResult, error) {
@@ -872,15 +872,15 @@ func metaLogin(c *loginContext) (flowResult, error) {
 	if !start.ok {
 		return flowResult{}, denied("Meta refused to start a device authorization (HTTP %d)", start.status)
 	}
-	verification := httpURL(start.body["verification_uri_complete"])
+	verification := httpURL(start.body.Get("verification_uri_complete"))
 	if verification == "" {
-		verification = httpURL(start.body["verification_uri"])
+		verification = httpURL(start.body.Get("verification_uri"))
 	}
 	deviceCode, userCode := start.str("device_code"), start.str("user_code")
 	if deviceCode == "" || userCode == "" || verification == "" {
 		return flowResult{}, denied("Meta device authorization response is missing required fields")
 	}
-	interval, expires := positive(start.body["interval"]), positive(start.body["expires_in"])
+	interval, expires := positive(start.body.Get("interval")), positive(start.body.Get("expires_in"))
 	c.notify(Notice{Type: "device_code", UserCode: userCode, VerificationURL: verification, ExpiresInS: orDefault(expires, 900), IntervalS: orDefault(interval, 5)})
 	value, err := runDeviceFlow(c, interval, expires, func() (deviceStep, error) {
 		reply, err := c.form(metaTokenURL, [][2]string{{"grant_type", deviceGrant}, {"device_code", deviceCode}, {"client_id", metaClientID}}, nil)
@@ -894,7 +894,7 @@ func metaLogin(c *loginContext) (flowResult, error) {
 		case "authorization_pending":
 			return deviceStep{status: "pending"}, nil
 		case "slow_down":
-			return deviceStep{status: "slow_down", interval: positive(reply.body["interval"])}, nil
+			return deviceStep{status: "slow_down", interval: positive(reply.body.Get("interval"))}, nil
 		case "access_denied":
 			return deviceStep{status: "denied"}, nil
 		case "expired_token":
@@ -932,7 +932,7 @@ func openrouterLogin(c *loginContext) (flowResult, error) {
 		return flowResult{}, err
 	}
 	c.notify(Notice{Type: "progress", Stage: "exchange", Message: "Exchanging the code for an API key…"})
-	reply, err := c.json(openrouterKeyURL, orderedBody{{"code", returned.code}, {"code_verifier", verifier}, {"code_challenge_method", "S256"}}, nil)
+	reply, err := c.json(openrouterKeyURL, JSONObject{{"code", returned.code}, {"code_verifier", verifier}, {"code_challenge_method", "S256"}}, nil)
 	if err != nil {
 		return flowResult{}, err
 	}
@@ -943,5 +943,5 @@ func openrouterLogin(c *loginContext) (flowResult, error) {
 	if key == "" {
 		return flowResult{}, denied("OpenRouter returned no key")
 	}
-	return flowResult{material: JSONObject{"type": "api_key", "key": key, "minted": true}, label: "OpenRouter (minted key)", renewal: "none"}, nil
+	return flowResult{material: JSONObject{{"type", "api_key"}, {"key", key}, {"minted", true}}, label: "OpenRouter (minted key)", renewal: "none"}, nil
 }

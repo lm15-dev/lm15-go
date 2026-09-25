@@ -14,7 +14,6 @@ package lm15
 import (
 	"encoding/json"
 	"math"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -50,18 +49,18 @@ func (j Judgment) Ordered() bool { return j.Kind == JudgmentOrdered }
 
 // ─── §1 reading the convention ────────────────────────────────────────
 
-func constBranches(prop map[string]any) []map[string]any {
-	raw, ok := prop["anyOf"].([]any)
+func constBranches(prop JSONObject) []JSONObject {
+	raw, ok := prop.Get("anyOf").([]any)
 	if !ok || len(raw) == 0 {
 		return nil
 	}
-	out := make([]map[string]any, 0, len(raw))
+	out := make([]JSONObject, 0, len(raw))
 	for _, b := range raw {
-		obj, ok := b.(map[string]any)
+		obj, ok := asObject(b)
 		if !ok {
 			return nil
 		}
-		if _, has := obj["const"]; !has {
+		if _, has := obj.Lookup("const"); !has {
 			return nil
 		}
 		out = append(out, obj)
@@ -69,8 +68,8 @@ func constBranches(prop map[string]any) []map[string]any {
 	return out
 }
 
-func optDescription(prop map[string]any, key string) string {
-	if s, ok := prop[key].(string); ok {
+func optDescription(prop JSONObject, key string) string {
+	if s, ok := prop.Get(key).(string); ok {
 		return s
 	}
 	return ""
@@ -99,17 +98,17 @@ func jsonInteger(v any) (int, bool) {
 }
 
 func judgmentOf(name string, raw any) (Judgment, bool) {
-	prop, ok := raw.(map[string]any)
+	prop, ok := asObject(raw)
 	if !ok {
 		return Judgment{}, false
 	}
 	instruction := optDescription(prop, "description")
-	typ, _ := prop["type"].(string)
+	typ, _ := prop.Get("type").(string)
 	if typ == "boolean" {
 		return Judgment{Name: name, Kind: JudgmentBoolean, Keys: []string{"true", "false"}, Instruction: instruction,
 			Descriptions: map[string]string{}, Titles: map[string]string{}}, true
 	}
-	enum, hasEnum := prop["enum"].([]any)
+	enum, hasEnum := prop.Get("enum").([]any)
 	branches := constBranches(prop)
 	var values []any
 	descs := map[string]string{}
@@ -117,10 +116,10 @@ func judgmentOf(name string, raw any) (Judgment, bool) {
 	switch {
 	case hasEnum && len(enum) > 0 && branches == nil:
 		values = enum
-	case branches != nil && prop["enum"] == nil:
+	case branches != nil && prop.Get("enum") == nil:
 		for _, b := range branches {
-			values = append(values, b["const"])
-			key := wireStr(b["const"])
+			values = append(values, b.Get("const"))
+			key := wireStr(b.Get("const"))
 			if d := optDescription(b, "description"); d != "" {
 				descs[key] = d
 			}
@@ -180,55 +179,33 @@ func judgmentOf(name string, raw any) (Judgment, bool) {
 	return Judgment{Name: name, Kind: JudgmentOrdered, Keys: keys, Instruction: instruction, Descriptions: descs, Titles: titles}, true
 }
 
-// schemaPropertyOrder is the property order of a schema. Go maps carry no
-// insertion order, so the schema's own ordered list of names — required —
-// is used first, in its order; properties it does not name follow in
-// sorted order. Judgments() and the reference's schemas list every
-// property in required, in declaration order, so this reproduces it.
-func schemaPropertyOrder(schema map[string]any) []string {
-	props, _ := schema["properties"].(map[string]any)
-	seen := map[string]bool{}
-	var out []string
-	if required, ok := schema["required"].([]any); ok {
-		for _, r := range required {
-			name, ok := r.(string)
-			if !ok || seen[name] {
-				continue
-			}
-			if _, has := props[name]; has {
-				seen[name] = true
-				out = append(out, name)
-			}
-		}
-	}
-	var rest []string
-	for name := range props {
-		if !seen[name] {
-			rest = append(rest, name)
-		}
-	}
-	sort.Strings(rest)
-	return append(out, rest...)
+// schemaPropertyOrder is the order a schema lists its properties in: the
+// order a model fills structured output in, and the order judgments are
+// reported in (MAP-14 §1). A properties object given as a Go map has no
+// order of its own and reads sorted.
+func schemaPropertyOrder(schema JSONObject) []string {
+	props, _ := asObject(schema.Get("properties"))
+	return props.Keys()
 }
 
 // JudgmentsInSchema lists the judgments a json_schema declares, in
 // property order (MAP-14 §1). Any property that is not one of the three
 // shapes is ordinary structured output and is absent from the result.
 func JudgmentsInSchema(schema any) []Judgment {
-	obj, ok := schema.(map[string]any)
+	obj, ok := asObject(schema)
 	if !ok {
 		return nil
 	}
-	if typ, has := obj["type"]; has && typ != "object" {
+	if typ, has := obj.Lookup("type"); has && typ != "object" {
 		return nil
 	}
-	props, ok := obj["properties"].(map[string]any)
+	props, ok := asObject(obj.Get("properties"))
 	if !ok {
 		return nil
 	}
 	var out []Judgment
 	for _, name := range schemaPropertyOrder(obj) {
-		if j, ok := judgmentOf(name, props[name]); ok {
+		if j, ok := judgmentOf(name, props.Get(name)); ok {
 			out = append(out, j)
 		}
 	}
@@ -241,15 +218,15 @@ func RequestJudgments(req *Request) []Judgment {
 		return nil
 	}
 	f := req.Config.ResponseFormat
-	if f == nil || f["type"] != "json_schema" {
+	if f == nil || f.Get("type") != "json_schema" {
 		return nil
 	}
-	return JudgmentsInSchema(f["schema"])
+	return JudgmentsInSchema(f.Get("schema"))
 }
 
 // nonJudgmentProperties lists the schema's properties that are not judgments.
 func nonJudgmentProperties(schema any, found []Judgment) []string {
-	obj, ok := schema.(map[string]any)
+	obj, ok := asObject(schema)
 	if !ok {
 		return nil
 	}
@@ -285,11 +262,11 @@ func noteUnmeasurableProbabilities(scope *adaptScope, req *Request, provider str
 }
 
 func deepCopyJSON(v any) any {
-	switch x := v.(type) {
-	case map[string]any:
-		out := make(map[string]any, len(x))
-		for k, val := range x {
-			out[k] = deepCopyJSON(val)
+	switch x := jsonView(v).(type) {
+	case JSONObject:
+		out := make(JSONObject, len(x))
+		for i, m := range x {
+			out[i] = Member{m.Key, deepCopyJSON(m.Value)}
 		}
 		return out
 	case []any:
@@ -310,25 +287,28 @@ func anthropicSchema(schema JSONObject, found []Judgment) JSONObject {
 	if len(found) == 0 {
 		return schema
 	}
-	out := deepCopyJSON(schema).(map[string]any)
-	props, _ := out["properties"].(map[string]any)
+	out := deepCopyJSON(schema).(JSONObject)
+	props, _ := asObject(out.Get("properties"))
 	for _, j := range found {
-		prop, ok := props[j.Name].(map[string]any)
+		prop, ok := asObject(props.Get(j.Name))
 		if !ok {
 			continue
 		}
-		branches, isList := prop["anyOf"].([]any)
-		kind, hasType := prop["type"]
+		branches, isList := prop.Get("anyOf").([]any)
+		kind, hasType := prop.Lookup("type")
 		if hasType && isList {
-			delete(prop, "type")
-			for _, b := range branches {
-				if obj, ok := b.(map[string]any); ok {
-					if _, has := obj["type"]; !has {
-						obj["type"] = kind
-					}
+			prop.Delete("type")
+			for i, b := range branches {
+				if obj, ok := asObject(b); ok && !obj.Has("type") {
+					obj.Set("type", kind)
+					branches[i] = obj // branches is the deep copy's own list
 				}
 			}
+			props.Set(j.Name, prop)
 		}
+	}
+	if props != nil {
+		out.Set("properties", props)
 	}
 	return out
 }
@@ -341,31 +321,31 @@ func geminiSchema(schema JSONObject, found []Judgment) JSONObject {
 	if len(found) == 0 {
 		return schema
 	}
-	out := deepCopyJSON(schema).(map[string]any)
-	props, _ := out["properties"].(map[string]any)
+	out := deepCopyJSON(schema).(JSONObject)
+	props, _ := asObject(out.Get("properties"))
 	for _, j := range found {
-		prop, ok := props[j.Name].(map[string]any)
+		prop, ok := asObject(props.Get(j.Name))
 		if !ok {
 			continue
 		}
 		if j.Kind == JudgmentBoolean {
 			continue
 		}
-		if _, has := prop["anyOf"]; !has {
+		if _, has := prop.Lookup("anyOf"); !has {
 			continue
 		}
-		delete(prop, "anyOf")
+		prop.Delete("anyOf")
 		if j.Ordered() {
-			prop["type"] = "integer"
+			prop.Set("type", "integer")
 			enum := make([]any, 0, len(j.Keys))
 			for _, k := range j.Keys {
 				n, _ := strconv.Atoi(k)
 				enum = append(enum, n)
 			}
-			prop["enum"] = enum
+			prop.Set("enum", enum)
 		} else {
-			prop["type"] = "string"
-			prop["enum"] = toAnyList(j.Keys, func(k string) any { return k })
+			prop.Set("type", "string")
+			prop.Set("enum", toAnyList(j.Keys, func(k string) any { return k }))
 		}
 		var lines []string
 		any := false
@@ -394,8 +374,12 @@ func geminiSchema(schema JSONObject, found []Judgment) JSONObject {
 			if head != "" {
 				head += " "
 			}
-			prop["description"] = strings.TrimSpace(head + word + strings.Join(lines, "; "))
+			prop.Set("description", strings.TrimSpace(head+word+strings.Join(lines, "; ")))
 		}
+		props.Set(j.Name, prop)
+	}
+	if props != nil {
+		out.Set("properties", props)
 	}
 	return out
 }
@@ -413,7 +397,7 @@ func DataPartFromText(text string, found []Judgment) (DataPart, bool) {
 	if err != nil {
 		return DataPart{}, false
 	}
-	obj, ok := value.(map[string]any)
+	obj, ok := asObject(value)
 	if !ok {
 		return DataPart{}, false
 	}
@@ -516,17 +500,17 @@ func Choice(instruction string, options ...ChoiceOption) (JSONObject, error) {
 			anyDesc = true
 		}
 	}
-	prop := JSONObject{"type": "string", "description": instruction}
+	prop := JSONObject{{"type", "string"}, {"description", instruction}}
 	if !anyDesc {
-		prop["enum"] = toAnyList(options, func(o ChoiceOption) any { return o.Key })
+		prop.Set("enum", toAnyList(options, func(o ChoiceOption) any { return o.Key }))
 	} else {
-		prop["anyOf"] = toAnyList(options, func(o ChoiceOption) any {
-			b := JSONObject{"const": o.Key}
+		prop.Set("anyOf", toAnyList(options, func(o ChoiceOption) any {
+			b := JSONObject{{"const", o.Key}}
 			if o.Description != "" {
-				b["description"] = o.Description
+				b.Set("description", o.Description)
 			}
 			return b
-		})
+		}))
 	}
 	return prop, nil
 }
@@ -542,7 +526,7 @@ func Options(keys ...string) []ChoiceOption {
 
 // YesNo emits a boolean judgment property.
 func YesNo(instruction string) JSONObject {
-	return JSONObject{"type": "boolean", "description": instruction}
+	return JSONObject{{"type", "boolean"}, {"description", instruction}}
 }
 
 // ScoreLevel is one level of a Score judgment, low → high.
@@ -561,16 +545,16 @@ func Score(instruction string, levels ...ScoreLevel) (JSONObject, error) {
 	}
 	branches := make([]any, 0, len(levels))
 	for i, l := range levels {
-		b := JSONObject{"const": i}
+		b := JSONObject{{"const", i}}
 		if l.Name != "" {
-			b["title"] = l.Name
+			b.Set("title", l.Name)
 		}
 		if l.Description != "" {
-			b["description"] = l.Description
+			b.Set("description", l.Description)
 		}
 		branches = append(branches, b)
 	}
-	return JSONObject{"type": "integer", "description": instruction, "anyOf": branches}, nil
+	return JSONObject{{"type", "integer"}, {"description", instruction}, {"anyOf", branches}}, nil
 }
 
 // JudgmentProperty is one named judgment for Judgments.
@@ -591,9 +575,9 @@ func Judgments(name string, strict bool, properties ...JudgmentProperty) (JSONOb
 	props := JSONObject{}
 	required := make([]any, 0, len(properties))
 	for _, p := range properties {
-		props[p.Name] = p.Schema
+		props.Set(p.Name, p.Schema)
 		required = append(required, p.Name)
 	}
-	schema := JSONObject{"type": "object", "properties": props, "required": required, "additionalProperties": false}
-	return JSONObject{"type": "json_schema", "name": name, "strict": strict, "schema": schema}, nil
+	schema := JSONObject{{"type", "object"}, {"properties", props}, {"required", required}, {"additionalProperties", false}}
+	return JSONObject{{"type", "json_schema"}, {"name", name}, {"strict", strict}, {"schema", schema}}, nil
 }

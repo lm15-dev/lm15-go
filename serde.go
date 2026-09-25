@@ -40,7 +40,7 @@ func continuationFromJSON(v any) ([]ContinuationState, error) {
 	}
 	out := make([]ContinuationState, 0, len(list))
 	for _, item := range list {
-		obj, ok := item.(map[string]any)
+		obj, ok := asObject(item)
 		if !ok {
 			return nil, typeErrorf("continuation entries must be objects")
 		}
@@ -61,7 +61,7 @@ func ContinuationToDict(s ContinuationState) JSONObject {
 	if data == nil {
 		data = JSONObject{}
 	}
-	return JSONObject{"provider": s.Provider, "kind": s.Kind, "data": data}
+	return JSONObject{{"provider", s.Provider}, {"kind", s.Kind}, {"data", data}}
 }
 
 // ContinuationFromDict reads a state.
@@ -104,84 +104,84 @@ func (s *ContinuationState) UnmarshalJSON(b []byte) error {
 
 // PartToDict serializes a part.
 func PartToDict(p Part) JSONObject {
-	d := JSONObject{"type": p.Type()}
+	d := JSONObject{{"type", p.Type()}}
 	switch x := p.(type) {
 	case TextPart:
-		d["text"] = x.Text
+		d.Set("text", x.Text)
 	case ThinkingPart:
-		d["text"] = x.Text
+		d.Set("text", x.Text)
 	case RefusalPart:
-		d["text"] = x.Text
+		d.Set("text", x.Text)
 	case CitationPart:
 		if x.Text != "" {
-			d["text"] = x.Text
+			d.Set("text", x.Text)
 		}
 		if x.URL != "" {
-			d["url"] = x.URL
+			d.Set("url", x.URL)
 		}
 		if x.Title != "" {
-			d["title"] = x.Title
+			d.Set("title", x.Title)
 		}
 	case ImagePart:
-		mediaToDict(d, x.Media)
+		mediaToDict(&d, x.Media)
 		if x.Detail != "" {
-			d["detail"] = x.Detail
+			d.Set("detail", x.Detail)
 		}
 	case AudioPart:
-		mediaToDict(d, x.Media)
+		mediaToDict(&d, x.Media)
 	case VideoPart:
-		mediaToDict(d, x.Media)
+		mediaToDict(&d, x.Media)
 	case DocumentPart:
-		mediaToDict(d, x.Media)
+		mediaToDict(&d, x.Media)
 	case BinaryPart:
-		mediaToDict(d, x.Media)
+		mediaToDict(&d, x.Media)
 	case ToolCallPart:
-		d["id"] = x.ID
-		d["name"] = x.Name
+		d.Set("id", x.ID)
+		d.Set("name", x.Name)
 		input := x.Input
 		if input == nil {
 			input = JSONObject{}
 		}
-		d["input"] = input
+		d.Set("input", input)
 	case ToolResultPart:
-		d["id"] = x.ID
+		d.Set("id", x.ID)
 		if x.Name != "" {
-			d["name"] = x.Name
+			d.Set("name", x.Name)
 		}
-		d["content"] = toAnyList(x.Content, func(c Part) any { return PartToDict(c) })
+		d.Set("content", toAnyList(x.Content, func(c Part) any { return PartToDict(c) }))
 		if x.IsError {
-			d["is_error"] = true
+			d.Set("is_error", true)
 		}
 	case DataPart:
 		// value is always emitted, whatever it is (null is a value; the
 		// cleaner never looks inside — serde-rules.md "Data parts").
-		d["value"] = deref(x.Value)
+		d.Set("value", deref(x.Value))
 		if x.Probabilities != nil {
-			d["probabilities"] = probabilitiesToJSON(x.Probabilities)
+			d.Set("probabilities", probabilitiesToJSON(x.Probabilities))
 		}
 		if x.Method != "" {
-			d["method"] = x.Method
+			d.Set("method", x.Method)
 		}
 	}
 	if c := continuationToJSON(p.ContinuationStates()); c != nil {
-		d["continuation"] = c
+		d.Set("continuation", c)
 	}
 	return d
 }
 
-func mediaToDict(d JSONObject, m Media) {
-	d["media_type"] = m.MediaType
+func mediaToDict(d *JSONObject, m Media) {
+	d.Set("media_type", m.MediaType)
 	if m.Data != "" {
-		d["data"] = m.Data
+		d.Set("data", m.Data)
 	}
 	if m.URL != "" {
-		d["url"] = m.URL
+		d.Set("url", m.URL)
 	}
 	if m.FileID != "" {
-		d["file_id"] = m.FileID
+		d.Set("file_id", m.FileID)
 	}
 	if m.Path != "" {
-		d["path"] = m.Path
+		d.Set("path", m.Path)
 	}
 }
 
@@ -203,7 +203,7 @@ func mediaFromDict(d JSONObject) (Media, error) {
 	if m.Path, err = optString(d, "path"); err != nil {
 		return m, err
 	}
-	if m.Continuation, err = continuationFromJSON(d["continuation"]); err != nil {
+	if m.Continuation, err = continuationFromJSON(d.Get("continuation")); err != nil {
 		return m, err
 	}
 	return m, nil
@@ -215,7 +215,7 @@ func PartFromDict(d JSONObject) (Part, error) {
 	if err != nil {
 		return nil, err
 	}
-	continuation, err := continuationFromJSON(d["continuation"])
+	continuation, err := continuationFromJSON(d.Get("continuation"))
 	if err != nil {
 		return nil, err
 	}
@@ -292,14 +292,14 @@ func PartFromDict(d JSONObject) (Part, error) {
 			return nil, err
 		}
 		var content []Part
-		switch raw := d["content"].(type) {
+		switch raw := d.Get("content").(type) {
 		case string:
 			if raw != "" {
 				content = []Part{TextPart{Text: raw}}
 			}
 		case []any:
 			for _, c := range raw {
-				if obj, ok := c.(map[string]any); ok {
+				if obj, ok := asObject(c); ok {
 					p, err := PartFromDict(obj)
 					if err != nil {
 						return nil, err
@@ -315,7 +315,7 @@ func PartFromDict(d JSONObject) (Part, error) {
 			return nil, err
 		}
 		isError := false
-		if v, ok := d["is_error"]; ok && v != nil {
+		if v, ok := d.Lookup("is_error"); ok && v != nil {
 			b, ok := v.(bool)
 			if !ok {
 				return nil, typeErrorf("ToolResultPart.is_error must be a bool")
@@ -324,11 +324,11 @@ func PartFromDict(d JSONObject) (Part, error) {
 		}
 		part = ToolResultPart{ID: id, Content: content, Name: name, IsError: isError, Continuation: continuation}
 	case PartTypeData:
-		value, present := d["value"]
+		value, present := d.Lookup("value")
 		if !present {
 			return nil, keyError("value")
 		}
-		probabilities, err := probabilitiesFromJSON(d["probabilities"])
+		probabilities, err := probabilitiesFromJSON(d.Get("probabilities"))
 		if err != nil {
 			return nil, err
 		}
@@ -347,12 +347,12 @@ func PartFromDict(d JSONObject) (Part, error) {
 // JSON float (1.0, never 1).
 func probabilitiesToJSON(p map[string]map[string]float64) JSONObject {
 	out := JSONObject{}
-	for name, dist := range p {
+	for _, name := range sortedMapKeys(p) {
 		inner := JSONObject{}
-		for key, prob := range dist {
-			inner[key] = jsonFloat(prob)
+		for _, key := range sortedMapKeys(p[name]) {
+			inner = append(inner, Member{key, jsonFloat(p[name][key])})
 		}
-		out[name] = inner
+		out = append(out, Member{name, inner})
 	}
 	return out
 }
@@ -361,18 +361,18 @@ func probabilitiesFromJSON(v any) (map[string]map[string]float64, error) {
 	if v == nil {
 		return nil, nil
 	}
-	outer, ok := v.(map[string]any)
+	outer, ok := asObject(v)
 	if !ok {
 		return nil, typeErrorf("DataPart.probabilities must be a mapping of field -> {key: probability}")
 	}
 	out := make(map[string]map[string]float64, len(outer))
-	for name, raw := range outer {
-		inner, ok := raw.(map[string]any)
+	for name, raw := range outer.All() {
+		inner, ok := asObject(raw)
 		if !ok {
 			return nil, typeErrorf("DataPart.probabilities[%q] must be a mapping of key -> probability", name)
 		}
 		dist := make(map[string]float64, len(inner))
-		for key, prob := range inner {
+		for key, prob := range inner.All() {
 			if _, isBool := prob.(bool); isBool {
 				return nil, typeErrorf("DataPart.probabilities[%q][%q] must be a number", name, key)
 			}
@@ -392,7 +392,7 @@ func partsFromList(v any) ([]Part, error) {
 	list, _ := v.([]any)
 	out := make([]Part, 0, len(list))
 	for _, item := range list {
-		if obj, ok := item.(map[string]any); ok {
+		if obj, ok := asObject(item); ok {
 			p, err := PartFromDict(obj)
 			if err != nil {
 				return nil, err
@@ -451,9 +451,9 @@ func (p ToolResultPart) MarshalJSON() ([]byte, error) {
 
 // MessageToDict serializes a message.
 func MessageToDict(m Message) JSONObject {
-	d := JSONObject{"role": m.Role, "parts": partsToList(m.Parts)}
+	d := JSONObject{{"role", m.Role}, {"parts", partsToList(m.Parts)}}
 	if c := continuationToJSON(m.Continuation); c != nil {
-		d["continuation"] = c
+		d.Set("continuation", c)
 	}
 	return d
 }
@@ -464,14 +464,14 @@ func MessageFromDict(d JSONObject) (Message, error) {
 	if err != nil {
 		return Message{}, err
 	}
-	parts, err := partsFromList(d["parts"])
+	parts, err := partsFromList(d.Get("parts"))
 	if err != nil {
 		return Message{}, err
 	}
 	if len(parts) == 0 {
 		return Message{}, valueErrorf("message for role '%s' has no parts", role)
 	}
-	continuation, err := continuationFromJSON(d["continuation"])
+	continuation, err := continuationFromJSON(d.Get("continuation"))
 	if err != nil {
 		return Message{}, err
 	}
@@ -500,11 +500,11 @@ func (m *Message) UnmarshalJSON(b []byte) error {
 func ToolToDict(t Tool) JSONObject {
 	switch x := t.(type) {
 	case FunctionTool:
-		d := dict{"type": "function", "name": x.Name}.omit("description", x.Description)
-		d["parameters"] = x.EffectiveParameters()
+		d := dict{{"type", "function"}, {"name", x.Name}}.omit("description", x.Description)
+		d = d.put("parameters", x.EffectiveParameters())
 		return JSONObject(d)
 	case BuiltinTool:
-		return JSONObject(dict{"type": "builtin", "name": x.Name}.omit("config", x.Config))
+		return JSONObject(dict{{"type", "builtin"}, {"name", x.Name}}.omit("config", x.Config))
 	}
 	return nil
 }
@@ -515,7 +515,7 @@ func ToolFromDict(d JSONObject) (Tool, error) {
 	if err != nil {
 		return nil, err
 	}
-	if t, _ := d["type"].(string); t == "builtin" {
+	if t, _ := d.Get("type").(string); t == "builtin" {
 		config, err := optObject(d, "config")
 		if err != nil {
 			return nil, err
@@ -531,8 +531,8 @@ func ToolFromDict(d JSONObject) (Tool, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, present := d["parameters"]; present && params == nil {
-		if d["parameters"] != nil {
+	if _, present := d.Lookup("parameters"); present && params == nil {
+		if d.Get("parameters") != nil {
 			return nil, typeErrorf("parameters must be a JSON object")
 		}
 	}
@@ -555,7 +555,7 @@ func (t BuiltinTool) MarshalJSON() ([]byte, error) {
 
 // ToolChoiceToDict serializes a tool choice.
 func ToolChoiceToDict(tc ToolChoice) JSONObject {
-	return JSONObject(dict{"mode": tc.EffectiveMode()}.omit("allowed", tc.Allowed).omit("parallel", tc.Parallel))
+	return JSONObject(dict{{"mode", tc.EffectiveMode()}}.omit("allowed", tc.Allowed).omit("parallel", tc.Parallel))
 }
 
 // ToolChoiceFromDict reads a tool choice (INV-045 mode → auto).
@@ -567,7 +567,7 @@ func ToolChoiceFromDict(d JSONObject) (ToolChoice, error) {
 	if mode == "" {
 		mode = "auto"
 	}
-	allowed, err := stringList(d["allowed"], "allowed")
+	allowed, err := stringList(d.Get("allowed"), "allowed")
 	if err != nil {
 		return ToolChoice{}, err
 	}
@@ -581,17 +581,17 @@ func ToolChoiceFromDict(d JSONObject) (ToolChoice, error) {
 
 // ReasoningToDict serializes reasoning.
 func ReasoningToDict(r Reasoning) JSONObject {
-	return JSONObject(dict{"effort": r.Effort}.omit("thinking_budget", r.ThinkingBudget).omit("summary", r.Summary))
+	return JSONObject(dict{{"effort", r.Effort}}.omit("thinking_budget", r.ThinkingBudget).omit("summary", r.Summary))
 }
 
 // ReasoningFromDict reads reasoning with the legacy leniencies (INV-043).
 func ReasoningFromDict(d JSONObject) (Reasoning, error) {
 	defaultEffort := "medium"
-	if enabled, ok := d["enabled"].(bool); ok && !enabled {
+	if enabled, ok := d.Get("enabled").(bool); ok && !enabled {
 		defaultEffort = "off"
 	}
 	effort := defaultEffort
-	if v, ok := d["effort"]; ok && v != nil {
+	if v, ok := d.Lookup("effort"); ok && v != nil {
 		s, ok := v.(string)
 		if !ok {
 			return Reasoning{}, valueErrorf("unsupported reasoning effort: %v", v)
@@ -624,7 +624,7 @@ func ReasoningFromDict(d JSONObject) (Reasoning, error) {
 
 // CacheConfigToDict serializes a cache config.
 func CacheConfigToDict(c CacheConfig) JSONObject {
-	return JSONObject(dict{"mode": c.EffectiveMode()}.
+	return JSONObject(dict{{"mode", c.EffectiveMode()}}.
 		omit("retention", c.Retention).omit("key", c.Key).omit("prefix_until_index", c.PrefixUntilIndex).
 		omit("prefix", c.Prefix).omit("resource", c.Resource))
 }
@@ -674,35 +674,35 @@ func ConfigToDict(c Config) JSONObject {
 		omit("max_tokens", c.MaxTokens).omit("temperature", c.Temperature).omit("top_p", c.TopP).omit("top_k", c.TopK).
 		omit("stop", c.Stop).omit("response_format", c.ResponseFormat)
 	if c.ToolChoice != nil {
-		d["tool_choice"] = ToolChoiceToDict(*c.ToolChoice)
+		d = d.put("tool_choice", ToolChoiceToDict(*c.ToolChoice))
 	}
 	if c.Reasoning != nil {
-		d["reasoning"] = ReasoningToDict(*c.Reasoning)
+		d = d.put("reasoning", ReasoningToDict(*c.Reasoning))
 	}
 	if c.Cache != nil {
-		d["cache"] = CacheConfigToDict(*c.Cache)
+		d = d.put("cache", CacheConfigToDict(*c.Cache))
 	}
 	// seed 0 and a 0.0 penalty are data, emitted (spec/types.md § Config).
 	if c.Seed != nil {
-		d["seed"] = *c.Seed
+		d = d.put("seed", *c.Seed)
 	}
 	if c.FrequencyPenalty != nil {
-		d["frequency_penalty"] = jsonFloat(*c.FrequencyPenalty)
+		d = d.put("frequency_penalty", jsonFloat(*c.FrequencyPenalty))
 	}
 	if c.PresencePenalty != nil {
-		d["presence_penalty"] = jsonFloat(*c.PresencePenalty)
+		d = d.put("presence_penalty", jsonFloat(*c.PresencePenalty))
 	}
-	d.omit("service_tier", c.ServiceTier).omit("user_id", c.UserID).omit("store", c.Store).omit("logprobs", c.Logprobs).
+	d = d.omit("service_tier", c.ServiceTier).omit("user_id", c.UserID).omit("store", c.Store).omit("logprobs", c.Logprobs).
 		omit("probabilities", c.Probabilities).omit("extensions", c.Extensions)
 	return JSONObject(d)
 }
 
 func configNest(d JSONObject, key string) (JSONObject, error) {
-	v, ok := d[key]
+	v, ok := d.Lookup(key)
 	if !ok || v == nil {
 		return nil, nil
 	}
-	m, ok := v.(map[string]any)
+	m, ok := asObject(v)
 	if !ok {
 		return nil, typeErrorf("config.%s must be a JSON object, got %s", key, jsonTypeName(v))
 	}
@@ -725,11 +725,11 @@ func ConfigFromDict(d JSONObject) (Config, error) {
 	if c.TopK, err = optInt(d, "top_k"); err != nil {
 		return c, err
 	}
-	if c.Stop, err = stringList(d["stop"], "stop"); err != nil {
+	if c.Stop, err = stringList(d.Get("stop"), "stop"); err != nil {
 		return c, err
 	}
-	if rf, ok := d["response_format"]; ok && rf != nil {
-		m, ok := rf.(map[string]any)
+	if rf, ok := d.Lookup("response_format"); ok && rf != nil {
+		m, ok := asObject(rf)
 		if !ok {
 			return c, typeErrorf("response_format must be a JSON object")
 		}
@@ -792,8 +792,8 @@ func ConfigFromDict(d JSONObject) (Config, error) {
 	if c.Probabilities, err = optString(d, "probabilities"); err != nil {
 		return c, err
 	}
-	if ext, ok := d["extensions"]; ok && ext != nil {
-		m, ok := ext.(map[string]any)
+	if ext, ok := d.Lookup("extensions"); ok && ext != nil {
+		m, ok := asObject(ext)
 		if !ok {
 			return c, typeErrorf("extensions must be a JSON object")
 		}
@@ -832,12 +832,12 @@ func (c *Config) UnmarshalJSON(b []byte) error {
 // ─── Logprobs ────────────────────────────────────────────────────────
 
 func topLogprobToDict(t TopLogprob) JSONObject {
-	d := JSONObject{"token": t.Token, "logprob": jsonFloat(t.Logprob)}
+	d := JSONObject{{"token", t.Token}, {"logprob", jsonFloat(t.Logprob)}}
 	if t.Bytes != nil {
-		d["bytes"] = toAnyList(t.Bytes, func(b int) any { return b })
+		d.Set("bytes", toAnyList(t.Bytes, func(b int) any { return b }))
 	}
 	if t.TokenID != nil {
-		d["token_id"] = *t.TokenID
+		d.Set("token_id", *t.TokenID)
 	}
 	return d
 }
@@ -846,7 +846,7 @@ func topLogprobToDict(t TopLogprob) JSONObject {
 func TokenLogprobToDict(t TokenLogprob) JSONObject {
 	d := topLogprobToDict(TopLogprob{Token: t.Token, Logprob: t.Logprob, Bytes: t.Bytes, TokenID: t.TokenID})
 	if len(t.Top) > 0 {
-		d["top"] = toAnyList(t.Top, func(x TopLogprob) any { return topLogprobToDict(x) })
+		d.Set("top", toAnyList(t.Top, func(x TopLogprob) any { return topLogprobToDict(x) }))
 	}
 	return d
 }
@@ -875,7 +875,7 @@ func topLogprobFromDict(d JSONObject) (TopLogprob, error) {
 	if err != nil {
 		return TopLogprob{}, err
 	}
-	v, ok := d["logprob"]
+	v, ok := d.Lookup("logprob")
 	if !ok {
 		return TopLogprob{}, keyError("logprob")
 	}
@@ -883,7 +883,7 @@ func topLogprobFromDict(d JSONObject) (TopLogprob, error) {
 	if err != nil {
 		return TopLogprob{}, typeErrorf("logprob must be a float")
 	}
-	bytesList, err := logprobBytes(d["bytes"])
+	bytesList, err := logprobBytes(d.Get("bytes"))
 	if err != nil {
 		return TopLogprob{}, err
 	}
@@ -902,13 +902,13 @@ func TokenLogprobFromDict(d JSONObject) (TokenLogprob, error) {
 		return TokenLogprob{}, err
 	}
 	var top []TopLogprob
-	if raw, ok := d["top"]; ok && raw != nil {
+	if raw, ok := d.Lookup("top"); ok && raw != nil {
 		list, ok := raw.([]any)
 		if !ok {
 			return TokenLogprob{}, typeErrorf("TokenLogprob.top must contain TopLogprob objects")
 		}
 		for _, item := range list {
-			obj, ok := item.(map[string]any)
+			obj, ok := asObject(item)
 			if !ok {
 				return TokenLogprob{}, typeErrorf("TokenLogprob.top must contain TopLogprob objects")
 			}
@@ -940,7 +940,7 @@ func logprobsFromJSON(v any) ([]TokenLogprob, error) {
 	}
 	out := make([]TokenLogprob, 0, len(list))
 	for _, item := range list {
-		obj, ok := item.(map[string]any)
+		obj, ok := asObject(item)
 		if !ok {
 			return nil, typeErrorf("logprobs must contain TokenLogprob objects")
 		}
@@ -961,9 +961,9 @@ func (t TokenLogprob) MarshalJSON() ([]byte, error) {
 
 // ErrorDetailToDict serializes an error detail.
 func ErrorDetailToDict(e ErrorDetail) JSONObject {
-	d := dict{"code": e.Code}.omit("message", e.Message).omit("provider_code", e.ProviderCode)
+	d := dict{{"code", e.Code}}.omit("message", e.Message).omit("provider_code", e.ProviderCode)
 	if h := e.HTTPResponse.toDict(); h != nil {
-		d["http_response"] = h
+		d = d.put("http_response", h)
 	}
 	return JSONObject(d)
 }
@@ -982,7 +982,7 @@ func ErrorDetailFromDict(d JSONObject) (ErrorDetail, error) {
 	if err != nil {
 		return ErrorDetail{}, err
 	}
-	http, err := httpResponseDetailFromJSON(d["http_response"])
+	http, err := httpResponseDetailFromJSON(d.Get("http_response"))
 	if err != nil {
 		return ErrorDetail{}, err
 	}
@@ -999,55 +999,55 @@ func (e ErrorDetail) MarshalJSON() ([]byte, error) {
 // DeltaToDict serializes a delta: only nil fields are dropped; empty strings
 // are emitted; part_index is always emitted (except a nil ContinuationDelta index).
 func DeltaToDict(dl Delta) JSONObject {
-	out := dict{"type": dl.Type()}
+	out := dict{{"type", dl.Type()}}
 	switch x := dl.(type) {
 	case TextDelta:
-		out["part_index"] = x.PartIndex
-		out["text"] = x.Text
+		out = out.put("part_index", x.PartIndex)
+		out = out.put("text", x.Text)
 		if len(x.Logprobs) > 0 {
-			out["logprobs"] = logprobsToJSON(x.Logprobs)
+			out = out.put("logprobs", logprobsToJSON(x.Logprobs))
 		}
 		if x.LogprobsIncomplete {
-			out["logprobs_complete"] = false
+			out = out.put("logprobs_complete", false)
 		}
 	case ThinkingDelta:
-		out["part_index"] = x.PartIndex
-		out["text"] = x.Text
+		out = out.put("part_index", x.PartIndex)
+		out = out.put("text", x.Text)
 	case AudioDelta:
-		out["part_index"] = x.PartIndex
-		out.omitNull("data", x.Data).omitNull("url", x.URL).omitNull("file_id", x.FileID)
+		out = out.put("part_index", x.PartIndex)
+		out = out.omitNull("data", x.Data).omitNull("url", x.URL).omitNull("file_id", x.FileID)
 		if x.MediaType != "" {
-			out["media_type"] = x.MediaType
+			out = out.put("media_type", x.MediaType)
 		}
 	case ImageDelta:
-		out["part_index"] = x.PartIndex
-		out.omitNull("data", x.Data).omitNull("url", x.URL).omitNull("file_id", x.FileID)
+		out = out.put("part_index", x.PartIndex)
+		out = out.omitNull("data", x.Data).omitNull("url", x.URL).omitNull("file_id", x.FileID)
 		if x.MediaType != "" {
-			out["media_type"] = x.MediaType
+			out = out.put("media_type", x.MediaType)
 		}
 	case ToolCallDelta:
-		out["part_index"] = x.PartIndex
-		out["input"] = x.Input
+		out = out.put("part_index", x.PartIndex)
+		out = out.put("input", x.Input)
 		if x.ID != "" {
-			out["id"] = x.ID
+			out = out.put("id", x.ID)
 		}
 		if x.Name != "" {
-			out["name"] = x.Name
+			out = out.put("name", x.Name)
 		}
 	case CitationDelta:
-		out["part_index"] = x.PartIndex
-		out.omitNull("text", x.Text).omitNull("url", x.URL).omitNull("title", x.Title)
+		out = out.put("part_index", x.PartIndex)
+		out = out.omitNull("text", x.Text).omitNull("url", x.URL).omitNull("title", x.Title)
 	case ContinuationDelta:
-		out["provider"] = x.Provider
-		out["kind"] = x.Kind
+		if x.PartIndex != nil {
+			out = out.put("part_index", *x.PartIndex)
+		}
+		out = out.put("provider", x.Provider)
+		out = out.put("kind", x.Kind)
 		data := x.Data
 		if data == nil {
 			data = JSONObject{}
 		}
-		out["data"] = data
-		if x.PartIndex != nil {
-			out["part_index"] = *x.PartIndex
-		}
+		out = out.put("data", data)
 	}
 	return JSONObject(out)
 }
@@ -1073,7 +1073,7 @@ func DeltaFromDict(d JSONObject) (Delta, error) {
 		if err != nil {
 			return nil, err
 		}
-		lps, err := logprobsFromJSON(d["logprobs"])
+		lps, err := logprobsFromJSON(d.Get("logprobs"))
 		if err != nil {
 			return nil, err
 		}
@@ -1241,22 +1241,22 @@ func (u *Usage) UnmarshalJSON(b []byte) error {
 func StreamEventToDict(e StreamEvent) JSONObject {
 	switch x := e.(type) {
 	case StreamStartEvent:
-		d := dict{"type": "start"}.omit("id", x.ID).omit("model", x.Model)
+		d := dict{{"type", "start"}}.omit("id", x.ID).omit("model", x.Model)
 		if a := adaptationsToJSON(x.Adaptations); a != nil {
-			d["adaptations"] = a
+			d = d.put("adaptations", a)
 		}
 		return JSONObject(d)
 	case StreamDeltaEvent:
-		return JSONObject{"type": "delta", "delta": DeltaToDict(x.Delta)}
+		return JSONObject{{"type", "delta"}, {"delta", DeltaToDict(x.Delta)}}
 	case StreamEndEvent:
-		d := dict{"type": "end"}.omit("finish_reason", x.FinishReason)
+		d := dict{{"type", "end"}}.omit("finish_reason", x.FinishReason)
 		if x.Usage != nil {
-			d.omit("usage", UsageToDict(*x.Usage))
+			d = d.omit("usage", UsageToDict(*x.Usage))
 		}
-		d.omit("provider_data", x.ProviderData)
+		d = d.omit("provider_data", x.ProviderData)
 		return JSONObject(d)
 	case StreamErrorEvent:
-		return JSONObject{"type": "error", "error": ErrorDetailToDict(x.Error)}
+		return JSONObject{{"type", "error"}, {"error", ErrorDetailToDict(x.Error)}}
 	}
 	return nil
 }
@@ -1277,16 +1277,16 @@ func StreamEventFromDict(d JSONObject) (StreamEvent, error) {
 		if err != nil {
 			return nil, err
 		}
-		adaptations, err := adaptationsFromJSON(d["adaptations"])
+		adaptations, err := adaptationsFromJSON(d.Get("adaptations"))
 		if err != nil {
 			return nil, err
 		}
 		e := StreamStartEvent{ID: id, Model: model, Adaptations: adaptations}
 		return e, e.Validate()
 	case "delta":
-		obj, ok := d["delta"].(map[string]any)
+		obj, ok := asObject(d.Get("delta"))
 		if !ok {
-			if _, present := d["delta"]; !present {
+			if _, present := d.Lookup("delta"); !present {
 				return nil, keyError("delta")
 			}
 			return nil, typeErrorf("delta must be a JSON object")
@@ -1302,7 +1302,7 @@ func StreamEventFromDict(d JSONObject) (StreamEvent, error) {
 			return nil, err
 		}
 		var usage *Usage
-		if obj, ok := d["usage"].(map[string]any); ok {
+		if obj, ok := asObject(d.Get("usage")); ok {
 			u, err := UsageFromDict(obj)
 			if err != nil {
 				return nil, err
@@ -1316,7 +1316,7 @@ func StreamEventFromDict(d JSONObject) (StreamEvent, error) {
 		e := StreamEndEvent{FinishReason: finish, Usage: usage, ProviderData: pd}
 		return e, e.Validate()
 	case "error":
-		obj, ok := d["error"].(map[string]any)
+		obj, ok := asObject(d.Get("error"))
 		if !ok {
 			return nil, keyError("error")
 		}
@@ -1380,7 +1380,7 @@ func toolsFromJSON(v any) ([]Tool, error) {
 	}
 	out := make([]Tool, 0, len(list))
 	for _, item := range list {
-		obj, ok := item.(map[string]any)
+		obj, ok := asObject(item)
 		if !ok {
 			return nil, typeErrorf("tools must contain objects")
 		}
@@ -1395,10 +1395,10 @@ func toolsFromJSON(v any) ([]Tool, error) {
 
 // RequestToDict serializes a request.
 func RequestToDict(r *Request) JSONObject {
-	d := dict{"model": r.Model, "messages": toAnyList(r.Messages, func(m Message) any { return MessageToDict(m) })}
-	d.omit("system", systemToJSON(r.System))
-	d.omit("tools", toAnyList(r.Tools, func(t Tool) any { return ToolToDict(t) }))
-	d.omit("config", ConfigToDict(r.Config))
+	d := dict{{"model", r.Model}, {"messages", toAnyList(r.Messages, func(m Message) any { return MessageToDict(m) })}}
+	d = d.omit("system", systemToJSON(r.System))
+	d = d.omit("tools", toAnyList(r.Tools, func(t Tool) any { return ToolToDict(t) }))
+	d = d.omit("config", ConfigToDict(r.Config))
 	return JSONObject(d)
 }
 
@@ -1408,7 +1408,7 @@ func RequestFromDict(d JSONObject) (*Request, error) {
 	if err != nil {
 		return nil, err
 	}
-	rawMessages, ok := d["messages"]
+	rawMessages, ok := d.Lookup("messages")
 	if !ok {
 		return nil, keyError("messages")
 	}
@@ -1418,7 +1418,7 @@ func RequestFromDict(d JSONObject) (*Request, error) {
 	}
 	messages := make([]Message, 0, len(list))
 	for _, item := range list {
-		obj, ok := item.(map[string]any)
+		obj, ok := asObject(item)
 		if !ok {
 			return nil, typeErrorf("Request.messages must contain Message objects — wrap plain text with Message.user(\"...\").")
 		}
@@ -1428,17 +1428,17 @@ func RequestFromDict(d JSONObject) (*Request, error) {
 		}
 		messages = append(messages, m)
 	}
-	system, err := systemFromJSON(d["system"])
+	system, err := systemFromJSON(d.Get("system"))
 	if err != nil {
 		return nil, err
 	}
-	tools, err := toolsFromJSON(d["tools"])
+	tools, err := toolsFromJSON(d.Get("tools"))
 	if err != nil {
 		return nil, err
 	}
 	config := Config{}
-	if raw, ok := d["config"]; ok && raw != nil {
-		obj, ok := raw.(map[string]any)
+	if raw, ok := d.Lookup("config"); ok && raw != nil {
+		obj, ok := asObject(raw)
 		if !ok {
 			return nil, typeErrorf("Request.config must be a Config")
 		}
@@ -1467,18 +1467,17 @@ func (r *Request) UnmarshalJSON(b []byte) error {
 
 // ResponseToDict serializes a response; provider_data only when asked.
 func ResponseToDict(r *Response, includeProviderData bool) JSONObject {
-	d := dict{"model": r.Model, "message": MessageToDict(r.Message), "finish_reason": r.FinishReason}
-	d.omit("id", r.ID)
-	d.omit("usage", UsageToDict(r.Usage))
-	d.omit("logprobs", logprobsToJSON(r.Logprobs))
+	d := dict{}.omit("id", r.ID).put("model", r.Model).put("message", MessageToDict(r.Message)).put("finish_reason", r.FinishReason)
+	d = d.omit("usage", UsageToDict(r.Usage))
+	d = d.omit("logprobs", logprobsToJSON(r.Logprobs))
 	if r.LogprobsIncomplete {
-		d["logprobs_complete"] = false
+		d = d.put("logprobs_complete", false)
 	}
 	if includeProviderData && r.ProviderData != nil {
-		d["provider_data"] = r.ProviderData
+		d = d.put("provider_data", r.ProviderData)
 	}
 	if a := adaptationsToJSON(r.Adaptations); a != nil {
-		d["adaptations"] = a
+		d = d.put("adaptations", a)
 	}
 	return JSONObject(d)
 }
@@ -1493,9 +1492,9 @@ func ResponseFromDict(d JSONObject) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	msgObj, ok := d["message"].(map[string]any)
+	msgObj, ok := asObject(d.Get("message"))
 	if !ok {
-		if _, present := d["message"]; !present {
+		if _, present := d.Lookup("message"); !present {
 			return nil, keyError("message")
 		}
 		return nil, typeErrorf("Response.message must be a Message")
@@ -1509,12 +1508,12 @@ func ResponseFromDict(d JSONObject) (*Response, error) {
 		return nil, err
 	}
 	usage := Usage{}
-	if obj, ok := d["usage"].(map[string]any); ok {
+	if obj, ok := asObject(d.Get("usage")); ok {
 		if usage, err = UsageFromDict(obj); err != nil {
 			return nil, err
 		}
 	}
-	lps, err := logprobsFromJSON(d["logprobs"])
+	lps, err := logprobsFromJSON(d.Get("logprobs"))
 	if err != nil {
 		return nil, err
 	}
@@ -1522,7 +1521,7 @@ func ResponseFromDict(d JSONObject) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	adaptations, err := adaptationsFromJSON(d["adaptations"])
+	adaptations, err := adaptationsFromJSON(d.Get("adaptations"))
 	if err != nil {
 		return nil, err
 	}
@@ -1554,8 +1553,9 @@ func (r *Response) UnmarshalJSON(b []byte) error {
 
 // BatchRequestToDict serializes a batch request.
 func BatchRequestToDict(b BatchRequest) JSONObject {
-	return JSONObject(dict{"requests": toAnyList(b.Requests, func(r *Request) any { return RequestToDict(r) })}.
-		omit("model", b.EffectiveModel()).omit("label", b.Label).omit("extensions", b.Extensions))
+	return JSONObject(dict{}.omit("model", b.EffectiveModel()).
+		put("requests", toAnyList(b.Requests, func(r *Request) any { return RequestToDict(r) })).
+		omit("label", b.Label).omit("extensions", b.Extensions))
 }
 
 // BatchRequestFromDict reads a batch request.
@@ -1565,9 +1565,9 @@ func BatchRequestFromDict(d JSONObject) (BatchRequest, error) {
 		return BatchRequest{}, err
 	}
 	var requests []*Request
-	list, _ := d["requests"].([]any)
+	list, _ := d.Get("requests").([]any)
 	for _, item := range list {
-		obj, ok := item.(map[string]any)
+		obj, ok := asObject(item)
 		if !ok {
 			return BatchRequest{}, typeErrorf("BatchRequest.requests must contain Request objects")
 		}
@@ -1598,7 +1598,7 @@ func BatchRequestFromDict(d JSONObject) (BatchRequest, error) {
 
 // BatchJobToDict serializes a batch job snapshot.
 func BatchJobToDict(j BatchJobInfo) JSONObject {
-	return JSONObject(dict{"id": j.ID, "status": j.Status}.omit("label", j.Label).omit("created_at", j.CreatedAt).omit("provider_data", j.ProviderData))
+	return JSONObject(dict{{"id", j.ID}, {"status", j.Status}}.omit("label", j.Label).omit("created_at", j.CreatedAt).omit("provider_data", j.ProviderData))
 }
 
 // BatchJobFromDict reads a batch job snapshot.
@@ -1629,19 +1629,19 @@ func BatchJobFromDict(d JSONObject) (BatchJobInfo, error) {
 
 // BatchEntryToDict serializes a batch entry (its response WITH provider_data).
 func BatchEntryToDict(e BatchEntry) JSONObject {
-	d := dict{"index": e.Index, "outcome": e.Outcome}
+	d := dict{{"index", e.Index}, {"outcome", e.Outcome}}
 	if e.Response != nil {
-		d["response"] = ResponseToDict(e.Response, true)
+		d = d.put("response", ResponseToDict(e.Response, true))
 	}
 	if e.Error != nil {
-		d["error"] = ErrorDetailToDict(*e.Error)
+		d = d.put("error", ErrorDetailToDict(*e.Error))
 	}
 	return JSONObject(d)
 }
 
 // BatchEntryFromDict reads a batch entry.
 func BatchEntryFromDict(d JSONObject) (BatchEntry, error) {
-	v, ok := d["index"]
+	v, ok := d.Lookup("index")
 	if !ok {
 		return BatchEntry{}, keyError("index")
 	}
@@ -1654,14 +1654,14 @@ func BatchEntryFromDict(d JSONObject) (BatchEntry, error) {
 		return BatchEntry{}, err
 	}
 	e := BatchEntry{Index: index, Outcome: outcome}
-	if obj, ok := d["response"].(map[string]any); ok {
+	if obj, ok := asObject(d.Get("response")); ok {
 		r, err := ResponseFromDict(obj)
 		if err != nil {
 			return BatchEntry{}, err
 		}
 		e.Response = r
 	}
-	if obj, ok := d["error"].(map[string]any); ok {
+	if obj, ok := asObject(d.Get("error")); ok {
 		detail, err := ErrorDetailFromDict(obj)
 		if err != nil {
 			return BatchEntry{}, err
@@ -1675,11 +1675,12 @@ func BatchEntryFromDict(d JSONObject) (BatchEntry, error) {
 
 // FileUploadRequestToDict serializes an upload request (bytes as base64).
 func FileUploadRequestToDict(r FileUploadRequest) JSONObject {
-	d := dict{"filename": r.Filename, "media_type": r.EffectiveMediaType()}
+	d := dict{{"filename", r.Filename}}
 	if r.Bytes != nil {
-		d["bytes_data"] = base64.StdEncoding.EncodeToString(r.Bytes)
+		d = d.put("bytes_data", base64.StdEncoding.EncodeToString(r.Bytes))
 	}
-	d.omit("extensions", r.Extensions).omit("path", r.Path)
+	d = d.put("media_type", r.EffectiveMediaType())
+	d = d.omit("extensions", r.Extensions).omit("path", r.Path)
 	return JSONObject(d)
 }
 
@@ -1690,7 +1691,7 @@ func FileUploadRequestFromDict(d JSONObject) (FileUploadRequest, error) {
 		return FileUploadRequest{}, err
 	}
 	var data []byte
-	if raw, ok := d["bytes_data"].(string); ok {
+	if raw, ok := d.Get("bytes_data").(string); ok {
 		decoded, err := base64.StdEncoding.DecodeString(raw)
 		if err != nil {
 			return FileUploadRequest{}, valueErrorf("bytes_data must be base64")
@@ -1724,10 +1725,10 @@ func FileUploadRequestFromDict(d JSONObject) (FileUploadRequest, error) {
 
 // FileInfoToDict serializes a file snapshot (readiness always; downloadable=false is data).
 func FileInfoToDict(f FileInfo) JSONObject {
-	return JSONObject(dict{"id": f.ID, "readiness": f.EffectiveReadiness()}.
+	return JSONObject(dict{{"id", f.ID}}.
 		omit("filename", f.Filename).omit("media_type", f.MediaType).omit("size_bytes", f.SizeBytes).
-		omit("created_at", f.CreatedAt).omit("expires_at", f.ExpiresAt).omit("downloadable", f.Downloadable).
-		omit("provider_data", f.ProviderData))
+		omit("created_at", f.CreatedAt).omit("expires_at", f.ExpiresAt).put("readiness", f.EffectiveReadiness()).
+		omit("downloadable", f.Downloadable).omit("provider_data", f.ProviderData))
 }
 
 // FileInfoFromDict reads a file snapshot.
@@ -1775,9 +1776,9 @@ func FilePageToDict(p FilePage) JSONObject {
 // FilePageFromDict reads a page.
 func FilePageFromDict(d JSONObject) (FilePage, error) {
 	var p FilePage
-	list, _ := d["items"].([]any)
+	list, _ := d.Get("items").([]any)
 	for _, item := range list {
-		obj, ok := item.(map[string]any)
+		obj, ok := asObject(item)
 		if !ok {
 			return p, typeErrorf("FilePage.items must contain FileInfo objects")
 		}
@@ -1798,7 +1799,7 @@ func FilePageFromDict(d JSONObject) (FilePage, error) {
 
 // CacheInfoToDict serializes a cache snapshot.
 func CacheInfoToDict(c CacheInfo) JSONObject {
-	return JSONObject(dict{"id": c.ID, "model": c.Model}.omit("tokens", c.Tokens).omit("created_at", c.CreatedAt).
+	return JSONObject(dict{{"id", c.ID}, {"model", c.Model}}.omit("tokens", c.Tokens).omit("created_at", c.CreatedAt).
 		omit("expires_at", c.ExpiresAt).omit("label", c.Label).omit("provider_data", c.ProviderData))
 }
 
@@ -1838,9 +1839,9 @@ func CachePageToDict(p CachePage) JSONObject {
 // CachePageFromDict reads a cache page.
 func CachePageFromDict(d JSONObject) (CachePage, error) {
 	var p CachePage
-	list, _ := d["items"].([]any)
+	list, _ := d.Get("items").([]any)
 	for _, item := range list {
-		obj, ok := item.(map[string]any)
+		obj, ok := asObject(item)
 		if !ok {
 			return p, typeErrorf("CachePage.items must contain CacheInfo objects")
 		}
@@ -1859,21 +1860,21 @@ func CachePageFromDict(d JSONObject) (CachePage, error) {
 
 // CachedPrefixToDict serializes a cached prefix.
 func CachedPrefixToDict(c CachedPrefix) JSONObject {
-	d := dict{"prefix": RequestToDict(c.Prefix)}
+	d := dict{{"prefix", RequestToDict(c.Prefix)}}
 	if c.Resource != nil {
-		d["resource"] = CacheInfoToDict(*c.Resource)
+		d = d.put("resource", CacheInfoToDict(*c.Resource))
 	}
 	if c.Provider != "" {
-		d["provider"] = c.Provider
+		d = d.put("provider", c.Provider)
 	}
 	return JSONObject(d)
 }
 
 // CachedPrefixFromDict reads a cached prefix.
 func CachedPrefixFromDict(d JSONObject) (CachedPrefix, error) {
-	obj, ok := d["prefix"].(map[string]any)
+	obj, ok := asObject(d.Get("prefix"))
 	if !ok {
-		if _, present := d["prefix"]; !present {
+		if _, present := d.Lookup("prefix"); !present {
 			return CachedPrefix{}, keyError("prefix")
 		}
 		return CachedPrefix{}, typeErrorf("CachedPrefix.prefix must be a Request")
@@ -1883,14 +1884,14 @@ func CachedPrefixFromDict(d JSONObject) (CachedPrefix, error) {
 		return CachedPrefix{}, err
 	}
 	c := CachedPrefix{Prefix: prefix}
-	if raw, present := d["provider"]; present && raw != nil {
+	if raw, present := d.Lookup("provider"); present && raw != nil {
 		provider, ok := raw.(string)
 		if !ok {
 			return CachedPrefix{}, typeErrorf("CachedPrefix.provider must be a string")
 		}
 		c.Provider = provider
 	}
-	if res, ok := d["resource"].(map[string]any); ok {
+	if res, ok := asObject(d.Get("resource")); ok {
 		info, err := CacheInfoFromDict(res)
 		if err != nil {
 			return CachedPrefix{}, err
@@ -1913,7 +1914,7 @@ func imagePartsFromJSON(v any) ([]ImagePart, error) {
 	list, _ := v.([]any)
 	out := make([]ImagePart, 0, len(list))
 	for _, item := range list {
-		obj, ok := item.(map[string]any)
+		obj, ok := asObject(item)
 		if !ok {
 			return nil, typeErrorf("images must contain ImagePart objects")
 		}
@@ -1932,7 +1933,7 @@ func imagePartsFromJSON(v any) ([]ImagePart, error) {
 
 // ImageGenerationRequestToDict serializes an image generation request.
 func ImageGenerationRequestToDict(r ImageGenerationRequest) JSONObject {
-	return JSONObject(dict{"model": r.Model, "prompt": r.Prompt}.omit("size", r.Size).omit("images", imagePartsToJSON(r.Images)).omit("extensions", r.Extensions))
+	return JSONObject(dict{{"model", r.Model}, {"prompt", r.Prompt}}.omit("size", r.Size).omit("images", imagePartsToJSON(r.Images)).omit("extensions", r.Extensions))
 }
 
 // ImageGenerationRequestFromDict reads an image generation request.
@@ -1948,7 +1949,7 @@ func ImageGenerationRequestFromDict(d JSONObject) (ImageGenerationRequest, error
 	if r.Size, err = optString(d, "size"); err != nil {
 		return r, err
 	}
-	if r.Images, err = imagePartsFromJSON(d["images"]); err != nil {
+	if r.Images, err = imagePartsFromJSON(d.Get("images")); err != nil {
 		return r, err
 	}
 	if r.Extensions, err = optObject(d, "extensions"); err != nil {
@@ -1962,7 +1963,7 @@ func ImageGenerationRequestFromDict(d JSONObject) (ImageGenerationRequest, error
 
 // ImageGenerationResponseToDict serializes an image generation response.
 func ImageGenerationResponseToDict(r ImageGenerationResponse) JSONObject {
-	return JSONObject(dict{"images": imagePartsToJSON(r.Images)}.omit("text", r.Text).omit("id", r.ID).omit("model", r.Model).
+	return JSONObject(dict{{"images", imagePartsToJSON(r.Images)}}.omit("text", r.Text).omit("id", r.ID).omit("model", r.Model).
 		omit("usage", UsageToDict(r.Usage)).omit("provider_data", r.ProviderData))
 }
 
@@ -1970,7 +1971,7 @@ func ImageGenerationResponseToDict(r ImageGenerationResponse) JSONObject {
 func ImageGenerationResponseFromDict(d JSONObject) (ImageGenerationResponse, error) {
 	var r ImageGenerationResponse
 	var err error
-	if r.Images, err = imagePartsFromJSON(d["images"]); err != nil {
+	if r.Images, err = imagePartsFromJSON(d.Get("images")); err != nil {
 		return r, err
 	}
 	if r.Text, err = optString(d, "text"); err != nil {
@@ -1982,7 +1983,7 @@ func ImageGenerationResponseFromDict(d JSONObject) (ImageGenerationResponse, err
 	if r.Model, err = optString(d, "model"); err != nil {
 		return r, err
 	}
-	if obj, ok := d["usage"].(map[string]any); ok {
+	if obj, ok := asObject(d.Get("usage")); ok {
 		if r.Usage, err = UsageFromDict(obj); err != nil {
 			return r, err
 		}
@@ -1995,7 +1996,7 @@ func ImageGenerationResponseFromDict(d JSONObject) (ImageGenerationResponse, err
 
 // SpeechGenerationRequestToDict serializes a speech request.
 func SpeechGenerationRequestToDict(r SpeechGenerationRequest) JSONObject {
-	return JSONObject(dict{"model": r.Model, "prompt": r.Prompt}.omit("voice", r.Voice).omit("format", r.Format).omit("extensions", r.Extensions))
+	return JSONObject(dict{{"model", r.Model}, {"prompt", r.Prompt}}.omit("voice", r.Voice).omit("format", r.Format).omit("extensions", r.Extensions))
 }
 
 // SpeechGenerationRequestFromDict reads a speech request.
@@ -2025,14 +2026,14 @@ func SpeechGenerationRequestFromDict(d JSONObject) (SpeechGenerationRequest, err
 
 // SpeechGenerationResponseToDict serializes a speech response.
 func SpeechGenerationResponseToDict(r SpeechGenerationResponse) JSONObject {
-	return JSONObject(dict{"audio": PartToDict(r.Audio)}.omit("id", r.ID).omit("model", r.Model).
+	return JSONObject(dict{{"audio", PartToDict(r.Audio)}}.omit("id", r.ID).omit("model", r.Model).
 		omit("usage", UsageToDict(r.Usage)).omit("provider_data", r.ProviderData))
 }
 
 // SpeechGenerationResponseFromDict reads a speech response.
 func SpeechGenerationResponseFromDict(d JSONObject) (SpeechGenerationResponse, error) {
 	var r SpeechGenerationResponse
-	obj, ok := d["audio"].(map[string]any)
+	obj, ok := asObject(d.Get("audio"))
 	if !ok {
 		return r, keyError("audio")
 	}
@@ -2051,7 +2052,7 @@ func SpeechGenerationResponseFromDict(d JSONObject) (SpeechGenerationResponse, e
 	if r.Model, err = optString(d, "model"); err != nil {
 		return r, err
 	}
-	if uobj, ok := d["usage"].(map[string]any); ok {
+	if uobj, ok := asObject(d.Get("usage")); ok {
 		if r.Usage, err = UsageFromDict(uobj); err != nil {
 			return r, err
 		}
@@ -2064,7 +2065,7 @@ func SpeechGenerationResponseFromDict(d JSONObject) (SpeechGenerationResponse, e
 
 // VideoGenerationRequestToDict serializes a video request.
 func VideoGenerationRequestToDict(r VideoGenerationRequest) JSONObject {
-	return JSONObject(dict{"model": r.Model, "prompt": r.Prompt}.omit("seconds", r.Seconds).omit("images", imagePartsToJSON(r.Images)).omit("extensions", r.Extensions))
+	return JSONObject(dict{{"model", r.Model}, {"prompt", r.Prompt}}.omit("seconds", r.Seconds).omit("images", imagePartsToJSON(r.Images)).omit("extensions", r.Extensions))
 }
 
 // VideoGenerationRequestFromDict reads a video request.
@@ -2077,14 +2078,14 @@ func VideoGenerationRequestFromDict(d JSONObject) (VideoGenerationRequest, error
 	if r.Prompt, err = reqString(d, "prompt"); err != nil {
 		return r, err
 	}
-	if v, ok := d["seconds"]; ok && v != nil {
+	if v, ok := d.Lookup("seconds"); ok && v != nil {
 		s, err := jsonInt(v, "seconds")
 		if err != nil {
 			return r, valueErrorf("VideoGenerationRequest.seconds must be a positive int")
 		}
 		r.Seconds = &s
 	}
-	if r.Images, err = imagePartsFromJSON(d["images"]); err != nil {
+	if r.Images, err = imagePartsFromJSON(d.Get("images")); err != nil {
 		return r, err
 	}
 	if r.Extensions, err = optObject(d, "extensions"); err != nil {
@@ -2098,7 +2099,7 @@ func VideoGenerationRequestFromDict(d JSONObject) (VideoGenerationRequest, error
 
 // VideoJobToDict serializes a video job snapshot.
 func VideoJobToDict(j VideoJobInfo) JSONObject {
-	return JSONObject(dict{"id": j.ID, "status": j.Status}.omit("progress", j.Progress).omit("created_at", j.CreatedAt).
+	return JSONObject(dict{{"id", j.ID}, {"status", j.Status}}.omit("progress", j.Progress).omit("created_at", j.CreatedAt).
 		omit("model", j.Model).omit("provider_data", j.ProviderData))
 }
 
@@ -2112,7 +2113,7 @@ func VideoJobFromDict(d JSONObject) (VideoJobInfo, error) {
 	if j.Status, err = reqString(d, "status"); err != nil {
 		return j, err
 	}
-	if v, ok := d["progress"]; ok && v != nil {
+	if v, ok := d.Lookup("progress"); ok && v != nil {
 		p, err := jsonInt(v, "progress")
 		if err != nil {
 			return j, valueErrorf("VideoJobInfo.progress must be an int percentage 0-100")
@@ -2134,10 +2135,10 @@ func VideoJobFromDict(d JSONObject) (VideoJobInfo, error) {
 // ─── ModelInfo ───────────────────────────────────────────────────────
 
 func pricingToDict(p InferencePricing) JSONObject {
-	return JSONObject(dict{"currency": p.EffectiveCurrency()}.
+	return JSONObject(dict{}.
 		omit("input_per_million", p.InputPerMillion).omit("output_per_million", p.OutputPerMillion).
 		omit("cache_read_per_million", p.CacheReadPerMillion).omit("cache_write_per_million", p.CacheWritePerMillion).
-		omit("dimensions", p.Dimensions))
+		put("currency", p.EffectiveCurrency()).omit("dimensions", p.Dimensions))
 }
 
 func pricingFromDict(d JSONObject) (InferencePricing, error) {
@@ -2171,13 +2172,13 @@ func inferenceToDict(i InferenceModelInfo) JSONObject {
 	d := dict{}.omit("input_modalities", i.effectiveInput()).omit("output_modalities", i.effectiveOutput()).
 		omit("context_window", i.ContextWindow).omit("max_output_tokens", i.MaxOutputTokens)
 	if i.SupportsReasoning {
-		d["supports_reasoning"] = true
+		d = d.put("supports_reasoning", true)
 	}
-	d.omit("reasoning_efforts", i.ReasoningEfforts)
+	d = d.omit("reasoning_efforts", i.ReasoningEfforts)
 	if i.Pricing != nil {
-		d.omit("pricing", pricingToDict(*i.Pricing))
+		d = d.omit("pricing", pricingToDict(*i.Pricing))
 	}
-	d.omit("extensions", i.Extensions)
+	d = d.omit("extensions", i.Extensions)
 	return JSONObject(d)
 }
 
@@ -2200,12 +2201,12 @@ func inferenceFromDict(d JSONObject) (InferenceModelInfo, error) {
 	var err error
 	i.InputModalities = []string{"text"}
 	i.OutputModalities = []string{"text"}
-	if v, ok := d["input_modalities"]; ok && v != nil {
+	if v, ok := d.Lookup("input_modalities"); ok && v != nil {
 		if i.InputModalities, err = stringList(v, "input_modalities"); err != nil {
 			return i, err
 		}
 	}
-	if v, ok := d["output_modalities"]; ok && v != nil {
+	if v, ok := d.Lookup("output_modalities"); ok && v != nil {
 		if i.OutputModalities, err = stringList(v, "output_modalities"); err != nil {
 			return i, err
 		}
@@ -2216,13 +2217,13 @@ func inferenceFromDict(d JSONObject) (InferenceModelInfo, error) {
 	if i.MaxOutputTokens, err = optInt(d, "max_output_tokens"); err != nil {
 		return i, err
 	}
-	if v, ok := d["supports_reasoning"].(bool); ok {
+	if v, ok := d.Get("supports_reasoning").(bool); ok {
 		i.SupportsReasoning = v
 	}
-	if i.ReasoningEfforts, err = stringList(d["reasoning_efforts"], "reasoning_efforts"); err != nil {
+	if i.ReasoningEfforts, err = stringList(d.Get("reasoning_efforts"), "reasoning_efforts"); err != nil {
 		return i, err
 	}
-	if obj, ok := d["pricing"].(map[string]any); ok {
+	if obj, ok := asObject(d.Get("pricing")); ok {
 		p, err := pricingFromDict(obj)
 		if err != nil {
 			return i, err
@@ -2236,7 +2237,7 @@ func inferenceFromDict(d JSONObject) (InferenceModelInfo, error) {
 }
 
 func originToDict(o ModelOrigin) JSONObject {
-	return JSONObject(dict{"type": o.EffectiveType()}.omit("id", o.ID).omit("base_model", o.BaseModel).omit("provider_data", o.ProviderData))
+	return JSONObject(dict{{"type", o.EffectiveType()}}.omit("id", o.ID).omit("base_model", o.BaseModel).omit("provider_data", o.ProviderData))
 }
 
 func originFromDict(d JSONObject) (ModelOrigin, error) {
@@ -2263,14 +2264,14 @@ func originFromDict(d JSONObject) (ModelOrigin, error) {
 // ModelInfoToDict serializes model metadata (a default origin is dropped).
 func ModelInfoToDict(m ModelInfo) JSONObject {
 	origin := originToDict(m.Origin)
-	if len(origin) == 1 && origin["type"] == "provider" {
+	if len(origin) == 1 && origin.Get("type") == "provider" {
 		origin = JSONObject{}
 	}
-	d := dict{"id": m.ID, "provider": m.Provider, "api_family": m.APIFamily}.omit("aliases", m.Aliases).omit("origin", origin)
+	d := dict{{"id", m.ID}, {"provider", m.Provider}, {"api_family", m.APIFamily}}.omit("aliases", m.Aliases).omit("origin", origin)
 	if m.Inference != nil {
-		d.omit("inference", inferenceToDict(*m.Inference))
+		d = d.omit("inference", inferenceToDict(*m.Inference))
 	}
-	d.omit("extensions", m.Extensions)
+	d = d.omit("extensions", m.Extensions)
 	return JSONObject(d)
 }
 
@@ -2287,16 +2288,16 @@ func ModelInfoFromDict(d JSONObject) (ModelInfo, error) {
 	if m.APIFamily, err = reqString(d, "api_family"); err != nil {
 		return m, err
 	}
-	if m.Aliases, err = stringList(d["aliases"], "aliases"); err != nil {
+	if m.Aliases, err = stringList(d.Get("aliases"), "aliases"); err != nil {
 		return m, err
 	}
 	m.Origin = ModelOrigin{Type: "provider"}
-	if obj, ok := d["origin"].(map[string]any); ok {
+	if obj, ok := asObject(d.Get("origin")); ok {
 		if m.Origin, err = originFromDict(obj); err != nil {
 			return m, err
 		}
 	}
-	if obj, ok := d["inference"].(map[string]any); ok {
+	if obj, ok := asObject(d.Get("inference")); ok {
 		inf, err := inferenceFromDict(obj)
 		if err != nil {
 			return m, err
@@ -2328,7 +2329,7 @@ func (m *ModelInfo) UnmarshalJSON(b []byte) error {
 
 // AudioFormatToDict serializes an audio format.
 func AudioFormatToDict(a AudioFormat) JSONObject {
-	return JSONObject{"encoding": a.Encoding, "sample_rate": a.SampleRate, "channels": a.EffectiveChannels()}
+	return JSONObject{{"encoding", a.Encoding}, {"sample_rate", a.SampleRate}, {"channels", a.EffectiveChannels()}}
 }
 
 // AudioFormatFromDict reads an audio format (channels defaults to 1).
@@ -2337,7 +2338,7 @@ func AudioFormatFromDict(d JSONObject) (AudioFormat, error) {
 	if err != nil {
 		return AudioFormat{}, err
 	}
-	v, ok := d["sample_rate"]
+	v, ok := d.Lookup("sample_rate")
 	if !ok {
 		return AudioFormat{}, keyError("sample_rate")
 	}
@@ -2357,15 +2358,15 @@ func AudioFormatFromDict(d JSONObject) (AudioFormat, error) {
 
 // LiveConfigToDict serializes a live config.
 func LiveConfigToDict(c LiveConfig) JSONObject {
-	d := dict{"model": c.Model}.omit("system", systemToJSON(c.System)).
+	d := dict{{"model", c.Model}}.omit("system", systemToJSON(c.System)).
 		omit("tools", toAnyList(c.Tools, func(t Tool) any { return ToolToDict(t) })).omit("voice", c.Voice)
 	if c.InputFormat != nil {
-		d["input_format"] = AudioFormatToDict(*c.InputFormat)
+		d = d.put("input_format", AudioFormatToDict(*c.InputFormat))
 	}
 	if c.OutputFormat != nil {
-		d["output_format"] = AudioFormatToDict(*c.OutputFormat)
+		d = d.put("output_format", AudioFormatToDict(*c.OutputFormat))
 	}
-	d.omit("extensions", c.Extensions)
+	d = d.omit("extensions", c.Extensions)
 	return JSONObject(d)
 }
 
@@ -2376,23 +2377,23 @@ func LiveConfigFromDict(d JSONObject) (LiveConfig, error) {
 	if c.Model, err = reqString(d, "model"); err != nil {
 		return c, err
 	}
-	if c.System, err = systemFromJSON(d["system"]); err != nil {
+	if c.System, err = systemFromJSON(d.Get("system")); err != nil {
 		return c, err
 	}
-	if c.Tools, err = toolsFromJSON(d["tools"]); err != nil {
+	if c.Tools, err = toolsFromJSON(d.Get("tools")); err != nil {
 		return c, err
 	}
 	if c.Voice, err = optString(d, "voice"); err != nil {
 		return c, err
 	}
-	if obj, ok := d["input_format"].(map[string]any); ok {
+	if obj, ok := asObject(d.Get("input_format")); ok {
 		f, err := AudioFormatFromDict(obj)
 		if err != nil {
 			return c, err
 		}
 		c.InputFormat = &f
 	}
-	if obj, ok := d["output_format"].(map[string]any); ok {
+	if obj, ok := asObject(d.Get("output_format")); ok {
 		f, err := AudioFormatFromDict(obj)
 		if err != nil {
 			return c, err
@@ -2412,19 +2413,19 @@ func LiveConfigFromDict(d JSONObject) (LiveConfig, error) {
 func LiveClientEventToDict(e LiveClientEvent) JSONObject {
 	switch x := e.(type) {
 	case LiveClientTurnEvent:
-		return JSONObject{"type": "turn", "parts": partsToList(x.Parts), "turn_complete": x.TurnComplete}
+		return JSONObject{{"type", "turn"}, {"parts", partsToList(x.Parts)}, {"turn_complete", x.TurnComplete}}
 	case LiveClientAudioEvent:
-		return JSONObject{"type": "audio", "data": x.Data, "media_type": x.EffectiveMediaType()}
+		return JSONObject{{"type", "audio"}, {"data", x.Data}, {"media_type", x.EffectiveMediaType()}}
 	case LiveClientImageEvent:
-		return JSONObject{"type": "image", "data": x.Data, "media_type": x.EffectiveMediaType()}
+		return JSONObject{{"type", "image"}, {"data", x.Data}, {"media_type", x.EffectiveMediaType()}}
 	case LiveClientTextEvent:
-		return JSONObject{"type": "text", "text": x.Text}
+		return JSONObject{{"type", "text"}, {"text", x.Text}}
 	case LiveClientToolResultEvent:
-		return JSONObject{"type": "tool_result", "id": x.ID, "content": partsToList(x.Content)}
+		return JSONObject{{"type", "tool_result"}, {"id", x.ID}, {"content", partsToList(x.Content)}}
 	case LiveClientInterruptEvent:
-		return JSONObject{"type": "interrupt"}
+		return JSONObject{{"type", "interrupt"}}
 	case LiveClientEndAudioEvent:
-		return JSONObject{"type": "end_audio"}
+		return JSONObject{{"type", "end_audio"}}
 	}
 	return nil
 }
@@ -2438,12 +2439,12 @@ func LiveClientEventFromDict(d JSONObject) (LiveClientEvent, error) {
 	var e LiveClientEvent
 	switch t {
 	case "turn":
-		parts, err := partsFromList(d["parts"])
+		parts, err := partsFromList(d.Get("parts"))
 		if err != nil {
 			return nil, err
 		}
 		complete := true
-		if v, ok := d["turn_complete"]; ok && v != nil {
+		if v, ok := d.Lookup("turn_complete"); ok && v != nil {
 			b, ok := v.(bool)
 			if !ok {
 				return nil, typeErrorf("LiveClientTurnEvent.turn_complete must be a bool")
@@ -2476,7 +2477,7 @@ func LiveClientEventFromDict(d JSONObject) (LiveClientEvent, error) {
 		if err != nil {
 			return nil, err
 		}
-		content, err := partsFromList(d["content"])
+		content, err := partsFromList(d.Get("content"))
 		if err != nil {
 			return nil, err
 		}
@@ -2495,25 +2496,25 @@ func LiveClientEventFromDict(d JSONObject) (LiveClientEvent, error) {
 func LiveServerEventToDict(e LiveServerEvent) JSONObject {
 	switch x := e.(type) {
 	case LiveServerAudioEvent:
-		return JSONObject(dict{"type": "audio", "data": x.Data}.omit("media_type", x.MediaType))
+		return JSONObject(dict{{"type", "audio"}, {"data", x.Data}}.omit("media_type", x.MediaType))
 	case LiveServerTextEvent:
-		return JSONObject{"type": "text", "text": x.Text}
+		return JSONObject{{"type", "text"}, {"text", x.Text}}
 	case LiveServerToolCallEvent:
 		input := x.Input
 		if input == nil {
 			input = JSONObject{}
 		}
-		return JSONObject{"type": "tool_call", "id": x.ID, "name": x.Name, "input": input}
+		return JSONObject{{"type", "tool_call"}, {"id", x.ID}, {"name", x.Name}, {"input", input}}
 	case LiveServerToolCallDeltaEvent:
-		return JSONObject(dict{"type": "tool_call_delta"}.omit("id", x.ID).omit("name", x.Name).omit("input_delta", x.InputDelta))
+		return JSONObject(dict{{"type", "tool_call_delta"}}.omit("id", x.ID).omit("name", x.Name).omit("input_delta", x.InputDelta))
 	case LiveServerInterruptedEvent:
-		return JSONObject{"type": "interrupted"}
+		return JSONObject{{"type", "interrupted"}}
 	case LiveServerTurnEndEvent:
-		return JSONObject(dict{"type": "turn_end"}.omit("usage", UsageToDict(x.Usage)))
+		return JSONObject(dict{{"type", "turn_end"}}.omit("usage", UsageToDict(x.Usage)))
 	case LiveServerUsageEvent:
-		return JSONObject(dict{"type": "usage"}.omit("usage", UsageToDict(x.Usage)))
+		return JSONObject(dict{{"type", "usage"}}.omit("usage", UsageToDict(x.Usage)))
 	case LiveServerErrorEvent:
-		return JSONObject{"type": "error", "error": ErrorDetailToDict(x.Error)}
+		return JSONObject{{"type", "error"}, {"error", ErrorDetailToDict(x.Error)}}
 	}
 	return nil
 }
@@ -2577,7 +2578,7 @@ func LiveServerEventFromDict(d JSONObject) (LiveServerEvent, error) {
 		e = LiveServerInterruptedEvent{}
 	case "turn_end", "usage":
 		usage := Usage{}
-		if obj, ok := d["usage"].(map[string]any); ok {
+		if obj, ok := asObject(d.Get("usage")); ok {
 			if usage, err = UsageFromDict(obj); err != nil {
 				return nil, err
 			}
@@ -2588,7 +2589,7 @@ func LiveServerEventFromDict(d JSONObject) (LiveServerEvent, error) {
 			e = LiveServerUsageEvent{Usage: usage}
 		}
 	case "error":
-		obj, ok := d["error"].(map[string]any)
+		obj, ok := asObject(d.Get("error"))
 		if !ok {
 			return nil, keyError("error")
 		}

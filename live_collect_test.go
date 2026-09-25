@@ -36,7 +36,7 @@ func TestLiveCollectionLimitVectors(t *testing.T) {
 				MaxBytes  int `json:"max_bytes"`
 				MaxEvents int `json:"max_events"`
 			} `json:"limits"`
-			Events []map[string]any `json:"events"`
+			Events []JSONObject `json:"events"`
 			Expect struct {
 				Accepted      int     `json:"accepted"`
 				Reads         int     `json:"reads"`

@@ -15,7 +15,7 @@ func typesafeRequest(t *testing.T) *Request {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &Request{Model: "jev", Messages: []Message{UserParts(Data(JSONObject{"empty": nil, "list": []any{1, "two"}}))}, Config: Config{ResponseFormat: format}}
+	return &Request{Model: "jev", Messages: []Message{UserParts(Data(JSONObject{{"empty", nil}, {"list", []any{1, "two"}}}))}, Config: Config{ResponseFormat: format}}
 }
 
 func TestTypeSafeStateAndMeasurements(t *testing.T) {
@@ -32,8 +32,8 @@ func TestTypeSafeStateAndMeasurements(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := body["state"].(map[string]any)
-	if _, ok := state["empty"]; !ok || len(state["list"].([]any)) != 2 {
+	state := body.Get("state").(JSONObject)
+	if _, ok := state.Lookup("empty"); !ok || len(state.Get("list").([]any)) != 2 {
 		t.Fatalf("state was altered: %s", wire.Body)
 	}
 	valid := `{"answers":{"choice":{"type":"choice","choice":"a","probabilities":{"a":0.7,"b":0.4}},"yes":{"type":"noul","noul":0.8}}}`

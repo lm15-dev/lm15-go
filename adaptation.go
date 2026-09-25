@@ -96,12 +96,12 @@ func validateAdaptations(list []Adaptation) error {
 
 // AdaptationToDict serializes one record (asked/applied omitted when nil).
 func AdaptationToDict(a Adaptation) JSONObject {
-	d := JSONObject{"field": a.Field, "action": a.Action, "reason": a.Reason}
+	d := JSONObject{{"field", a.Field}, {"action", a.Action}, {"reason", a.Reason}}
 	if a.Asked != nil {
-		d["asked"] = deref(a.Asked)
+		d.Set("asked", deref(a.Asked))
 	}
 	if a.Applied != nil {
-		d["applied"] = deref(a.Applied)
+		d.Set("applied", deref(a.Applied))
 	}
 	return d
 }
@@ -120,7 +120,7 @@ func AdaptationFromDict(d JSONObject) (Adaptation, error) {
 	if err != nil {
 		return Adaptation{}, err
 	}
-	a := Adaptation{Field: field, Action: action, Reason: reason, Asked: d["asked"], Applied: d["applied"]}
+	a := Adaptation{Field: field, Action: action, Reason: reason, Asked: d.Get("asked"), Applied: d.Get("applied")}
 	return a, a.Validate()
 }
 
@@ -141,7 +141,7 @@ func adaptationsFromJSON(v any) ([]Adaptation, error) {
 	}
 	out := make([]Adaptation, 0, len(list))
 	for _, item := range list {
-		obj, ok := item.(map[string]any)
+		obj, ok := asObject(item)
 		if !ok {
 			return nil, typeErrorf("adaptations must be a list of Adaptation")
 		}

@@ -161,19 +161,19 @@ func recipeLogin(provider, method string, answers, settings map[string]string, h
 		if key == "" {
 			return flowResult{}, denied("no API key was entered")
 		}
-		return flowResult{material: JSONObject{"type": "api_key", "key": key}, label: provider + " API key", renewal: "none"}, nil
+		return flowResult{material: JSONObject{{"type", "api_key"}, {"key", key}}, label: provider + " API key", renewal: "none"}, nil
 	case method == "env":
 		name := answers["name"]
 		if name == "" {
 			return flowResult{}, denied("no environment variable was chosen")
 		}
-		return flowResult{material: JSONObject{"type": "env", "name": name}, label: provider + " key from $" + name, renewal: "recipe"}, nil
+		return flowResult{material: JSONObject{{"type", "env"}, {"name", name}}, label: provider + " key from $" + name, renewal: "recipe"}, nil
 	case method == "cloud":
 		named := answers["named"]
 		if !inVocab(named, NamedCredentials) {
 			return flowResult{}, denied("choose one of %s", strings.Join(NamedCredentials, ", "))
 		}
-		return flowResult{material: JSONObject{"type": "cloud", "named": named}, label: provider + " via " + named + " identity", renewal: "recipe"}, nil
+		return flowResult{material: JSONObject{{"type", "cloud"}, {"named", named}}, label: provider + " via " + named + " identity", renewal: "recipe"}, nil
 	case method == "local":
 		base := answers["base_url"]
 		if base == "" {
@@ -183,7 +183,7 @@ func recipeLogin(provider, method string, answers, settings map[string]string, h
 		if key == "" {
 			key = "local"
 		}
-		result := flowResult{material: JSONObject{"type": "local", "base_url": base, "key": key}, label: provider + " local server", renewal: "none", settings: map[string]string{}}
+		result := flowResult{material: JSONObject{{"type", "local"}, {"base_url", base}, {"key", key}}, label: provider + " local server", renewal: "none", settings: map[string]string{}}
 		if base != "" {
 			result.settings["base_url"] = base
 		}
@@ -202,7 +202,7 @@ func recipeLogin(provider, method string, answers, settings map[string]string, h
 		if err := probeExternal(source, home); err != nil {
 			return flowResult{}, err // fail now, typed, if that tool has no login here
 		}
-		return flowResult{material: JSONObject{"type": "external", "source": source}, label: provider + " via " + label, renewal: "external"}, nil
+		return flowResult{material: JSONObject{{"type", "external"}, {"source", source}}, label: provider + " via " + label, renewal: "external"}, nil
 	}
 	return flowResult{}, denied("unknown recipe method %q", method)
 }
@@ -308,7 +308,7 @@ func recipeRequestAuth(material JSONObject, env func(string) string) (RequestAut
 	case "cloud":
 		auth.Named = materialStr(material, "named")
 	default:
-		return auth, denied("unknown connection material %q", fmt.Sprint(material["type"]))
+		return auth, denied("unknown connection material %q", fmt.Sprint(material.Get("type")))
 	}
 	return auth, nil
 }
@@ -316,7 +316,7 @@ func recipeRequestAuth(material JSONObject, env func(string) string) (RequestAut
 func isRecipe(material JSONObject) bool {
 	switch materialStr(material, "type") {
 	case "api_key", "env", "external", "local", "cloud":
-		minted, _ := material["minted"].(bool)
+		minted, _ := material.Get("minted").(bool)
 		return !minted
 	}
 	return false

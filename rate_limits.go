@@ -104,8 +104,8 @@ func (r RateLimitHeaders) toJSON() JSONObject {
 		return nil
 	}
 	out := JSONObject{}
-	for name, values := range r {
-		out[name] = toAnyList(values, func(s string) any { return s })
+	for _, name := range sortedMapKeys(r) {
+		out = append(out, Member{name, toAnyList(r[name], func(s string) any { return s })})
 	}
 	return out
 }
@@ -276,13 +276,13 @@ func (h HTTPResponseDetail) toDict() JSONObject {
 	}
 	d := dict{}
 	if h.RequestID != "" {
-		d["request_id"] = h.RequestID
+		d = d.put("request_id", h.RequestID)
 	}
 	if h.RetryAfter != nil {
-		d["retry_after"] = jsonFloat(*h.RetryAfter)
+		d = d.put("retry_after", jsonFloat(*h.RetryAfter))
 	}
 	if rl := h.RateLimitHeaders.toJSON(); rl != nil {
-		d["rate_limit_headers"] = rl
+		d = d.put("rate_limit_headers", rl)
 	}
 	return JSONObject(d)
 }
@@ -294,36 +294,36 @@ func httpResponseDetailFromJSON(v any) (HTTPResponseDetail, error) {
 	if v == nil {
 		return out, nil
 	}
-	d, ok := v.(map[string]any)
+	d, ok := asObject(v)
 	if !ok {
 		return out, typeErrorf("ErrorDetail.http_response must be an object")
 	}
-	for key := range d {
+	for key := range d.All() {
 		if key != "request_id" && key != "retry_after" && key != "rate_limit_headers" {
 			return out, valueErrorf("unknown ErrorDetail.http_response field: %s", key)
 		}
 	}
-	if raw, ok := d["request_id"]; ok && raw != nil {
+	if raw, ok := d.Lookup("request_id"); ok && raw != nil {
 		s, ok := raw.(string)
 		if !ok || s == "" {
 			return out, valueErrorf("http_response.request_id must be a non-empty string")
 		}
 		out.RequestID = s
 	}
-	if raw, ok := d["retry_after"]; ok && raw != nil {
+	if raw, ok := d.Lookup("retry_after"); ok && raw != nil {
 		f, err := jsonFloat64(raw, "http_response.retry_after")
 		if err != nil || math.IsInf(f, 0) || math.IsNaN(f) || f < 0 {
 			return out, valueErrorf("http_response.retry_after must be finite nonnegative seconds")
 		}
 		out.RetryAfter = &f
 	}
-	if raw, ok := d["rate_limit_headers"]; ok {
-		m, ok := raw.(map[string]any)
+	if raw, ok := d.Lookup("rate_limit_headers"); ok {
+		m, ok := asObject(raw)
 		if !ok {
 			return out, typeErrorf("http_response.rate_limit_headers must map names to string arrays")
 		}
 		snapshot := map[string][]string{}
-		for name, values := range m {
+		for name, values := range m.All() {
 			list, ok := values.([]any)
 			if !ok {
 				return out, typeErrorf("http_response.rate_limit_headers must map names to string arrays")

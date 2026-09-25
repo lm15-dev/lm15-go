@@ -18,11 +18,11 @@ func SurfaceDump() JSONObject {
 		for _, f := range flattenFields(rt) {
 			fields = append(fields, f)
 		}
-		types[rt.Name()] = JSONObject{"fields": fields}
+		types.Set(rt.Name(), JSONObject{{"fields", fields}})
 	}
 	enums := JSONObject{}
 	for name, values := range Vocabularies {
-		enums[name] = toAnyList(values, func(s string) any { return s })
+		enums.Set(name, toAnyList(values, func(s string) any { return s }))
 	}
 	providers := JSONObject{}
 	for _, id := range ProviderIDs() {
@@ -30,18 +30,18 @@ func SurfaceDump() JSONObject {
 		s := def.Access.Supports
 		supports := JSONObject{}
 		for _, name := range endpointSupportFields {
-			supports[name] = s.SupportsEndpoint(name)
+			supports.Set(name, s.SupportsEndpoint(name))
 		}
 		extra := append([]string(nil), s.Extra...)
 		sort.Strings(extra)
-		supports["extra"] = toAnyList(extra, func(x string) any { return x })
-		providers[id] = JSONObject{
-			"supports":   supports,
-			"auth_modes": toAnyList(def.Access.AuthModes, func(x string) any { return x }),
-			"env_keys":   toAnyList(def.Access.EnvKeys, func(x string) any { return x }),
-		}
+		supports.Set("extra", toAnyList(extra, func(x string) any { return x }))
+		providers.Set(id, JSONObject{
+			{"supports", supports},
+			{"auth_modes", toAnyList(def.Access.AuthModes, func(x string) any { return x })},
+			{"env_keys", toAnyList(def.Access.EnvKeys, func(x string) any { return x })},
+		})
 	}
-	return JSONObject{"types": types, "enums": enums, "providers": providers}
+	return JSONObject{{"types", types}, {"enums", enums}, {"providers", providers}}
 }
 
 // canonicalTypes lists one zero value per public canonical type; the field

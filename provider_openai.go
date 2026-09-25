@@ -116,7 +116,7 @@ func attachUnmapped(providerData JSONObject, unmapped []JSONObject) JSONObject {
 		return providerData
 	}
 	out := copyObject(providerData)
-	out["_lm15_unmapped"] = toAnyList(unmapped, func(u JSONObject) any { return u })
+	out.Set("_lm15_unmapped", toAnyList(unmapped, func(u JSONObject) any { return u }))
 	return out
 }
 
@@ -125,7 +125,7 @@ func recordUnmapped(unmapped *[]JSONObject, path string, typ any) {
 	if !truthy(typ) {
 		t = "<missing>"
 	}
-	*unmapped = append(*unmapped, JSONObject{"path": path, "type": t})
+	*unmapped = append(*unmapped, JSONObject{{"path", path}, {"type", t}})
 }
 
 var gptVersionRe = regexp.MustCompile(`^gpt-(\d+)\.(\d+)`)
@@ -191,7 +191,7 @@ func hasExplicitBreakpoint(req *Request, cacheControl string, breakpoint *int) b
 }
 
 // cacheCommonPayload adds the shared MAP-6 fields for both OpenAI dialects.
-func cacheCommonPayload(req *Request, payload JSONObject, cacheControl, provider string, breakpoint *int, scope *adaptScope) error {
+func cacheCommonPayload(req *Request, payload *JSONObject, cacheControl, provider string, breakpoint *int, scope *adaptScope) error {
 	cfg := req.Config.Cache
 	if cfg == nil {
 		return nil
@@ -220,10 +220,10 @@ func cacheCommonPayload(req *Request, payload JSONObject, cacheControl, provider
 	if cacheControl == "openai_implicit" {
 		if cfg.EffectiveMode() != "off" {
 			if cfg.Key != "" {
-				payload["prompt_cache_key"] = cfg.Key
+				payload.Set("prompt_cache_key", cfg.Key)
 			}
 			if cfg.Retention == "long" {
-				payload["prompt_cache_retention"] = "24h"
+				payload.Set("prompt_cache_retention", "24h")
 			}
 		}
 		if cfg.Resource != "" {
@@ -233,18 +233,18 @@ func cacheCommonPayload(req *Request, payload JSONObject, cacheControl, provider
 	}
 	if cfg.EffectiveMode() == "off" {
 		if openaiModelHasCacheOptions(req.Model) {
-			payload["prompt_cache_options"] = JSONObject{"mode": "explicit"}
+			payload.Set("prompt_cache_options", JSONObject{{"mode", "explicit"}})
 		}
 		return nil
 	}
 	if cfg.Key != "" {
-		payload["prompt_cache_key"] = cfg.Key
+		payload.Set("prompt_cache_key", cfg.Key)
 	}
 	if cfg.Retention == "long" {
-		payload["prompt_cache_retention"] = "24h"
+		payload.Set("prompt_cache_retention", "24h")
 	}
 	if openaiModelHasCacheOptions(req.Model) && hasExplicitBreakpoint(req, cacheControl, breakpoint) {
-		payload["prompt_cache_options"] = JSONObject{"mode": "explicit"}
+		payload.Set("prompt_cache_options", JSONObject{{"mode", "explicit"}})
 	}
 	if cfg.Resource != "" {
 		return UnsupportedFeature(provider, "config.cache.resource", "%s: cache.resource is not supported — this provider has no stored-cache tier; it caches by marks on blocks (prefix / prefix_until_index) and automatically", provider)
@@ -257,28 +257,28 @@ func breakpointUnsupported(provider string, index int, role string) *Error {
 }
 
 func responseFormatToOpenAIText(f JSONObject) JSONObject {
-	if f["type"] == "json_object" {
-		return JSONObject{"format": JSONObject{"type": "json_object"}}
+	if f.Get("type") == "json_object" {
+		return JSONObject{{"format", JSONObject{{"type", "json_object"}}}}
 	}
-	name := wireStr(f["name"])
+	name := wireStr(f.Get("name"))
 	if name == "" {
 		name = "response"
 	}
-	fmtObj := JSONObject{"type": "json_schema", "name": name, "schema": f["schema"]}
-	if strict, ok := f["strict"]; ok {
-		fmtObj["strict"] = strict
+	fmtObj := JSONObject{{"type", "json_schema"}, {"name", name}, {"schema", f.Get("schema")}}
+	if strict, ok := f.Lookup("strict"); ok {
+		fmtObj.Set("strict", strict)
 	}
-	return JSONObject{"format": fmtObj}
+	return JSONObject{{"format", fmtObj}}
 }
 
 func openaiFinishFromStatus(data JSONObject, hasToolCall bool) string {
 	if hasToolCall {
 		return FinishToolCall
 	}
-	status := strings.ToLower(wireStr(data["status"]))
+	status := strings.ToLower(wireStr(data.Get("status")))
 	reason := ""
-	if inc := wireObj(data["incomplete_details"]); inc != nil {
-		reason = strings.ToLower(wireStr(inc["reason"]))
+	if inc := wireObj(data.Get("incomplete_details")); inc != nil {
+		reason = strings.ToLower(wireStr(inc.Get("reason")))
 	}
 	if status == "incomplete" && strings.Contains(reason, "token") {
 		return FinishLength
@@ -304,11 +304,11 @@ func openaiBatchStatus(status string) string {
 
 func annotationText(a JSONObject, source string, hasSource bool) string {
 	for _, key := range []string{"text", "snippet", "cited_text", "quote"} {
-		if s := wireStr(a[key]); s != "" && a[key] != nil {
+		if s := wireStr(a.Get(key)); s != "" && a.Get(key) != nil {
 			return s
 		}
 	}
-	start, end := wireIntPtr(a["start_index"]), wireIntPtr(a["end_index"])
+	start, end := wireIntPtr(a.Get("start_index")), wireIntPtr(a.Get("end_index"))
 	if hasSource && start != nil && end != nil && 0 <= *start && *start < *end && *end <= len(source) {
 		return source[*start:*end]
 	}
@@ -316,8 +316,8 @@ func annotationText(a JSONObject, source string, hasSource bool) string {
 }
 
 func citationFromOpenAIAnnotation(a JSONObject, source string, hasSource bool) (CitationPart, bool) {
-	url := firstStr(a["url"], a["uri"])
-	title := firstStr(a["title"], a["filename"], a["file_id"])
+	url := firstStr(a.Get("url"), a.Get("uri"))
+	title := firstStr(a.Get("title"), a.Get("filename"), a.Get("file_id"))
 	text := annotationText(a, source, hasSource)
 	if url == "" && title == "" && text == "" {
 		return CitationPart{}, false
@@ -344,23 +344,23 @@ func citationDeltaFromAnnotation(a JSONObject, partIndex int) (CitationDelta, bo
 }
 
 func openaiUsage(usageData JSONObject) Usage {
-	in := wireObj(usageData["input_tokens_details"])
+	in := wireObj(usageData.Get("input_tokens_details"))
 	if in == nil {
-		in = wireObj(usageData["input_token_details"])
+		in = wireObj(usageData.Get("input_token_details"))
 	}
-	out := wireObj(usageData["output_tokens_details"])
+	out := wireObj(usageData.Get("output_tokens_details"))
 	if out == nil {
-		out = wireObj(usageData["output_token_details"])
+		out = wireObj(usageData.Get("output_token_details"))
 	}
 	return Usage{
-		InputTokens:       wireIntPtr(usageData["input_tokens"]),
-		OutputTokens:      wireIntPtr(usageData["output_tokens"]),
-		TotalTokens:       wireIntPtr(usageData["total_tokens"]),
-		ReasoningTokens:   wireIntPtr(out["reasoning_tokens"]),
-		CacheReadTokens:   wireIntPtr(in["cached_tokens"]),
-		CacheWriteTokens:  wireIntPtr(in["cache_write_tokens"]),
-		InputAudioTokens:  wireIntPtr(in["audio_tokens"]),
-		OutputAudioTokens: wireIntPtr(out["audio_tokens"]),
+		InputTokens:       wireIntPtr(usageData.Get("input_tokens")),
+		OutputTokens:      wireIntPtr(usageData.Get("output_tokens")),
+		TotalTokens:       wireIntPtr(usageData.Get("total_tokens")),
+		ReasoningTokens:   wireIntPtr(out.Get("reasoning_tokens")),
+		CacheReadTokens:   wireIntPtr(in.Get("cached_tokens")),
+		CacheWriteTokens:  wireIntPtr(in.Get("cache_write_tokens")),
+		InputAudioTokens:  wireIntPtr(in.Get("audio_tokens")),
+		OutputAudioTokens: wireIntPtr(out.Get("audio_tokens")),
 	}.Normalize()
 }
 
@@ -462,15 +462,15 @@ func openaiNormalizeError(c *lmCore, status int, body string) *Error {
 	obj := wireObj(data)
 	var msg, code, errType string
 	if obj != nil {
-		switch e := obj["error"].(type) {
-		case map[string]any:
-			msg = wireStr(e["message"])
-			code = wireStr(e["code"])
-			errType = wireStr(e["type"])
-			if e["code"] == nil {
+		switch e := jsonView(obj.Get("error")).(type) {
+		case JSONObject:
+			msg = wireStr(e.Get("message"))
+			code = wireStr(e.Get("code"))
+			errType = wireStr(e.Get("type"))
+			if e.Get("code") == nil {
 				code = ""
 			}
-			if e["type"] == nil {
+			if e.Get("type") == nil {
 				errType = ""
 			}
 		case nil:
@@ -518,7 +518,7 @@ func codexDetailError(c *lmCore, status int, body string) *Error {
 	if obj == nil {
 		return nil
 	}
-	detail, ok := obj["detail"].(string)
+	detail, ok := obj.Get("detail").(string)
 	if !ok || strings.TrimSpace(detail) == "" {
 		return nil
 	}
@@ -568,9 +568,9 @@ func (l *OpenAILM) buildInput(messages []Message, compat ResolvedOpenAIResponses
 				if err != nil {
 					return nil, err
 				}
-				item := JSONObject{"type": "function_call_output", "call_id": tr.ID, "output": output}
+				item := JSONObject{{"type", "function_call_output"}, {"call_id", tr.ID}, {"output", output}}
 				if compat.ToolResultName == "include" && tr.Name != "" {
-					item["name"] = tr.Name
+					item.Set("name", tr.Name)
 				}
 				items = append(items, item)
 			}
@@ -581,26 +581,26 @@ func (l *OpenAILM) buildInput(messages []Message, compat ResolvedOpenAIResponses
 			for _, part := range msg.Parts {
 				switch p := part.(type) {
 				case TextPart:
-					content = append(content, JSONObject{"type": "output_text", "text": p.Text})
+					content = append(content, JSONObject{{"type", "output_text"}, {"text", p.Text}})
 				case RefusalPart:
-					content = append(content, JSONObject{"type": "refusal", "refusal": p.Text})
+					content = append(content, JSONObject{{"type", "refusal"}, {"refusal", p.Text}})
 				case ThinkingPart:
 					state := ContinuationData(p.Continuation, "openai", "reasoning_item")
 					if len(state) > 0 {
-						item := JSONObject{"type": "reasoning"}
+						item := JSONObject{{"type", "reasoning"}}
 						for _, k := range []string{"id", "encrypted_content"} {
-							if v, ok := state[k]; ok {
-								item[k] = v
+							if v, ok := state.Lookup(k); ok {
+								item.Set(k, v)
 							}
 						}
 						if p.Text != "" {
-							item["summary"] = []any{JSONObject{"type": "summary_text", "text": p.Text}}
+							item.Set("summary", []any{JSONObject{{"type", "summary_text"}, {"text", p.Text}}})
 						} else {
-							item["summary"] = []any{}
+							item.Set("summary", []any{})
 						}
 						items = append(items, item)
 					} else if p.Text != "" {
-						content = append(content, JSONObject{"type": "output_text", "text": p.Text})
+						content = append(content, JSONObject{{"type", "output_text"}, {"text", p.Text}})
 					}
 				}
 			}
@@ -618,25 +618,25 @@ func (l *OpenAILM) buildInput(messages []Message, compat ResolvedOpenAIResponses
 			}
 		}
 		if atBreakpoint {
-			if len(content) == 0 || content[len(content)-1]["type"] != "input_text" {
+			if len(content) == 0 || content[len(content)-1].Get("type") != "input_text" {
 				return nil, breakpointUnsupported(l.provider, msgIndex, msg.Role)
 			}
-			content[len(content)-1]["prompt_cache_breakpoint"] = JSONObject{"mode": "explicit"}
+			content[len(content)-1].Set("prompt_cache_breakpoint", JSONObject{{"mode", "explicit"}})
 		}
 		if len(content) > 0 {
 			role := msg.Role
 			if role == RoleDeveloper {
 				role = compat.DeveloperRole
 			}
-			item := JSONObject{"role": role, "content": toAnyList(content, func(b JSONObject) any { return b })}
+			item := JSONObject{{"role", role}, {"content", toAnyList(content, func(b JSONObject) any { return b })}}
 			if compat.CommentaryPhase == "tag" && msg.Role == RoleAssistant && hasToolCall(msg.Parts) {
-				item["phase"] = "commentary"
+				item.Set("phase", "commentary")
 			}
 			items = append(items, item)
 		}
 		for _, part := range msg.Parts {
 			if tc, ok := part.(ToolCallPart); ok {
-				items = append(items, JSONObject{"type": "function_call", "call_id": tc.ID, "name": tc.Name, "arguments": jsonRaw(tc.Input)})
+				items = append(items, JSONObject{{"type", "function_call"}, {"call_id", tc.ID}, {"name", tc.Name}, {"arguments", jsonRaw(tc.Input)}})
 			}
 		}
 	}
@@ -670,19 +670,19 @@ func (l *OpenAILM) toolChoicePayload(req *Request, compat ResolvedOpenAIResponse
 		}
 		if len(entries) == 1 && tc.EffectiveMode() == "required" {
 			if bt, ok := entries[0].(BuiltinTool); ok {
-				return JSONObject{"type": builtinTypeOpenAI(bt, compat)}
+				return JSONObject{{"type", builtinTypeOpenAI(bt, compat)}}
 			}
-			return JSONObject{"type": "function", "name": entries[0].ToolName()}
+			return JSONObject{{"type", "function"}, {"name", entries[0].ToolName()}}
 		}
 		var wire []any
 		for _, t := range entries {
 			if bt, ok := t.(BuiltinTool); ok {
-				wire = append(wire, JSONObject{"type": builtinTypeOpenAI(bt, compat)})
+				wire = append(wire, JSONObject{{"type", builtinTypeOpenAI(bt, compat)}})
 			} else {
-				wire = append(wire, JSONObject{"type": "function", "name": t.ToolName()})
+				wire = append(wire, JSONObject{{"type", "function"}, {"name", t.ToolName()}})
 			}
 		}
-		return JSONObject{"type": "allowed_tools", "mode": tc.EffectiveMode(), "tools": wire}
+		return JSONObject{{"type", "allowed_tools"}, {"mode", tc.EffectiveMode()}, {"tools", wire}}
 	}
 	if tc.EffectiveMode() == "required" {
 		return "required"
@@ -703,7 +703,7 @@ func (l *OpenAILM) payload(req *Request, stream bool, scope *adaptScope) (JSONOb
 	if err != nil {
 		return nil, err
 	}
-	payload := JSONObject{"model": req.Model, "input": input, "stream": stream}
+	payload := JSONObject{{"model", req.Model}, {"input", input}, {"stream", stream}}
 	cfg := req.Config
 	if req.System != nil {
 		text, err := systemText(req.System, l.provider)
@@ -711,20 +711,20 @@ func (l *OpenAILM) payload(req *Request, stream bool, scope *adaptScope) (JSONOb
 			return nil, err
 		}
 		if cacheStablePrefix(req, compat.CacheControl) {
-			first := JSONObject{"role": compat.DeveloperRole, "content": []any{JSONObject{"type": "input_text", "text": text, "prompt_cache_breakpoint": JSONObject{"mode": "explicit"}}}}
-			payload["input"] = append([]any{first}, input...)
+			first := JSONObject{{"role", compat.DeveloperRole}, {"content", []any{JSONObject{{"type", "input_text"}, {"text", text}, {"prompt_cache_breakpoint", JSONObject{{"mode", "explicit"}}}}}}}
+			payload.Set("input", append([]any{first}, input...))
 		} else {
-			payload["instructions"] = text
+			payload.Set("instructions", text)
 		}
 	}
 	if cfg.MaxTokens != nil {
-		payload[compat.MaxOutputTokensField] = *cfg.MaxTokens
+		payload.Set(compat.MaxOutputTokensField, *cfg.MaxTokens)
 	}
 	if cfg.Temperature != nil {
-		payload["temperature"] = jsonFloat(*cfg.Temperature)
+		payload.Set("temperature", jsonFloat(*cfg.Temperature))
 	}
 	if cfg.TopP != nil {
-		payload["top_p"] = jsonFloat(*cfg.TopP)
+		payload.Set("top_p", jsonFloat(*cfg.TopP))
 	}
 	if len(cfg.Stop) > 0 {
 		// MAP-13 client_side: the Responses wire has no stop field; the text
@@ -754,34 +754,34 @@ func (l *OpenAILM) payload(req *Request, stream bool, scope *adaptScope) (JSONOb
 		}
 	}
 	if cfg.Logprobs != nil {
-		payload["top_logprobs"] = *cfg.Logprobs
-		payload["include"] = []any{"message.output_text.logprobs"}
+		payload.Set("top_logprobs", *cfg.Logprobs)
+		payload.Set("include", []any{"message.output_text.logprobs"})
 	}
 	if len(req.Tools) > 0 {
 		var tools []any
 		for _, t := range req.Tools {
 			switch x := t.(type) {
 			case FunctionTool:
-				tp := JSONObject{"type": "function", "name": x.Name, "description": nilIfEmpty(x.Description), "parameters": x.EffectiveParameters()}
+				tp := JSONObject{{"type", "function"}, {"name", x.Name}, {"description", nilIfEmpty(x.Description)}, {"parameters", x.EffectiveParameters()}}
 				if compat.StrictTools == "include" {
-					tp["strict"] = false
+					tp.Set("strict", false)
 				}
 				tools = append(tools, tp)
 			case BuiltinTool:
-				out := JSONObject{"type": builtinTypeOpenAI(x, compat)}
-				for k, v := range x.Config {
-					out[k] = v
+				out := JSONObject{{"type", builtinTypeOpenAI(x, compat)}}
+				for k, v := range x.Config.All() {
+					out.Set(k, v)
 				}
 				tools = append(tools, out)
 			}
 		}
-		payload["tools"] = tools
+		payload.Set("tools", tools)
 	}
 	if tc := l.toolChoicePayload(req, compat); tc != nil {
-		payload["tool_choice"] = tc
+		payload.Set("tool_choice", tc)
 	}
 	if cfg.ToolChoice != nil && cfg.ToolChoice.Parallel != nil {
-		payload["parallel_tool_calls"] = *cfg.ToolChoice.Parallel
+		payload.Set("parallel_tool_calls", *cfg.ToolChoice.Parallel)
 	}
 	if len(cfg.ResponseFormat) > 0 {
 		// MAP-14: the judgment convention goes verbatim (strict honours
@@ -790,7 +790,7 @@ func (l *OpenAILM) payload(req *Request, stream bool, scope *adaptScope) (JSONOb
 		if err := noteUnmeasurableProbabilities(scope, req, l.provider); err != nil {
 			return nil, err
 		}
-		payload["text"] = responseFormatToOpenAIText(cfg.ResponseFormat)
+		payload.Set("text", responseFormatToOpenAIText(cfg.ResponseFormat))
 	}
 	if r := cfg.Reasoning; r != nil {
 		if !r.IsOff() {
@@ -810,61 +810,61 @@ func (l *OpenAILM) payload(req *Request, stream bool, scope *adaptScope) (JSONOb
 			}
 			switch compat.ReasoningFormat {
 			case "responses_reasoning":
-				rp := JSONObject{"effort": r.Effort}
+				rp := JSONObject{{"effort", r.Effort}}
 				if summary != "" {
-					rp["summary"] = summary
+					rp.Set("summary", summary)
 				}
-				payload["reasoning"] = rp
+				payload.Set("reasoning", rp)
 			case "reasoning_effort":
-				payload["reasoning_effort"] = r.Effort
+				payload.Set("reasoning_effort", r.Effort)
 			case "openrouter":
-				payload["reasoning"] = JSONObject{"effort": r.Effort}
+				payload.Set("reasoning", JSONObject{{"effort", r.Effort}})
 			case "deepseek":
-				payload["thinking"] = JSONObject{"type": "enabled"}
-				payload["reasoning_effort"] = r.Effort
+				payload.Set("thinking", JSONObject{{"type", "enabled"}})
+				payload.Set("reasoning_effort", r.Effort)
 			case "qwen", "zai":
-				payload["enable_thinking"] = true
+				payload.Set("enable_thinking", true)
 			case "qwen_chat_template":
-				payload["chat_template_kwargs"] = JSONObject{"enable_thinking": true, "preserve_thinking": true}
+				payload.Set("chat_template_kwargs", JSONObject{{"enable_thinking", true}, {"preserve_thinking", true}})
 			}
 		} else {
 			switch compat.ReasoningFormat {
 			case "responses_reasoning":
-				payload["reasoning"] = JSONObject{"effort": "none"}
+				payload.Set("reasoning", JSONObject{{"effort", "none"}})
 			case "reasoning_effort":
-				payload["reasoning_effort"] = "none"
+				payload.Set("reasoning_effort", "none")
 			case "openrouter":
-				payload["reasoning"] = JSONObject{"enabled": false}
+				payload.Set("reasoning", JSONObject{{"enabled", false}})
 			case "deepseek":
-				payload["thinking"] = JSONObject{"type": "disabled"}
+				payload.Set("thinking", JSONObject{{"type", "disabled"}})
 			case "qwen", "zai":
-				payload["enable_thinking"] = false
+				payload.Set("enable_thinking", false)
 			case "qwen_chat_template":
-				payload["chat_template_kwargs"] = JSONObject{"enable_thinking": false}
+				payload.Set("chat_template_kwargs", JSONObject{{"enable_thinking", false}})
 			}
 		}
 	}
-	if err := cacheCommonPayload(req, payload, compat.CacheControl, l.provider, breakpoint, scope); err != nil {
+	if err := cacheCommonPayload(req, &payload, compat.CacheControl, l.provider, breakpoint, scope); err != nil {
 		return nil, err
 	}
 	if compat.Routing != nil {
-		payload["provider"] = compat.Routing
+		payload.Set("provider", compat.Routing)
 	}
 	if cfg.ServiceTier != "" {
-		payload["service_tier"] = cfg.ServiceTier
+		payload.Set("service_tier", cfg.ServiceTier)
 	}
 	if cfg.UserID != "" {
-		payload["safety_identifier"] = cfg.UserID
+		payload.Set("safety_identifier", cfg.UserID)
 	}
 	if cfg.Store != nil {
-		payload["store"] = *cfg.Store
+		payload.Set("store", *cfg.Store)
 	}
-	for k, v := range cfg.Extensions {
+	for k, v := range cfg.Extensions.All() {
 		switch k {
 		case "prompt_caching", "cache", "compat", "openai_compat", "openai_responses_compat":
 			continue
 		}
-		payload[k] = v
+		payload.Set(k, v)
 	}
 	if l.isCodex() {
 		// An explicit cap or store=true is refused, never stripped: dropping a
@@ -876,15 +876,15 @@ func (l *OpenAILM) payload(req *Request, stream bool, scope *adaptScope) (JSONOb
 			return nil, UnsupportedFeature(l.provider, "config.store", "%s: config.store: this backend cannot store a retrievable response; the program may depend on retrieval", l.provider)
 		}
 		if l.access.SystemPrefix != "" {
-			if _, has := payload["instructions"]; !has {
-				payload["instructions"] = l.access.SystemPrefix
+			if _, has := payload.Lookup("instructions"); !has {
+				payload.Set("instructions", l.access.SystemPrefix)
 			}
 		}
-		payload["store"] = false
-		payload["stream"] = true
-		delete(payload, "max_output_tokens")
-		delete(payload, "max_completion_tokens")
-		delete(payload, "max_tokens")
+		payload.Set("store", false)
+		payload.Set("stream", true)
+		payload.Delete("max_output_tokens")
+		payload.Delete("max_completion_tokens")
+		payload.Delete("max_tokens")
 	}
 	return payload, nil
 }
@@ -911,34 +911,34 @@ func (l *OpenAILM) parseResponse(req *Request, resp *HTTPResponse) (*Response, e
 	if err != nil {
 		return nil, err
 	}
-	if e := wireObj(data["error"]); e != nil {
-		return nil, openaiResponseError(&l.lmCore, wireStr(e["code"]), firstStr(e["message"], mustJSONString(e)))
+	if e := wireObj(data.Get("error")); e != nil {
+		return nil, openaiResponseError(&l.lmCore, wireStr(e.Get("code")), firstStr(e.Get("message"), mustJSONString(e)))
 	}
 	var parts []Part
 	var unmapped []JSONObject
 	var logprobs []TokenLogprob
-	for i, rawItem := range wireList(data["output"]) {
+	for i, rawItem := range wireList(data.Get("output")) {
 		item := wireObj(rawItem)
 		if item == nil {
 			recordUnmapped(&unmapped, "output["+strconv.Itoa(i)+"]", jsonTypeName(rawItem))
 			continue
 		}
-		itemType := wireStr(item["type"])
+		itemType := wireStr(item.Get("type"))
 		switch {
 		case itemType == "message":
-			for j, rawContent := range wireList(item["content"]) {
+			for j, rawContent := range wireList(item.Get("content")) {
 				content := wireObj(rawContent)
 				path := "output[" + strconv.Itoa(i) + "].content[" + strconv.Itoa(j) + "]"
 				if content == nil {
 					recordUnmapped(&unmapped, path, jsonTypeName(rawContent))
 					continue
 				}
-				switch ctype := wireStr(content["type"]); ctype {
+				switch ctype := wireStr(content.Get("type")); ctype {
 				case "output_text", "text":
-					text := wireStr(content["text"])
+					text := wireStr(content.Get("text"))
 					parts = append(parts, TextPart{Text: text})
-					logprobs = append(logprobs, openaiTokenLogprobs(content["logprobs"])...)
-					for _, rawA := range wireList(content["annotations"]) {
+					logprobs = append(logprobs, openaiTokenLogprobs(content.Get("logprobs"))...)
+					for _, rawA := range wireList(content.Get("annotations")) {
 						if a := wireObj(rawA); a != nil {
 							if c, ok := citationFromOpenAIAnnotation(a, text, true); ok {
 								parts = append(parts, c)
@@ -946,55 +946,55 @@ func (l *OpenAILM) parseResponse(req *Request, resp *HTTPResponse) (*Response, e
 						}
 					}
 				case "refusal":
-					text := firstStr(content["refusal"], content["text"])
+					text := firstStr(content.Get("refusal"), content.Get("text"))
 					if text != "" {
 						parts = append(parts, RefusalPart{Text: text})
 					} else {
 						parts = append(parts, TextPart{})
 					}
 				case "output_image":
-					if b64 := firstStr(content["b64_json"], content["image_base64"]); b64 != "" {
+					if b64 := firstStr(content.Get("b64_json"), content.Get("image_base64")); b64 != "" {
 						parts = append(parts, ImagePart{Media: Media{MediaType: "image/png", Data: b64}})
 					}
 				case "output_audio":
-					audio := wireObj(content["audio"])
-					if b64 := firstStr(audio["data"], content["b64_json"]); b64 != "" {
+					audio := wireObj(content.Get("audio"))
+					if b64 := firstStr(audio.Get("data"), content.Get("b64_json")); b64 != "" {
 						parts = append(parts, AudioPart{Media: Media{MediaType: "audio/wav", Data: b64}})
 					}
 				default:
-					recordUnmapped(&unmapped, path, content["type"])
+					recordUnmapped(&unmapped, path, content.Get("type"))
 				}
 			}
 		case itemType == "function_call":
-			if !truthy(item["name"]) {
+			if !truthy(item.Get("name")) {
 				return nil, unnamedToolCallError(l.provider, "output["+strconv.Itoa(i)+"]")
 			}
-			id := firstStr(item["call_id"], item["id"])
+			id := firstStr(item.Get("call_id"), item.Get("id"))
 			if id == "" {
 				id = "call_" + strconv.Itoa(len(parts))
 			}
-			parts = append(parts, ToolCallPart{ID: id, Name: wireStr(item["name"]), Input: parseJSONObject(item["arguments"])})
+			parts = append(parts, ToolCallPart{ID: id, Name: wireStr(item.Get("name")), Input: parseJSONObject(item.Get("arguments"))})
 		case itemType == "reasoning":
 			text := ""
-			if summary, ok := item["summary"].([]any); ok {
+			if summary, ok := item.Get("summary").([]any); ok {
 				var lines []string
 				for _, x := range summary {
 					if obj := wireObj(x); obj != nil {
-						lines = append(lines, wireStr(obj["text"]))
+						lines = append(lines, wireStr(obj.Get("text")))
 					} else {
 						lines = append(lines, wireStr(x))
 					}
 				}
 				text = strings.Join(lines, "\n")
 			} else {
-				text = firstStr(item["summary"], item["text"])
+				text = firstStr(item.Get("summary"), item.Get("text"))
 			}
 			state := JSONObject{}
-			if truthy(item["id"]) {
-				state["id"] = wireStr(item["id"])
+			if truthy(item.Get("id")) {
+				state.Set("id", wireStr(item.Get("id")))
 			}
-			if truthy(item["encrypted_content"]) {
-				state["encrypted_content"] = wireStr(item["encrypted_content"])
+			if truthy(item.Get("encrypted_content")) {
+				state.Set("encrypted_content", wireStr(item.Get("encrypted_content")))
 			}
 			var continuation []ContinuationState
 			if len(state) > 0 {
@@ -1005,19 +1005,19 @@ func (l *OpenAILM) parseResponse(req *Request, resp *HTTPResponse) (*Response, e
 			}
 		case openaiProviderExecutedItems[itemType]:
 		default:
-			recordUnmapped(&unmapped, "output["+strconv.Itoa(i)+"]", item["type"])
+			recordUnmapped(&unmapped, "output["+strconv.Itoa(i)+"]", item.Get("type"))
 		}
 	}
 	if len(parts) == 0 {
-		parts = []Part{TextPart{Text: wireStr(data["output_text"])}}
+		parts = []Part{TextPart{Text: wireStr(data.Get("output_text"))}}
 	}
-	usage := openaiUsage(wireObj(data["usage"]))
-	model := wireStr(data["model"])
+	usage := openaiUsage(wireObj(data.Get("usage")))
+	model := wireStr(data.Get("model"))
 	if model == "" {
 		model = req.Model
 	}
 	return &Response{
-		ID:           wireStr(data["id"]),
+		ID:           wireStr(data.Get("id")),
 		Model:        model,
 		Message:      Message{Role: RoleAssistant, Parts: ReplaceTextWithData(parts, RequestJudgments(req))},
 		FinishReason: openaiFinishFromStatus(data, hasToolCall(parts)),
@@ -1044,17 +1044,17 @@ func (l *OpenAILM) parseStreamEvents(req *Request, ev sse.Event) ([]StreamEvent,
 	if payload == nil {
 		return nil, nil
 	}
-	et := wireStr(payload["type"])
-	outputIndex := wireInt(payload["output_index"], 0)
+	et := wireStr(payload.Get("type"))
+	outputIndex := wireInt(payload.Get("output_index"), 0)
 	if et == "response.output_item.added" || et == "response.output_item.done" {
-		if item := wireObj(payload["item"]); item != nil && wireStr(item["type"]) == "reasoning" {
+		if item := wireObj(payload.Get("item")); item != nil && wireStr(item.Get("type")) == "reasoning" {
 			if et == "response.output_item.added" {
 				return []StreamEvent{StreamDeltaEvent{Delta: ThinkingDelta{Text: "", PartIndex: outputIndex}}}, nil
 			}
 			state := JSONObject{}
 			for _, k := range []string{"id", "encrypted_content"} {
-				if truthy(item[k]) {
-					state[k] = item[k]
+				if truthy(item.Get(k)) {
+					state.Set(k, item.Get(k))
 				}
 			}
 			if len(state) > 0 {
@@ -1066,41 +1066,41 @@ func (l *OpenAILM) parseStreamEvents(req *Request, ev sse.Event) ([]StreamEvent,
 	}
 	switch et {
 	case "response.created":
-		resp := wireObj(payload["response"])
-		model := wireStr(resp["model"])
+		resp := wireObj(payload.Get("response"))
+		model := wireStr(resp.Get("model"))
 		if model == "" {
 			model = req.Model
 		}
-		return []StreamEvent{StreamStartEvent{ID: wireStr(resp["id"]), Model: model}}, nil
+		return []StreamEvent{StreamStartEvent{ID: wireStr(resp.Get("id")), Model: model}}, nil
 	case "response.output_text.delta", "response.refusal.delta":
-		return []StreamEvent{StreamDeltaEvent{Delta: TextDelta{Text: wireStr(payload["delta"]), PartIndex: outputIndex, Logprobs: openaiTokenLogprobs(payload["logprobs"])}}}, nil
+		return []StreamEvent{StreamDeltaEvent{Delta: TextDelta{Text: wireStr(payload.Get("delta")), PartIndex: outputIndex, Logprobs: openaiTokenLogprobs(payload.Get("logprobs"))}}}, nil
 	case "response.reasoning_summary_text.delta", "response.reasoning_text.delta":
-		return []StreamEvent{StreamDeltaEvent{Delta: ThinkingDelta{Text: wireStr(payload["delta"]), PartIndex: outputIndex}}}, nil
+		return []StreamEvent{StreamDeltaEvent{Delta: ThinkingDelta{Text: wireStr(payload.Get("delta")), PartIndex: outputIndex}}}, nil
 	case "response.output_text.annotation.added":
-		if a := wireObj(payload["annotation"]); a != nil {
+		if a := wireObj(payload.Get("annotation")); a != nil {
 			if d, ok := citationDeltaFromAnnotation(a, outputIndex); ok {
 				return []StreamEvent{StreamDeltaEvent{Delta: d}}, nil
 			}
 		}
 		return nil, nil
 	case "response.output_audio.delta":
-		return []StreamEvent{StreamDeltaEvent{Delta: AudioDelta{Data: S(wireStr(payload["delta"])), PartIndex: outputIndex, MediaType: "audio/wav"}}}, nil
+		return []StreamEvent{StreamDeltaEvent{Delta: AudioDelta{Data: S(wireStr(payload.Get("delta"))), PartIndex: outputIndex, MediaType: "audio/wav"}}}, nil
 	case "response.output_image.delta", "response.image.delta":
-		return []StreamEvent{StreamDeltaEvent{Delta: ImageDelta{Data: S(wireStr(payload["delta"])), PartIndex: outputIndex, MediaType: "image/png"}}}, nil
+		return []StreamEvent{StreamDeltaEvent{Delta: ImageDelta{Data: S(wireStr(payload.Get("delta"))), PartIndex: outputIndex, MediaType: "image/png"}}}, nil
 	case "response.output_item.added":
-		item := wireObj(payload["item"])
-		if wireStr(item["type"]) == "function_call" {
-			return []StreamEvent{StreamDeltaEvent{Delta: ToolCallDelta{Input: wireStr(item["arguments"]), PartIndex: outputIndex, ID: firstStr(item["call_id"], item["id"]), Name: wireStr(item["name"])}}}, nil
+		item := wireObj(payload.Get("item"))
+		if wireStr(item.Get("type")) == "function_call" {
+			return []StreamEvent{StreamDeltaEvent{Delta: ToolCallDelta{Input: wireStr(item.Get("arguments")), PartIndex: outputIndex, ID: firstStr(item.Get("call_id"), item.Get("id")), Name: wireStr(item.Get("name"))}}}, nil
 		}
 		return nil, nil
 	case "response.function_call_arguments.delta":
-		return []StreamEvent{StreamDeltaEvent{Delta: ToolCallDelta{Input: wireStr(payload["delta"]), PartIndex: outputIndex, ID: firstStr(payload["call_id"], payload["id"]), Name: wireStr(payload["name"])}}}, nil
+		return []StreamEvent{StreamDeltaEvent{Delta: ToolCallDelta{Input: wireStr(payload.Get("delta")), PartIndex: outputIndex, ID: firstStr(payload.Get("call_id"), payload.Get("id")), Name: wireStr(payload.Get("name"))}}}, nil
 	case "response.completed":
-		resp := wireObj(payload["response"])
-		usage := openaiUsage(wireObj(resp["usage"]))
+		resp := wireObj(payload.Get("response"))
+		usage := openaiUsage(wireObj(resp.Get("usage")))
 		hasTool := false
-		for _, rawItem := range wireList(resp["output"]) {
-			if item := wireObj(rawItem); item != nil && wireStr(item["type"]) == "function_call" {
+		for _, rawItem := range wireList(resp.Get("output")) {
+			if item := wireObj(rawItem); item != nil && wireStr(item.Get("type")) == "function_call" {
 				hasTool = true
 			}
 		}
@@ -1117,18 +1117,18 @@ func (l *OpenAILM) parseStreamEvents(req *Request, ev sse.Event) ([]StreamEvent,
 }
 
 func openaiStreamErrorFields(payload JSONObject) (string, string) {
-	if e := wireObj(payload["error"]); e != nil {
-		code := firstStr(e["code"], e["type"], payload["code"])
+	if e := wireObj(payload.Get("error")); e != nil {
+		code := firstStr(e.Get("code"), e.Get("type"), payload.Get("code"))
 		if code == "" {
 			code = "provider"
 		}
-		return code, firstStr(e["message"], payload["message"])
+		return code, firstStr(e.Get("message"), payload.Get("message"))
 	}
-	code := firstStr(payload["code"], payload["error_type"])
+	code := firstStr(payload.Get("code"), payload.Get("error_type"))
 	if code == "" {
 		code = "provider"
 	}
-	return code, wireStr(payload["message"])
+	return code, wireStr(payload.Get("message"))
 }
 
 // ─── Codex / live overrides ──────────────────────────────────────────
@@ -1149,7 +1149,7 @@ func (l *OpenAILM) streamOverride(ctx context.Context, req *Request) (iter.Seq2[
 }
 
 func (l *OpenAILM) shouldUseLiveCompletion(req *Request) bool {
-	mode := strings.ToLower(wireStr(req.Config.Extensions["transport"]))
+	mode := strings.ToLower(wireStr(req.Config.Extensions.Get("transport")))
 	if mode == "live" || mode == "websocket" || mode == "ws" {
 		return true
 	}
@@ -1173,9 +1173,9 @@ func (l *OpenAILM) modelsFromBody(body string) ([]ModelInfo, error) {
 		return nil, err
 	}
 	if l.isCodex() {
-		return modelInfosFromEntries(data["models"], l.provider, "openai_responses", func(e map[string]any) string { return stringOnly(e["slug"]) }), nil
+		return modelInfosFromEntries(data.Get("models"), l.provider, "openai_responses", func(e JSONObject) string { return stringOnly(e.Get("slug")) }), nil
 	}
-	return modelInfosFromEntries(data["data"], l.provider, "openai_responses", func(e map[string]any) string { return stringOnly(e["id"]) }), nil
+	return modelInfosFromEntries(data.Get("data"), l.provider, "openai_responses", func(e JSONObject) string { return stringOnly(e.Get("id")) }), nil
 }
 
 func stringOnly(v any) string {
@@ -1188,13 +1188,13 @@ func stringOnly(v any) string {
 func (l *OpenAILM) fileUploadRequest(req *FileUploadRequest) (*TransportRequest, error) {
 	purpose := "user_data"
 	var fields [][2]string
-	if p, ok := req.Extensions["purpose"]; ok {
+	if p, ok := req.Extensions.Lookup("purpose"); ok {
 		purpose = wireStr(p)
 	}
 	fields = append(fields, [2]string{"purpose", purpose})
-	for _, k := range sortedKeys(req.Extensions) {
+	for k, v := range req.Extensions.All() {
 		if k != "purpose" {
-			fields = append(fields, [2]string{k, wireStr(req.Extensions[k])})
+			fields = append(fields, [2]string{k, wireStr(v)})
 		}
 	}
 	content, err := req.Content()
@@ -1206,20 +1206,20 @@ func (l *OpenAILM) fileUploadRequest(req *FileUploadRequest) (*TransportRequest,
 }
 
 func (l *OpenAILM) fileInfo(data JSONObject) (FileInfo, error) {
-	id := stringOnly(data["id"])
+	id := stringOnly(data.Get("id"))
 	if id == "" {
 		return FileInfo{}, l.providerError(KindProvider, "openai: file object carries no id", 0, "", "")
 	}
 	var size *int
-	if v, ok := data["bytes"]; ok {
+	if v, ok := data.Lookup("bytes"); ok {
 		if i, err := jsonInt(v, "bytes"); err == nil {
 			size = &i
 		}
 	}
 	return FileInfo{
-		ID: id, Filename: stringOnly(data["filename"]), SizeBytes: size,
-		CreatedAt: isoUTC(data["created_at"]), ExpiresAt: isoUTC(data["expires_at"]),
-		Readiness: openaiFileReadinessOf(data["status"]), ProviderData: data,
+		ID: id, Filename: stringOnly(data.Get("filename")), SizeBytes: size,
+		CreatedAt: isoUTC(data.Get("created_at")), ExpiresAt: isoUTC(data.Get("expires_at")),
+		Readiness: openaiFileReadinessOf(data.Get("status")), ProviderData: data,
 	}, nil
 }
 
@@ -1249,7 +1249,7 @@ func (l *OpenAILM) filePageFromListBody(body string) (FilePage, error) {
 		return FilePage{}, err
 	}
 	var items []FileInfo
-	for _, e := range wireList(data["data"]) {
+	for _, e := range wireList(data.Get("data")) {
 		if obj := wireObj(e); obj != nil {
 			info, err := l.fileInfo(obj)
 			if err != nil {
@@ -1259,8 +1259,8 @@ func (l *OpenAILM) filePageFromListBody(body string) (FilePage, error) {
 		}
 	}
 	cursor := ""
-	if truthy(data["has_more"]) && len(items) > 0 {
-		cursor = stringOnly(data["last_id"])
+	if truthy(data.Get("has_more")) && len(items) > 0 {
+		cursor = stringOnly(data.Get("last_id"))
 	}
 	return FilePage{Items: items, NextCursor: cursor}, nil
 }
@@ -1282,7 +1282,7 @@ func (l *OpenAILM) batchUploadRequest(req *BatchRequest, scope *adaptScope) (*Tr
 		if err != nil {
 			return nil, err
 		}
-		lines = append(lines, jsonRaw(JSONObject{"custom_id": strconv.Itoa(i), "method": "POST", "url": "/v1/responses", "body": body}))
+		lines = append(lines, jsonRaw(JSONObject{{"custom_id", strconv.Itoa(i)}, {"method", "POST"}, {"url", "/v1/responses"}, {"body", body}}))
 	}
 	data := []byte(strings.Join(lines, "\n") + "\n")
 	ct, body := multipartFormBody([][2]string{{"purpose", "batch"}}, []multipartFile{{Field: "file", Filename: "lm15-batch.jsonl", ContentType: "application/jsonl", Data: data}})
@@ -1290,36 +1290,36 @@ func (l *OpenAILM) batchUploadRequest(req *BatchRequest, scope *adaptScope) (*Tr
 }
 
 func (l *OpenAILM) batchSubmitRequest(req *BatchRequest, uploadBody JSONObject, scope *adaptScope) (*TransportRequest, error) {
-	inputFileID := stringOnly(uploadBody["id"])
+	inputFileID := stringOnly(uploadBody.Get("id"))
 	if inputFileID == "" {
 		return nil, l.providerError(KindProvider, "openai: batch input file upload returned no id", 0, "", "")
 	}
-	payload := JSONObject{"input_file_id": inputFileID, "endpoint": "/v1/responses", "completion_window": "24h"}
+	payload := JSONObject{{"input_file_id", inputFileID}, {"endpoint", "/v1/responses"}, {"completion_window", "24h"}}
 	ext := copyObject(req.Extensions)
-	if v, ok := ext["endpoint"]; ok {
-		payload["endpoint"] = v
-		delete(ext, "endpoint")
+	if v, ok := ext.Lookup("endpoint"); ok {
+		payload.Set("endpoint", v)
+		ext.Delete("endpoint")
 	}
-	if v, ok := ext["completion_window"]; ok {
-		payload["completion_window"] = v
-		delete(ext, "completion_window")
+	if v, ok := ext.Lookup("completion_window"); ok {
+		payload.Set("completion_window", v)
+		ext.Delete("completion_window")
 	}
 	if req.Label != "" {
-		payload["metadata"] = JSONObject{"label": req.Label}
+		payload.Set("metadata", JSONObject{{"label", req.Label}})
 	}
-	for k, v := range ext {
-		payload[k] = v
+	for k, v := range ext.All() {
+		payload.Set(k, v)
 	}
 	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/batches", headers: l.headers(""), payload: payload, scope: scope})
 }
 
 func (l *OpenAILM) batchJobInfo(data JSONObject) (BatchJobInfo, error) {
-	id := stringOnly(data["id"])
+	id := stringOnly(data.Get("id"))
 	if id == "" {
 		return BatchJobInfo{}, l.providerError(KindProvider, "openai: batch object carries no id", 0, "", "")
 	}
-	label := stringOnly(wireObj(data["metadata"])["label"])
-	return BatchJobInfo{ID: id, Status: openaiBatchStatus(wireStr(data["status"])), Label: label, CreatedAt: isoUTC(data["created_at"]), ProviderData: data}, nil
+	label := stringOnly(wireObj(data.Get("metadata")).Get("label"))
+	return BatchJobInfo{ID: id, Status: openaiBatchStatus(wireStr(data.Get("status"))), Label: label, CreatedAt: isoUTC(data.Get("created_at")), ProviderData: data}, nil
 }
 
 func (l *OpenAILM) batchJobFromBody(body string) (BatchJobInfo, error) {
@@ -1341,7 +1341,7 @@ func (l *OpenAILM) batchCancelRequest(batchID string) (*TransportRequest, error)
 func (l *OpenAILM) batchResultFetches(statusBody JSONObject) ([]*TransportRequest, error) {
 	var out []*TransportRequest
 	for _, key := range []string{"output_file_id", "error_file_id"} {
-		if id := stringOnly(statusBody[key]); id != "" {
+		if id := stringOnly(statusBody.Get(key)); id != "" {
 			req, err := l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/files/" + pathID(id, false) + "/content", headers: l.headers("")})
 			if err != nil {
 				return nil, err
@@ -1353,7 +1353,7 @@ func (l *OpenAILM) batchResultFetches(statusBody JSONObject) ([]*TransportReques
 }
 
 func (l *OpenAILM) batchEntries(statusBody JSONObject, fetched []string) ([]BatchEntry, error) {
-	jobStatus := openaiBatchStatus(wireStr(statusBody["status"]))
+	jobStatus := openaiBatchStatus(wireStr(statusBody.Get("status")))
 	found := map[int]BatchEntry{}
 	maxIndex := -1
 	for _, text := range fetched {
@@ -1365,18 +1365,18 @@ func (l *OpenAILM) batchEntries(statusBody JSONObject, fetched []string) ([]Batc
 			if err != nil {
 				return nil, err
 			}
-			index, err := strconv.Atoi(wireStr(item["custom_id"]))
+			index, err := strconv.Atoi(wireStr(item.Get("custom_id")))
 			if err != nil {
 				return nil, valueErrorf("batch entry custom_id is not an int")
 			}
 			if index > maxIndex {
 				maxIndex = index
 			}
-			respObj := wireObj(item["response"])
-			statusCode := wireInt(respObj["status_code"], 0)
-			bodyObj := wireObj(respObj["body"])
+			respObj := wireObj(item.Get("response"))
+			statusCode := wireInt(respObj.Get("status_code"), 0)
+			bodyObj := wireObj(respObj.Get("body"))
 			if statusCode == 200 && len(bodyObj) > 0 {
-				resp, err := l.parseResponse(batchEntryRequest(stringOnly(bodyObj["model"])), JSONResponse(200, bodyObj))
+				resp, err := l.parseResponse(batchEntryRequest(stringOnly(bodyObj.Get("model"))), JSONResponse(200, bodyObj))
 				if err != nil {
 					return nil, err
 				}
@@ -1384,7 +1384,7 @@ func (l *OpenAILM) batchEntries(statusBody JSONObject, fetched []string) ([]Batc
 			} else {
 				var errSource any = bodyObj
 				if len(bodyObj) == 0 {
-					errSource = item["error"]
+					errSource = item.Get("error")
 					if errSource == nil {
 						errSource = JSONObject{}
 					}
@@ -1401,7 +1401,7 @@ func (l *OpenAILM) batchEntries(statusBody JSONObject, fetched []string) ([]Batc
 			}
 		}
 	}
-	total := wireInt(wireObj(statusBody["request_counts"])["total"], 0)
+	total := wireInt(wireObj(statusBody.Get("request_counts")).Get("total"), 0)
 	if total == 0 && maxIndex >= 0 {
 		total = maxIndex + 1
 	}
@@ -1434,7 +1434,7 @@ func (l *OpenAILM) batchJobsFromListBody(body string) ([]BatchJobInfo, error) {
 		return nil, err
 	}
 	var out []BatchJobInfo
-	for _, e := range wireList(data["data"]) {
+	for _, e := range wireList(data.Get("data")) {
 		if obj := wireObj(e); obj != nil {
 			info, err := l.batchJobInfo(obj)
 			if err != nil {
@@ -1454,34 +1454,34 @@ func (l *OpenAILM) videoSubmitRequest(req *VideoGenerationRequest) (*TransportRe
 	if len(req.Images) > 0 {
 		return nil, UnsupportedFeatureErrorf(l.provider, "openai: video input images (input_reference) are not mapped yet; use the provider door until the mapping is live-receipted")
 	}
-	payload := JSONObject{"model": req.Model, "prompt": req.Prompt}
-	for k, v := range req.Extensions {
-		payload[k] = v
+	payload := JSONObject{{"model", req.Model}, {"prompt", req.Prompt}}
+	for k, v := range req.Extensions.All() {
+		payload.Set(k, v)
 	}
 	if req.Seconds != nil {
-		payload["seconds"] = strconv.Itoa(*req.Seconds)
+		payload.Set("seconds", strconv.Itoa(*req.Seconds))
 	}
 	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/videos", headers: l.headers(""), payload: payload})
 }
 
 func (l *OpenAILM) videoJobInfo(data JSONObject) (VideoJobInfo, error) {
-	id := stringOnly(data["id"])
+	id := stringOnly(data.Get("id"))
 	if id == "" {
 		return VideoJobInfo{}, l.providerError(KindProvider, "openai: video object carries no id", 0, "", "")
 	}
-	wireStatus := wireStr(data["status"])
+	wireStatus := wireStr(data.Get("status"))
 	status, ok := openaiVideoStatusMap[wireStatus]
 	if !ok {
 		return VideoJobInfo{}, l.providerError(KindProvider, "openai: unknown video status "+strconv.Quote(wireStatus), 0, "", "")
 	}
 	var progress *int
-	if _, isBool := data["progress"].(bool); !isBool {
-		if f, err := jsonFloat64(data["progress"], ""); err == nil {
+	if _, isBool := data.Get("progress").(bool); !isBool {
+		if f, err := jsonFloat64(data.Get("progress"), ""); err == nil {
 			p := int(f)
 			progress = &p
 		}
 	}
-	return VideoJobInfo{ID: id, Status: status, Progress: progress, CreatedAt: isoUTC(data["created_at"]), Model: stringOnly(data["model"]), ProviderData: data}, nil
+	return VideoJobInfo{ID: id, Status: status, Progress: progress, CreatedAt: isoUTC(data.Get("created_at")), Model: stringOnly(data.Get("model")), ProviderData: data}, nil
 }
 
 func (l *OpenAILM) videoJobFromBody(body string, _ string) (VideoJobInfo, error) {
@@ -1497,7 +1497,7 @@ func (l *OpenAILM) videoStatusRequest(videoID string) (*TransportRequest, error)
 }
 
 func (l *OpenAILM) videoResultFetch(statusBody JSONObject) (*TransportRequest, error) {
-	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/videos/" + pathID(wireStr(statusBody["id"]), false) + "/content", headers: l.headers("")})
+	return l.emit(emitSpec{method: "GET", url: strings.TrimRight(l.baseURL, "/") + "/videos/" + pathID(wireStr(statusBody.Get("id")), false) + "/content", headers: l.headers("")})
 }
 
 func (l *OpenAILM) videoPart(_ JSONObject, fetched *HTTPResponse) (VideoPart, error) {
@@ -1521,7 +1521,7 @@ func (l *OpenAILM) videoJobsFromListBody(body string) ([]VideoJobInfo, error) {
 		return nil, err
 	}
 	var out []VideoJobInfo
-	for _, e := range wireList(data["data"]) {
+	for _, e := range wireList(data.Get("data")) {
 		if obj := wireObj(e); obj != nil {
 			info, err := l.videoJobInfo(obj)
 			if err != nil {
@@ -1539,13 +1539,13 @@ func (l *OpenAILM) imageGenerateRequest(req *ImageGenerationRequest) (*Transport
 	base := strings.TrimRight(l.baseURL, "/")
 	compat := ResolveOpenAIResponsesCompat(l.compatBase)
 	if len(req.Images) == 0 {
-		payload := JSONObject{"model": req.Model, "prompt": req.Prompt}
+		payload := JSONObject{{"model", req.Model}, {"prompt", req.Prompt}}
 		if req.Size != "" {
-			payload["size"] = req.Size
+			payload.Set("size", req.Size)
 		}
-		for k, v := range req.Extensions {
+		for k, v := range req.Extensions.All() {
 			if v != nil {
-				payload[k] = v
+				payload.Set(k, v)
 			}
 		}
 		return l.emit(emitSpec{method: "POST", url: base + "/images/generations", headers: l.headers(""), payload: payload})
@@ -1559,8 +1559,8 @@ func (l *OpenAILM) imageGenerateRequest(req *ImageGenerationRequest) (*Transport
 	if req.Size != "" {
 		fields = append(fields, [2]string{"size", req.Size})
 	}
-	for _, k := range sortedKeys(req.Extensions) {
-		fields = append(fields, [2]string{k, wireStr(req.Extensions[k])})
+	for k, v := range req.Extensions.All() {
+		fields = append(fields, [2]string{k, wireStr(v)})
 	}
 	var files []multipartFile
 	for i, img := range req.Images {
@@ -1584,40 +1584,40 @@ func (l *OpenAILM) imageGenerationFromResponse(_ *ImageGenerationRequest, resp *
 		return ImageGenerationResponse{}, err
 	}
 	mediaType := ""
-	if f := stringOnly(data["output_format"]); f != "" {
+	if f := stringOnly(data.Get("output_format")); f != "" {
 		mediaType = "image/" + f
 	}
 	if mediaType == "" {
 		mediaType = "application/octet-stream"
 	}
 	var images []ImagePart
-	for _, e := range wireList(data["data"]) {
+	for _, e := range wireList(data.Get("data")) {
 		item := wireObj(e)
 		if item == nil {
 			continue
 		}
-		if b64 := stringOnly(item["b64_json"]); b64 != "" {
+		if b64 := stringOnly(item.Get("b64_json")); b64 != "" {
 			images = append(images, ImagePart{Media: Media{MediaType: mediaType, Data: b64}})
-		} else if url := stringOnly(item["url"]); url != "" {
+		} else if url := stringOnly(item.Get("url")); url != "" {
 			images = append(images, ImagePart{Media: Media{MediaType: mediaType, URL: url}})
 		}
 	}
-	u := wireObj(data["usage"])
-	usage := Usage{InputTokens: wireIntPtr(u["input_tokens"]), OutputTokens: wireIntPtr(u["output_tokens"]), TotalTokens: wireIntPtr(u["total_tokens"])}.Normalize()
+	u := wireObj(data.Get("usage"))
+	usage := Usage{InputTokens: wireIntPtr(u.Get("input_tokens")), OutputTokens: wireIntPtr(u.Get("output_tokens")), TotalTokens: wireIntPtr(u.Get("total_tokens"))}.Normalize()
 	out := ImageGenerationResponse{Images: images, Usage: usage, ProviderData: data}
 	return out, out.Validate()
 }
 
 func (l *OpenAILM) speechGenerateRequest(req *SpeechGenerationRequest) (*TransportRequest, error) {
-	payload := JSONObject{"model": req.Model, "input": req.Prompt}
-	for k, v := range req.Extensions {
-		payload[k] = v
+	payload := JSONObject{{"model", req.Model}, {"input", req.Prompt}}
+	for k, v := range req.Extensions.All() {
+		payload.Set(k, v)
 	}
 	if req.Voice != "" {
-		payload["voice"] = req.Voice
+		payload.Set("voice", req.Voice)
 	}
 	if req.Format != "" {
-		payload["response_format"] = req.Format
+		payload.Set("response_format", req.Format)
 	}
 	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/audio/speech", headers: l.headers(""), payload: payload})
 }
@@ -1628,5 +1628,5 @@ func (l *OpenAILM) speechGenerationFromResponse(_ *SpeechGenerationRequest, resp
 		return SpeechGenerationResponse{}, l.providerError(KindProvider, "openai: speech response carries no content-type", 0, "", "")
 	}
 	audio := AudioPart{Media: Media{MediaType: ct, Data: base64.StdEncoding.EncodeToString(resp.Body)}}
-	return SpeechGenerationResponse{Audio: audio, ProviderData: JSONObject{"content_type": ct}}, nil
+	return SpeechGenerationResponse{Audio: audio, ProviderData: JSONObject{{"content_type", ct}}}, nil
 }

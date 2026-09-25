@@ -135,19 +135,19 @@ func (l *AnthropicLM) normalizeError(status int, body string) *Error {
 	}
 	var msg, errType, requestID string
 	if obj != nil {
-		var errObj any = obj["error"]
-		switch e := errObj.(type) {
-		case map[string]any:
-			msg = wireStr(e["message"])
-			errType = firstStr(e["type"], e["code"])
+		var errObj any = obj.Get("error")
+		switch e := jsonView(errObj).(type) {
+		case JSONObject:
+			msg = wireStr(e.Get("message"))
+			errType = firstStr(e.Get("type"), e.Get("code"))
 		case string:
 			msg = e
 		default:
 			// Azure Foundry's gateway uses top-level {code, message}.
-			msg = wireStr(obj["message"])
-			errType = firstStr(obj["type"], obj["code"])
+			msg = wireStr(obj.Get("message"))
+			errType = firstStr(obj.Get("type"), obj.Get("code"))
 		}
-		requestID = wireStr(obj["request_id"])
+		requestID = wireStr(obj.Get("request_id"))
 	}
 	switch {
 	case anthropicContextLengthMessage(msg):
@@ -205,21 +205,21 @@ func (l *AnthropicLM) headers(req *Request) [][2]string {
 func (l *AnthropicLM) toolResultContent(p Part) (JSONObject, error) {
 	switch x := p.(type) {
 	case TextPart:
-		return JSONObject{"type": "text", "text": x.Text}, nil
+		return JSONObject{{"type", "text"}, {"text", x.Text}}, nil
 	case DataPart:
-		return JSONObject{"type": "text", "text": DataPartText(x)}, nil
+		return JSONObject{{"type", "text"}, {"text", DataPartText(x)}}, nil
 	case ImagePart:
 		src, err := anthropicSource(x.Media)
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"type": "image", "source": src}, nil
+		return JSONObject{{"type", "image"}, {"source", src}}, nil
 	case DocumentPart:
 		src, err := anthropicSource(x.Media)
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"type": "document", "source": src}, nil
+		return JSONObject{{"type", "document"}, {"source", src}}, nil
 	}
 	if IsMediaPart(p) {
 		return nil, UnsupportedFeature(l.provider, "messages[*].tool_result.content["+p.Type()+"]", "%s: a %s part cannot reach a tool_result block (text, image and document only; MAP-10)", l.provider, p.Type())
@@ -228,30 +228,30 @@ func (l *AnthropicLM) toolResultContent(p Part) (JSONObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	return JSONObject{"type": "text", "text": text}, nil
+	return JSONObject{{"type", "text"}, {"text", text}}, nil
 }
 
 func (l *AnthropicLM) part(p Part) (JSONObject, error) {
 	switch x := p.(type) {
 	case TextPart:
-		return JSONObject{"type": "text", "text": x.Text}, nil
+		return JSONObject{{"type", "text"}, {"text", x.Text}}, nil
 	case DataPart:
 		// 2026-09-19 D3: a data part on a text wire is its compact JSON.
-		return JSONObject{"type": "text", "text": DataPartText(x)}, nil
+		return JSONObject{{"type", "text"}, {"text", DataPartText(x)}}, nil
 	case ImagePart:
 		src, err := anthropicSource(x.Media)
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"type": "image", "source": src}, nil
+		return JSONObject{{"type", "image"}, {"source", src}}, nil
 	case DocumentPart:
 		src, err := anthropicSource(x.Media)
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"type": "document", "source": src}, nil
+		return JSONObject{{"type", "document"}, {"source", src}}, nil
 	case ToolCallPart:
-		return JSONObject{"type": "tool_use", "id": x.ID, "name": x.Name, "input": x.Input}, nil
+		return JSONObject{{"type", "tool_use"}, {"id", x.ID}, {"name", x.Name}, {"input", x.Input}}, nil
 	case ToolResultPart:
 		if err := checkToolResultMedia(l.provider, x, l.resolved.ToolResultMedia, "a tool_result block"); err != nil {
 			return nil, err
@@ -264,33 +264,33 @@ func (l *AnthropicLM) part(p Part) (JSONObject, error) {
 			}
 			blocks = append(blocks, b)
 		}
-		out := JSONObject{"type": "tool_result", "tool_use_id": x.ID}
-		if len(blocks) == 1 && blocks[0]["type"] == "text" {
-			out["content"] = blocks[0]["text"]
+		out := JSONObject{{"type", "tool_result"}, {"tool_use_id", x.ID}}
+		if len(blocks) == 1 && blocks[0].Get("type") == "text" {
+			out.Set("content", blocks[0].Get("text"))
 		} else if len(blocks) > 0 {
-			out["content"] = toAnyList(blocks, func(b JSONObject) any { return b })
+			out.Set("content", toAnyList(blocks, func(b JSONObject) any { return b }))
 		}
 		if x.IsError {
-			out["is_error"] = true
+			out.Set("is_error", true)
 		}
 		return out, nil
 	case ThinkingPart:
 		if redacted := ContinuationData(x.Continuation, "anthropic", "redacted_thinking"); redacted != nil {
-			out := JSONObject{"type": "redacted_thinking"}
-			for k, v := range redacted {
-				out[k] = v
+			out := JSONObject{{"type", "redacted_thinking"}}
+			for k, v := range redacted.All() {
+				out.Set(k, v)
 			}
 			return out, nil
 		}
-		if sig := ContinuationData(x.Continuation, "anthropic", "thinking_signature"); sig != nil && truthy(sig["signature"]) {
-			return JSONObject{"type": "thinking", "thinking": x.Text, "signature": sig["signature"]}, nil
+		if sig := ContinuationData(x.Continuation, "anthropic", "thinking_signature"); sig != nil && truthy(sig.Get("signature")) {
+			return JSONObject{{"type", "thinking"}, {"thinking", x.Text}, {"signature", sig.Get("signature")}}, nil
 		}
 		if l.resolved.ThinkingReplay == "unsigned" && x.Text != "" {
-			return JSONObject{"type": "thinking", "thinking": x.Text}, nil
+			return JSONObject{{"type", "thinking"}, {"thinking", x.Text}}, nil
 		}
-		return JSONObject{"type": "text", "text": x.Text}, nil
+		return JSONObject{{"type", "text"}, {"text", x.Text}}, nil
 	}
-	return JSONObject{"type": "text", "text": partText(p)}, nil
+	return JSONObject{{"type", "text"}, {"text", partText(p)}}, nil
 }
 
 func (l *AnthropicLM) message(msg Message) (JSONObject, error) {
@@ -303,7 +303,7 @@ func (l *AnthropicLM) message(msg Message) (JSONObject, error) {
 		if err != nil {
 			return nil, err
 		}
-		return JSONObject{"role": role, "content": []any{JSONObject{"type": "text", "text": "[developer]\n" + text}}}, nil
+		return JSONObject{{"role", role}, {"content", []any{JSONObject{{"type", "text"}, {"text", "[developer]\n" + text}}}}}, nil
 	}
 	var parts []any
 	for _, p := range msg.Parts {
@@ -313,7 +313,7 @@ func (l *AnthropicLM) message(msg Message) (JSONObject, error) {
 		}
 		parts = append(parts, block)
 	}
-	return JSONObject{"role": role, "content": parts}, nil
+	return JSONObject{{"role", role}, {"content", parts}}, nil
 }
 
 // allowedSubset is the names of a proper-subset allowlist, else nil. MAP-13:
@@ -342,7 +342,7 @@ func (l *AnthropicLM) toolChoicePayload(req *Request) JSONObject {
 	payload := JSONObject{}
 	switch {
 	case tc.EffectiveMode() == "none":
-		payload["type"] = "none"
+		payload.Set("type", "none")
 	case len(tc.Allowed) > 0:
 		// {"type": "tool", "name": ...} forces client tools AND server tools
 		// (live 2026-09-01 with web_search). Every declared tool, or
@@ -350,20 +350,20 @@ func (l *AnthropicLM) toolChoicePayload(req *Request) JSONObject {
 		// tools list to: either way the wire form is any/auto over the
 		// tools sent.
 		if len(tc.Allowed) == 1 && tc.EffectiveMode() == "required" {
-			payload["type"] = "tool"
-			payload["name"] = tc.Allowed[0]
+			payload.Set("type", "tool")
+			payload.Set("name", tc.Allowed[0])
 		} else if tc.EffectiveMode() == "required" {
-			payload["type"] = "any"
+			payload.Set("type", "any")
 		} else {
-			payload["type"] = "auto"
+			payload.Set("type", "auto")
 		}
 	case tc.EffectiveMode() == "required":
-		payload["type"] = "any"
+		payload.Set("type", "any")
 	default:
-		payload["type"] = "auto"
+		payload.Set("type", "auto")
 	}
-	if tc.Parallel != nil && !*tc.Parallel && payload["type"] != "none" {
-		payload["disable_parallel_tool_use"] = true
+	if tc.Parallel != nil && !*tc.Parallel && payload.Get("type") != "none" {
+		payload.Set("disable_parallel_tool_use", true)
 	}
 	return payload
 }
@@ -392,10 +392,10 @@ func sameNameSet(allowed []string, tools []Tool) bool {
 // json_object refuses (MAP-13 rule 4(c) until a live receipt shows an open
 // schema is accepted); strict is satisfied, name is a label with no slot.
 func anthropicResponseFormat(provider string, f JSONObject) (JSONObject, error) {
-	if f["type"] == "json_object" {
+	if f.Get("type") == "json_object" {
 		return nil, UnsupportedFeature(provider, "config.response_format", "anthropic: response_format json_object is not supported — the Messages API has no any-JSON mode; give a json_schema (objects need additionalProperties: false)")
 	}
-	return JSONObject{"format": JSONObject{"type": "json_schema", "schema": f["schema"]}}, nil
+	return JSONObject{{"format", JSONObject{{"type", "json_schema"}, {"schema", f.Get("schema")}}}}, nil
 }
 
 // Output ceilings by model class, for the max_tokens the Messages API
@@ -484,14 +484,15 @@ func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSO
 			idx = len(messages) - 1
 		}
 		if idx >= 0 {
-			if content, ok := messages[idx]["content"].([]any); ok && len(content) > 0 {
-				if last, ok := content[len(content)-1].(JSONObject); ok {
-					marker := JSONObject{"type": "ephemeral"}
+			if content, ok := messages[idx].Get("content").([]any); ok && len(content) > 0 {
+				if last, ok := asObject(content[len(content)-1]); ok {
+					marker := JSONObject{{"type", "ephemeral"}}
 					if longCache {
-						marker["ttl"] = "1h"
+						marker.Set("ttl", "1h")
 					}
-					if _, has := last["cache_control"]; !has {
-						last["cache_control"] = marker
+					if !last.Has("cache_control") {
+						last.Set("cache_control", marker)
+						content[len(content)-1] = last // the adapter's own list, built above
 					}
 				}
 			}
@@ -574,20 +575,20 @@ func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSO
 	if thinkingBudget != nil {
 		maxTokens += *thinkingBudget
 	}
-	payload := JSONObject{"model": req.Model, "messages": toAnyList(messages, func(m JSONObject) any { return m }), "stream": stream, "max_tokens": maxTokens}
+	payload := JSONObject{{"model", req.Model}, {"messages", toAnyList(messages, func(m JSONObject) any { return m })}, {"stream", stream}, {"max_tokens", maxTokens}}
 	if req.System != nil {
 		text, err := systemText(req.System, l.provider)
 		if err != nil {
 			return nil, err
 		}
 		if useCache {
-			marker := JSONObject{"type": "ephemeral"}
+			marker := JSONObject{{"type", "ephemeral"}}
 			if longCache {
-				marker["ttl"] = "1h"
+				marker.Set("ttl", "1h")
 			}
-			payload["system"] = []any{JSONObject{"type": "text", "text": text, "cache_control": marker}}
+			payload.Set("system", []any{JSONObject{{"type", "text"}, {"text", text}, {"cache_control", marker}}})
 		} else {
-			payload["system"] = text
+			payload.Set("system", text)
 		}
 	}
 	samplingFixed := compat.SamplingParams == "reject"
@@ -629,16 +630,16 @@ func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSO
 			}
 			temperature = 1.0
 		}
-		payload["temperature"] = jsonFloat(temperature)
+		payload.Set("temperature", jsonFloat(temperature))
 	}
 	if cfg.TopP != nil && !samplingFixed {
-		payload["top_p"] = jsonFloat(*cfg.TopP)
+		payload.Set("top_p", jsonFloat(*cfg.TopP))
 	}
 	if cfg.TopK != nil && !samplingFixed {
-		payload["top_k"] = *cfg.TopK
+		payload.Set("top_k", *cfg.TopK)
 	}
 	if len(cfg.Stop) > 0 {
-		payload["stop_sequences"] = toAnyList(cfg.Stop, func(s string) any { return s })
+		payload.Set("stop_sequences", toAnyList(cfg.Stop, func(s string) any { return s }))
 	}
 	if len(req.Tools) > 0 {
 		var tools []any
@@ -651,15 +652,15 @@ func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSO
 			sent = append(sent, t.ToolName())
 			switch x := t.(type) {
 			case FunctionTool:
-				tools = append(tools, JSONObject{"name": x.Name, "description": nilIfEmpty(x.Description), "input_schema": x.EffectiveParameters()})
+				tools = append(tools, JSONObject{{"name", x.Name}, {"description", nilIfEmpty(x.Description)}, {"input_schema", x.EffectiveParameters()}})
 			case BuiltinTool:
 				wt := x.Name
 				if mapped, ok := anthropicBuiltinMap[x.Name]; ok {
 					wt = mapped
 				}
-				out := JSONObject{"type": wt, "name": x.Name}
-				for k, v := range x.Config {
-					out[k] = v
+				out := JSONObject{{"type", wt}, {"name", x.Name}}
+				for k, v := range x.Config.All() {
+					out.Set(k, v)
 				}
 				tools = append(tools, out)
 			}
@@ -669,7 +670,7 @@ func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSO
 				return nil, err
 			}
 		}
-		payload["tools"] = tools
+		payload.Set("tools", tools)
 	}
 	if toolChoice := l.toolChoicePayload(req); toolChoice != nil {
 		if compat.ParallelToolCalls == "reject" && cfg.ToolChoice.Parallel != nil {
@@ -678,31 +679,31 @@ func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSO
 			if err := scope.dropped("config.tool_choice.parallel", "this server accepts disable_parallel_tool_use and does not apply it (guide--anthropic-api.md); the model may return several calls", *cfg.ToolChoice.Parallel); err != nil {
 				return nil, err
 			}
-			delete(toolChoice, "disable_parallel_tool_use")
+			toolChoice.Delete("disable_parallel_tool_use")
 		}
-		payload["tool_choice"] = toolChoice
+		payload.Set("tool_choice", toolChoice)
 	}
 	switch {
 	case deepseekThinking:
 		if reasoning != nil && reasoning.IsOff() {
-			payload["thinking"] = JSONObject{"type": "disabled"}
+			payload.Set("thinking", JSONObject{{"type", "disabled"}})
 		} else if reasoning != nil {
-			payload["thinking"] = JSONObject{"type": "enabled"}
-			payload["output_config"] = JSONObject{"effort": reasoning.Effort}
+			payload.Set("thinking", JSONObject{{"type", "enabled"}})
+			payload.Set("output_config", JSONObject{{"effort", reasoning.Effort}})
 		}
 	case effortOnly:
 		if reasoning != nil && reasoning.IsOff() {
-			payload["thinking"] = JSONObject{"type": "disabled"}
+			payload.Set("thinking", JSONObject{{"type", "disabled"}})
 		} else if reasoning != nil {
-			payload["output_config"] = JSONObject{"effort": reasoning.Effort}
+			payload.Set("output_config", JSONObject{{"effort", reasoning.Effort}})
 		}
 	case alwaysAdaptive && reasoning != nil && reasoning.IsOff():
-		payload["thinking"] = JSONObject{"type": "disabled"}
+		payload.Set("thinking", JSONObject{{"type", "disabled"}})
 	case adaptive:
-		payload["thinking"] = JSONObject{"type": "adaptive"}
-		payload["output_config"] = JSONObject{"effort": reasoning.Effort}
+		payload.Set("thinking", JSONObject{{"type", "adaptive"}})
+		payload.Set("output_config", JSONObject{{"effort", reasoning.Effort}})
 	case thinkingBudget != nil:
-		payload["thinking"] = JSONObject{"type": "enabled", "budget_tokens": *thinkingBudget}
+		payload.Set("thinking", JSONObject{{"type", "enabled"}, {"budget_tokens", *thinkingBudget}})
 	}
 	if len(cfg.ResponseFormat) > 0 {
 		if compat.StructuredOutput == "reject" {
@@ -720,27 +721,27 @@ func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSO
 			}
 			format := cfg.ResponseFormat
 			if found := RequestJudgments(req); len(found) > 0 {
-				if schema, ok := format["schema"].(map[string]any); ok {
+				if schema, ok := asObject(format.Get("schema")); ok {
 					format = copyObject(format)
-					format["schema"] = anthropicSchema(schema, found)
+					format.Set("schema", anthropicSchema(schema, found))
 				}
 			}
 			oc, err := anthropicResponseFormat(l.provider, format)
 			if err != nil {
 				return nil, err
 			}
-			merged := copyObject(wireObj(payload["output_config"]))
-			for k, v := range oc {
-				merged[k] = v
+			merged := copyObject(wireObj(payload.Get("output_config")))
+			for k, v := range oc.All() {
+				merged.Set(k, v)
 			}
-			payload["output_config"] = merged
+			payload.Set("output_config", merged)
 		}
 	}
 	if cfg.ServiceTier != "" {
-		payload["service_tier"] = cfg.ServiceTier
+		payload.Set("service_tier", cfg.ServiceTier)
 	}
 	if cfg.UserID != "" {
-		payload["metadata"] = JSONObject{"user_id": cfg.UserID}
+		payload.Set("metadata", JSONObject{{"user_id", cfg.UserID}})
 	}
 	if cfg.Store != nil && !*cfg.Store {
 		// MAP-13 "satisfied": the Messages API keeps no retrievable
@@ -760,20 +761,20 @@ func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSO
 			return nil, err
 		}
 	}
-	for k, v := range cfg.Extensions {
+	for k, v := range cfg.Extensions.All() {
 		if k != "prompt_caching" {
-			payload[k] = v
+			payload.Set(k, v)
 		}
 	}
 	if l.access.SystemPrefix != "" {
-		prefix := JSONObject{"type": "text", "text": l.access.SystemPrefix}
-		switch existing := payload["system"].(type) {
+		prefix := JSONObject{{"type", "text"}, {"text", l.access.SystemPrefix}}
+		switch existing := payload.Get("system").(type) {
 		case nil:
-			payload["system"] = []any{prefix}
+			payload.Set("system", []any{prefix})
 		case []any:
-			payload["system"] = append([]any{prefix}, existing...)
+			payload.Set("system", append([]any{prefix}, existing...))
 		default:
-			payload["system"] = []any{prefix, JSONObject{"type": "text", "text": wireStr(existing)}}
+			payload.Set("system", []any{prefix, JSONObject{{"type", "text"}, {"text", wireStr(existing)}}})
 		}
 	}
 	return payload, nil
@@ -805,27 +806,27 @@ func anthropicFinish(stopReason string, hasToolCall bool) string {
 }
 
 func anthropicReasoningTokens(usage JSONObject) *int {
-	details := wireObj(usage["output_tokens_details"])
-	if details == nil || details["thinking_tokens"] == nil {
+	details := wireObj(usage.Get("output_tokens_details"))
+	if details == nil || details.Get("thinking_tokens") == nil {
 		return nil
 	}
-	return wireIntPtr(details["thinking_tokens"])
+	return wireIntPtr(details.Get("thinking_tokens"))
 }
 
 func anthropicUsage(u JSONObject) Usage {
 	return Usage{
-		InputTokens:      wireIntPtr(u["input_tokens"]),
-		OutputTokens:     wireIntPtr(u["output_tokens"]),
-		CacheReadTokens:  wireIntPtr(u["cache_read_input_tokens"]),
-		CacheWriteTokens: wireIntPtr(u["cache_creation_input_tokens"]),
+		InputTokens:      wireIntPtr(u.Get("input_tokens")),
+		OutputTokens:     wireIntPtr(u.Get("output_tokens")),
+		CacheReadTokens:  wireIntPtr(u.Get("cache_read_input_tokens")),
+		CacheWriteTokens: wireIntPtr(u.Get("cache_creation_input_tokens")),
 		ReasoningTokens:  anthropicReasoningTokens(u),
 	}.Normalize()
 }
 
 func citationFromAnthropic(c JSONObject) (CitationPart, bool) {
-	url := firstStr(c["url"], c["uri"])
-	title := firstStr(c["title"], c["document_title"], c["source_title"])
-	text := firstStr(c["cited_text"], c["text"], c["quote"])
+	url := firstStr(c.Get("url"), c.Get("uri"))
+	title := firstStr(c.Get("title"), c.Get("document_title"), c.Get("source_title"))
+	text := firstStr(c.Get("cited_text"), c.Get("text"), c.Get("quote"))
 	if url == "" && title == "" && text == "" {
 		return CitationPart{}, false
 	}
@@ -839,18 +840,18 @@ func (l *AnthropicLM) parseResponse(req *Request, resp *HTTPResponse) (*Response
 	}
 	var parts []Part
 	var unmapped []JSONObject
-	for i, raw := range wireList(data["content"]) {
+	for i, raw := range wireList(data.Get("content")) {
 		block := wireObj(raw)
 		path := "content[" + strconv.Itoa(i) + "]"
 		if block == nil {
 			recordUnmapped(&unmapped, path, jsonTypeName(raw))
 			continue
 		}
-		bt := wireStr(block["type"])
+		bt := wireStr(block.Get("type"))
 		switch {
 		case bt == "text":
-			parts = append(parts, TextPart{Text: wireStr(block["text"])})
-			for _, rawC := range wireList(block["citations"]) {
+			parts = append(parts, TextPart{Text: wireStr(block.Get("text"))})
+			for _, rawC := range wireList(block.Get("citations")) {
 				if c := wireObj(rawC); c != nil {
 					if cit, ok := citationFromAnthropic(c); ok {
 						parts = append(parts, cit)
@@ -858,48 +859,48 @@ func (l *AnthropicLM) parseResponse(req *Request, resp *HTTPResponse) (*Response
 				}
 			}
 		case bt == "tool_use":
-			if !truthy(block["name"]) {
+			if !truthy(block.Get("name")) {
 				return nil, unnamedToolCallError(l.provider, path)
 			}
-			id := wireStr(block["id"])
-			if id == "" || block["id"] == nil {
+			id := wireStr(block.Get("id"))
+			if id == "" || block.Get("id") == nil {
 				id = "tool_" + strconv.Itoa(len(parts))
 			}
-			input := wireObj(block["input"])
+			input := wireObj(block.Get("input"))
 			if input == nil {
 				input = JSONObject{}
 			}
-			parts = append(parts, ToolCallPart{ID: id, Name: wireStr(block["name"]), Input: input})
+			parts = append(parts, ToolCallPart{ID: id, Name: wireStr(block.Get("name")), Input: input})
 		case bt == "thinking":
 			var continuation []ContinuationState
-			if truthy(block["signature"]) {
-				continuation = []ContinuationState{{Provider: "anthropic", Kind: "thinking_signature", Data: JSONObject{"signature": wireStr(block["signature"])}}}
+			if truthy(block.Get("signature")) {
+				continuation = []ContinuationState{{Provider: "anthropic", Kind: "thinking_signature", Data: JSONObject{{"signature", wireStr(block.Get("signature"))}}}}
 			}
-			parts = append(parts, ThinkingPart{Text: firstStr(block["thinking"], block["text"]), Continuation: continuation})
+			parts = append(parts, ThinkingPart{Text: firstStr(block.Get("thinking"), block.Get("text")), Continuation: continuation})
 		case bt == "redacted_thinking":
 			var continuation []ContinuationState
-			if block["data"] != nil {
-				continuation = []ContinuationState{{Provider: "anthropic", Kind: "redacted_thinking", Data: JSONObject{"data": block["data"]}}}
+			if block.Get("data") != nil {
+				continuation = []ContinuationState{{Provider: "anthropic", Kind: "redacted_thinking", Data: JSONObject{{"data", block.Get("data")}}}}
 			}
 			parts = append(parts, ThinkingPart{Text: "", Continuation: continuation})
 		case anthropicProviderExecutedBlocks[bt]:
 		default:
-			recordUnmapped(&unmapped, path, block["type"])
+			recordUnmapped(&unmapped, path, block.Get("type"))
 		}
 	}
 	if len(parts) == 0 {
 		parts = []Part{TextPart{}}
 	}
-	model := wireStr(data["model"])
+	model := wireStr(data.Get("model"))
 	if model == "" {
 		model = req.Model
 	}
 	return &Response{
-		ID:           wireStr(data["id"]),
+		ID:           wireStr(data.Get("id")),
 		Model:        model,
 		Message:      Message{Role: RoleAssistant, Parts: ReplaceTextWithData(parts, RequestJudgments(req))},
-		FinishReason: anthropicFinish(wireStr(data["stop_reason"]), hasToolCall(parts)),
-		Usage:        anthropicUsage(wireObj(data["usage"])),
+		FinishReason: anthropicFinish(wireStr(data.Get("stop_reason")), hasToolCall(parts)),
+		Usage:        anthropicUsage(wireObj(data.Get("usage"))),
 		ProviderData: attachUnmapped(data, unmapped),
 	}, nil
 }
@@ -916,22 +917,22 @@ func (l *AnthropicLM) parseStreamEvents(req *Request, ev sse.Event) ([]StreamEve
 	if payload == nil {
 		return nil, nil
 	}
-	idx := wireInt(payload["index"], 0)
-	switch wireStr(payload["type"]) {
+	idx := wireInt(payload.Get("index"), 0)
+	switch wireStr(payload.Get("type")) {
 	case "message_start":
-		msg := wireObj(payload["message"])
-		model := wireStr(msg["model"])
+		msg := wireObj(payload.Get("message"))
+		model := wireStr(msg.Get("model"))
 		if model == "" {
 			model = req.Model
 		}
-		return []StreamEvent{StreamStartEvent{ID: wireStr(msg["id"]), Model: model}}, nil
+		return []StreamEvent{StreamStartEvent{ID: wireStr(msg.Get("id")), Model: model}}, nil
 	case "content_block_start":
-		block := wireObj(payload["content_block"])
-		switch wireStr(block["type"]) {
+		block := wireObj(payload.Get("content_block"))
+		switch wireStr(block.Get("type")) {
 		case "tool_use":
 			input := ""
-			switch start := block["input"].(type) {
-			case map[string]any:
+			switch start := jsonView(block.Get("input")).(type) {
+			case JSONObject:
 				if len(start) > 0 {
 					input = jsonRaw(start)
 				}
@@ -939,57 +940,57 @@ func (l *AnthropicLM) parseStreamEvents(req *Request, ev sse.Event) ([]StreamEve
 			default:
 				input = wireStr(start)
 			}
-			return []StreamEvent{StreamDeltaEvent{Delta: ToolCallDelta{Input: input, PartIndex: idx, ID: wireStr(block["id"]), Name: wireStr(block["name"])}}}, nil
+			return []StreamEvent{StreamDeltaEvent{Delta: ToolCallDelta{Input: input, PartIndex: idx, ID: wireStr(block.Get("id")), Name: wireStr(block.Get("name"))}}}, nil
 		case "redacted_thinking":
-			if block["data"] != nil {
+			if block.Get("data") != nil {
 				i := idx
 				return []StreamEvent{
 					StreamDeltaEvent{Delta: ThinkingDelta{Text: "", PartIndex: idx}},
-					StreamDeltaEvent{Delta: ContinuationDelta{Provider: "anthropic", Kind: "redacted_thinking", Data: JSONObject{"data": block["data"]}, PartIndex: &i}},
+					StreamDeltaEvent{Delta: ContinuationDelta{Provider: "anthropic", Kind: "redacted_thinking", Data: JSONObject{{"data", block.Get("data")}}, PartIndex: &i}},
 				}, nil
 			}
 		}
 		return nil, nil
 	case "content_block_delta":
-		delta := wireObj(payload["delta"])
-		switch dtype := wireStr(delta["type"]); dtype {
+		delta := wireObj(payload.Get("delta"))
+		switch dtype := wireStr(delta.Get("type")); dtype {
 		case "text_delta":
-			return []StreamEvent{StreamDeltaEvent{Delta: TextDelta{Text: wireStr(delta["text"]), PartIndex: idx}}}, nil
+			return []StreamEvent{StreamDeltaEvent{Delta: TextDelta{Text: wireStr(delta.Get("text")), PartIndex: idx}}}, nil
 		case "input_json_delta":
-			return []StreamEvent{StreamDeltaEvent{Delta: ToolCallDelta{Input: wireStr(delta["partial_json"]), PartIndex: idx}}}, nil
+			return []StreamEvent{StreamDeltaEvent{Delta: ToolCallDelta{Input: wireStr(delta.Get("partial_json")), PartIndex: idx}}}, nil
 		case "thinking_delta":
-			return []StreamEvent{StreamDeltaEvent{Delta: ThinkingDelta{Text: wireStr(delta["thinking"]), PartIndex: idx}}}, nil
+			return []StreamEvent{StreamDeltaEvent{Delta: ThinkingDelta{Text: wireStr(delta.Get("thinking")), PartIndex: idx}}}, nil
 		case "signature_delta":
-			if truthy(delta["signature"]) {
+			if truthy(delta.Get("signature")) {
 				i := idx
-				return []StreamEvent{StreamDeltaEvent{Delta: ContinuationDelta{Provider: "anthropic", Kind: "thinking_signature", Data: JSONObject{"signature": wireStr(delta["signature"])}, PartIndex: &i}}}, nil
+				return []StreamEvent{StreamDeltaEvent{Delta: ContinuationDelta{Provider: "anthropic", Kind: "thinking_signature", Data: JSONObject{{"signature", wireStr(delta.Get("signature"))}}, PartIndex: &i}}}, nil
 			}
 		case "citation_delta", "citations_delta":
-			c := wireObj(delta["citation"])
+			c := wireObj(delta.Get("citation"))
 			if c == nil {
 				c = delta
 			}
 			d := CitationDelta{PartIndex: idx}
-			if t := firstStr(c["cited_text"], c["text"]); t != "" {
+			if t := firstStr(c.Get("cited_text"), c.Get("text")); t != "" {
 				d.Text = S(t)
 			}
-			if u := wireStr(c["url"]); u != "" {
+			if u := wireStr(c.Get("url")); u != "" {
 				d.URL = S(u)
 			}
-			if t := wireStr(c["title"]); t != "" {
+			if t := wireStr(c.Get("title")); t != "" {
 				d.Title = S(t)
 			}
 			return []StreamEvent{StreamDeltaEvent{Delta: d}}, nil
 		}
 		return nil, nil
 	case "message_delta":
-		delta := wireObj(payload["delta"])
+		delta := wireObj(payload.Get("delta"))
 		var usage *Usage
-		if up := wireObj(payload["usage"]); len(up) > 0 {
+		if up := wireObj(payload.Get("usage")); len(up) > 0 {
 			u := anthropicUsage(up)
 			usage = &u
 		}
-		stopReason, hasStop := delta["stop_reason"]
+		stopReason, hasStop := delta.Lookup("stop_reason")
 		if (hasStop && stopReason != nil) || usage != nil {
 			finish := ""
 			if hasStop && stopReason != nil {
@@ -1002,12 +1003,12 @@ func (l *AnthropicLM) parseStreamEvents(req *Request, ev sse.Event) ([]StreamEve
 		return []StreamEvent{StreamEndEvent{}}, nil
 	case "error":
 		var code, message string
-		if e := wireObj(payload["error"]); e != nil {
-			code = firstStr(e["type"], e["code"], payload["code"])
-			message = firstStr(e["message"], payload["message"])
+		if e := wireObj(payload.Get("error")); e != nil {
+			code = firstStr(e.Get("type"), e.Get("code"), payload.Get("code"))
+			message = firstStr(e.Get("message"), payload.Get("message"))
 		} else {
-			code = firstStr(payload["code"], payload["error_type"])
-			message = wireStr(payload["message"])
+			code = firstStr(payload.Get("code"), payload.Get("error_type"))
+			message = wireStr(payload.Get("message"))
 		}
 		if code == "" {
 			code = "provider"
@@ -1028,15 +1029,15 @@ func (l *AnthropicLM) modelsFromBody(body string) ([]ModelInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return modelInfosFromEntries(data["data"], l.provider, "anthropic_messages", func(e map[string]any) string { return stringOnly(e["id"]) }), nil
+	return modelInfosFromEntries(data.Get("data"), l.provider, "anthropic_messages", func(e JSONObject) string { return stringOnly(e.Get("id")) }), nil
 }
 
 // ─── Files ───────────────────────────────────────────────────────────
 
 func (l *AnthropicLM) fileUploadRequest(req *FileUploadRequest) (*TransportRequest, error) {
 	var fields [][2]string
-	for _, k := range sortedKeys(req.Extensions) {
-		fields = append(fields, [2]string{k, wireStr(req.Extensions[k])})
+	for k, v := range req.Extensions.All() {
+		fields = append(fields, [2]string{k, wireStr(v)})
 	}
 	content, err := req.Content()
 	if err != nil {
@@ -1053,12 +1054,12 @@ func (l *AnthropicLM) fileUploadRequest(req *FileUploadRequest) (*TransportReque
 }
 
 func (l *AnthropicLM) fileInfo(data JSONObject) (FileInfo, error) {
-	id := stringOnly(data["id"])
+	id := stringOnly(data.Get("id"))
 	if id == "" {
 		return FileInfo{}, l.providerError(KindProvider, "anthropic: file object carries no id", 0, "", "")
 	}
 	var size *int
-	if v, ok := data["size_bytes"]; ok {
+	if v, ok := data.Lookup("size_bytes"); ok {
 		if _, isBool := v.(bool); !isBool {
 			if i, err := jsonInt(v, "size_bytes"); err == nil {
 				size = &i
@@ -1066,12 +1067,12 @@ func (l *AnthropicLM) fileInfo(data JSONObject) (FileInfo, error) {
 		}
 	}
 	var downloadable *bool
-	if b, ok := data["downloadable"].(bool); ok {
+	if b, ok := data.Get("downloadable").(bool); ok {
 		downloadable = &b
 	}
 	return FileInfo{
-		ID: id, Filename: stringOnly(data["filename"]), MediaType: stringOnly(data["mime_type"]), SizeBytes: size,
-		CreatedAt: isoUTC(data["created_at"]), ExpiresAt: isoUTC(data["expires_at"]), Readiness: "ready",
+		ID: id, Filename: stringOnly(data.Get("filename")), MediaType: stringOnly(data.Get("mime_type")), SizeBytes: size,
+		CreatedAt: isoUTC(data.Get("created_at")), ExpiresAt: isoUTC(data.Get("expires_at")), Readiness: "ready",
 		Downloadable: downloadable, ProviderData: data,
 	}, nil
 }
@@ -1102,7 +1103,7 @@ func (l *AnthropicLM) filePageFromListBody(body string) (FilePage, error) {
 		return FilePage{}, err
 	}
 	var items []FileInfo
-	for _, e := range wireList(data["data"]) {
+	for _, e := range wireList(data.Get("data")) {
 		if obj := wireObj(e); obj != nil {
 			info, err := l.fileInfo(obj)
 			if err != nil {
@@ -1111,7 +1112,7 @@ func (l *AnthropicLM) filePageFromListBody(body string) (FilePage, error) {
 			items = append(items, info)
 		}
 	}
-	return FilePage{Items: items, NextCursor: stringOnly(data["next_page"])}, nil
+	return FilePage{Items: items, NextCursor: stringOnly(data.Get("next_page"))}, nil
 }
 
 func (l *AnthropicLM) fileDeleteRequest(fileID string) (*TransportRequest, error) {
@@ -1125,14 +1126,14 @@ func (l *AnthropicLM) fileDownloadRequest(fileID string) (*TransportRequest, err
 // ─── Batch ───────────────────────────────────────────────────────────
 
 func anthropicBatchStatus(data JSONObject) string {
-	switch strings.ToLower(wireStr(data["processing_status"])) {
+	switch strings.ToLower(wireStr(data.Get("processing_status"))) {
 	case "in_progress":
 		return BatchRunning
 	case "canceling":
 		return BatchCancelling
 	case "ended":
-		counts := wireObj(data["request_counts"])
-		n := func(k string) int { return wireInt(counts[k], 0) }
+		counts := wireObj(data.Get("request_counts"))
+		n := func(k string) int { return wireInt(counts.Get(k), 0) }
 		if n("canceled") > 0 && n("succeeded") == 0 && n("errored") == 0 && n("expired") == 0 {
 			return BatchCancelled
 		}
@@ -1158,21 +1159,21 @@ func (l *AnthropicLM) batchSubmitRequest(req *BatchRequest, _ JSONObject, scope 
 		if err != nil {
 			return nil, err
 		}
-		requests = append(requests, JSONObject{"custom_id": strconv.Itoa(i), "params": params})
+		requests = append(requests, JSONObject{{"custom_id", strconv.Itoa(i)}, {"params", params}})
 	}
-	payload := JSONObject{"requests": requests}
-	for k, v := range req.Extensions {
-		payload[k] = v
+	payload := JSONObject{{"requests", requests}}
+	for k, v := range req.Extensions.All() {
+		payload.Set(k, v)
 	}
 	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/messages/batches", headers: l.headers(nil), payload: payload, scope: scope})
 }
 
 func (l *AnthropicLM) batchJobInfo(data JSONObject) (BatchJobInfo, error) {
-	id := stringOnly(data["id"])
+	id := stringOnly(data.Get("id"))
 	if id == "" {
 		return BatchJobInfo{}, l.providerError(KindProvider, "anthropic: batch object carries no id", 0, "", "")
 	}
-	return BatchJobInfo{ID: id, Status: anthropicBatchStatus(data), CreatedAt: isoUTC(data["created_at"]), ProviderData: data}, nil
+	return BatchJobInfo{ID: id, Status: anthropicBatchStatus(data), CreatedAt: isoUTC(data.Get("created_at")), ProviderData: data}, nil
 }
 
 func (l *AnthropicLM) batchJobFromBody(body string) (BatchJobInfo, error) {
@@ -1192,7 +1193,7 @@ func (l *AnthropicLM) batchCancelRequest(batchID string) (*TransportRequest, err
 }
 
 func (l *AnthropicLM) batchResultFetches(statusBody JSONObject) ([]*TransportRequest, error) {
-	url := stringOnly(statusBody["results_url"])
+	url := stringOnly(statusBody.Get("results_url"))
 	if url == "" {
 		return nil, l.providerError(KindProvider, "anthropic: ended batch carries no results_url", 0, "", "")
 	}
@@ -1216,30 +1217,30 @@ func (l *AnthropicLM) batchEntries(_ JSONObject, fetched []string) ([]BatchEntry
 		if err != nil {
 			return nil, err
 		}
-		index, err := strconv.Atoi(wireStr(item["custom_id"]))
+		index, err := strconv.Atoi(wireStr(item.Get("custom_id")))
 		if err != nil {
 			return nil, valueErrorf("batch entry custom_id is not an int")
 		}
-		result := wireObj(item["result"])
-		switch rtype := wireStr(result["type"]); rtype {
+		result := wireObj(item.Get("result"))
+		switch rtype := wireStr(result.Get("type")); rtype {
 		case "succeeded":
-			message := wireObj(result["message"])
-			resp, err := l.parseResponse(batchEntryRequest(stringOnly(message["model"])), JSONResponse(200, message))
+			message := wireObj(result.Get("message"))
+			resp, err := l.parseResponse(batchEntryRequest(stringOnly(message.Get("model"))), JSONResponse(200, message))
 			if err != nil {
 				return nil, err
 			}
 			entries = append(entries, BatchEntry{Index: index, Outcome: "succeeded", Response: resp})
 		case "errored":
-			raw := result["error"]
+			raw := result.Get("error")
 			var envelope JSONObject
 			if obj := wireObj(raw); obj != nil {
-				if _, has := obj["error"]; has {
+				if _, has := obj.Lookup("error"); has {
 					envelope = obj
 				} else {
-					envelope = JSONObject{"error": obj}
+					envelope = JSONObject{{"error", obj}}
 				}
 			} else {
-				envelope = JSONObject{"error": raw}
+				envelope = JSONObject{{"error", raw}}
 			}
 			e := l.normalizeError(400, jsonRaw(envelope))
 			msg := e.Message
@@ -1269,7 +1270,7 @@ func (l *AnthropicLM) batchJobsFromListBody(body string) ([]BatchJobInfo, error)
 		return nil, err
 	}
 	var out []BatchJobInfo
-	for _, e := range wireList(data["data"]) {
+	for _, e := range wireList(data.Get("data")) {
 		if obj := wireObj(e); obj != nil {
 			info, err := l.batchJobInfo(obj)
 			if err != nil {

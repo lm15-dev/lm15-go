@@ -115,7 +115,7 @@ func readJSONFile(path, provider, hint string) (JSONObject, error) {
 	if err != nil {
 		return nil, notConfigured(provider, "Credentials file at "+path+" is not valid JSON.", hint)
 	}
-	obj, ok := data.(map[string]any)
+	obj, ok := asObject(data)
 	if !ok {
 		return nil, notConfigured(provider, "Credentials file at "+path+" has an unexpected shape.", hint)
 	}
@@ -131,7 +131,7 @@ func readJSONFileOrNil(path string) JSONObject {
 	if err != nil {
 		return nil
 	}
-	obj, _ := data.(map[string]any)
+	obj, _ := asObject(data)
 	return obj
 }
 
@@ -173,7 +173,7 @@ func base64URLJSON(segment string) JSONObject {
 	if err != nil {
 		return nil
 	}
-	obj, _ := data.(map[string]any)
+	obj, _ := asObject(data)
 	return obj
 }
 
@@ -191,8 +191,8 @@ func jwtExpiresAtMs(token string) *int64 {
 	if claims == nil {
 		return nil
 	}
-	exp, err := jsonFloat64(claims["exp"], "")
-	if err != nil || claims["exp"] == nil {
+	exp, err := jsonFloat64(claims.Get("exp"), "")
+	if err != nil || claims.Get("exp") == nil {
 		return nil
 	}
 	ms := int64(exp*1000) - refreshSkewMs
@@ -205,7 +205,7 @@ func ExtractChatGPTAccountID(token string) string {
 	if claims == nil {
 		return ""
 	}
-	return stringOnly(wireObj(claims[openaiCodexJWTClaim])["chatgpt_account_id"])
+	return stringOnly(wireObj(claims.Get(openaiCodexJWTClaim)).Get("chatgpt_account_id"))
 }
 
 // ─── Token endpoints ─────────────────────────────────────────────────
@@ -244,7 +244,7 @@ func doAuthRequest(req *http.Request) (JSONObject, int, error) {
 		return nil, resp.StatusCode, err
 	}
 	data, _ := DecodeJSON(raw)
-	obj, _ := data.(map[string]any)
+	obj, _ := asObject(data)
 	if obj == nil {
 		obj = JSONObject{}
 	}
@@ -260,17 +260,17 @@ func LoadClaudeCodeCredential(path string) (LocalOAuthCredential, error) {
 	if err != nil {
 		return LocalOAuthCredential{}, err
 	}
-	raw := wireObj(data["claudeAiOauth"])
+	raw := wireObj(data.Get("claudeAiOauth"))
 	if raw == nil {
 		return LocalOAuthCredential{}, notConfigured("claude-code", "Credentials file at "+path+" has no claudeAiOauth section.", ClaudeCodeLoginHint)
 	}
-	access := stringOnly(raw["accessToken"])
+	access := stringOnly(raw.Get("accessToken"))
 	if access == "" {
 		return LocalOAuthCredential{}, notConfigured("claude-code", "Credentials file at "+path+" has no access token.", ClaudeCodeLoginHint)
 	}
-	cred := LocalOAuthCredential{AccessToken: access, RefreshToken: stringOnly(raw["refreshToken"])}
-	if _, isBool := raw["expiresAt"].(bool); !isBool {
-		if f, err := jsonFloat64(raw["expiresAt"], ""); err == nil && raw["expiresAt"] != nil {
+	cred := LocalOAuthCredential{AccessToken: access, RefreshToken: stringOnly(raw.Get("refreshToken"))}
+	if _, isBool := raw.Get("expiresAt").(bool); !isBool {
+		if f, err := jsonFloat64(raw.Get("expiresAt"), ""); err == nil && raw.Get("expiresAt") != nil {
 			ms := int64(f)
 			cred.ExpiresAt = &ms
 		}
@@ -289,16 +289,16 @@ func ReadClaudeCodeCredential(path string) *LocalOAuthCredential {
 
 // RefreshClaudeCodeCredential exchanges a refresh token.
 func RefreshClaudeCodeCredential(ctx context.Context, refreshToken string) (LocalOAuthCredential, error) {
-	payload, status, err := postJSON(ctx, ClaudeCodeTokenURL, JSONObject{"grant_type": "refresh_token", "client_id": ClaudeCodeClientID, "refresh_token": refreshToken})
+	payload, status, err := postJSON(ctx, ClaudeCodeTokenURL, JSONObject{{"grant_type", "refresh_token"}, {"client_id", ClaudeCodeClientID}, {"refresh_token", refreshToken}})
 	if err != nil {
 		return LocalOAuthCredential{}, err
 	}
 	if status >= 400 {
 		return LocalOAuthCredential{}, fmt.Errorf("Claude Code token refresh failed: HTTP %d", status)
 	}
-	access := stringOnly(payload["access_token"])
-	refresh := stringOnly(payload["refresh_token"])
-	expiresIn, err := jsonFloat64(payload["expires_in"], "")
+	access := stringOnly(payload.Get("access_token"))
+	refresh := stringOnly(payload.Get("refresh_token"))
+	expiresIn, err := jsonFloat64(payload.Get("expires_in"), "")
 	if access == "" || refresh == "" || err != nil {
 		return LocalOAuthCredential{}, fmt.Errorf("Claude Code token refresh response is missing required fields")
 	}
@@ -311,18 +311,18 @@ func writeClaudeCodeUnlocked(cred LocalOAuthCredential, path string) error {
 	if data == nil {
 		data = JSONObject{}
 	}
-	current := wireObj(data["claudeAiOauth"])
+	current := wireObj(data.Get("claudeAiOauth"))
 	if current == nil {
 		current = JSONObject{}
 	}
-	current["accessToken"] = cred.AccessToken
+	current.Set("accessToken", cred.AccessToken)
 	if cred.RefreshToken != "" {
-		current["refreshToken"] = cred.RefreshToken
+		current.Set("refreshToken", cred.RefreshToken)
 	}
 	if cred.ExpiresAt != nil {
-		current["expiresAt"] = *cred.ExpiresAt
+		current.Set("expiresAt", *cred.ExpiresAt)
 	}
-	data["claudeAiOauth"] = current
+	data.Set("claudeAiOauth", current)
 	return writePrivateJSON(path, data)
 }
 
@@ -384,19 +384,19 @@ func LoadCodexCLICredential(path string) (LocalOAuthCredential, error) {
 	if err != nil {
 		return LocalOAuthCredential{}, err
 	}
-	tokens := wireObj(data["tokens"])
+	tokens := wireObj(data.Get("tokens"))
 	if tokens == nil {
 		return LocalOAuthCredential{}, notConfigured("openai-codex", "Credentials file at "+path+" has no tokens section.", OpenAICodexLoginHint)
 	}
-	access := stringOnly(tokens["access_token"])
+	access := stringOnly(tokens.Get("access_token"))
 	if access == "" {
 		return LocalOAuthCredential{}, notConfigured("openai-codex", "Credentials file at "+path+" has no access token.", OpenAICodexLoginHint)
 	}
-	account := stringOnly(tokens["account_id"])
+	account := stringOnly(tokens.Get("account_id"))
 	if account == "" {
 		account = ExtractChatGPTAccountID(access)
 	}
-	return LocalOAuthCredential{AccessToken: access, RefreshToken: stringOnly(tokens["refresh_token"]), ExpiresAt: jwtExpiresAtMs(access), AccountID: account}, nil
+	return LocalOAuthCredential{AccessToken: access, RefreshToken: stringOnly(tokens.Get("refresh_token")), ExpiresAt: jwtExpiresAtMs(access), AccountID: account}, nil
 }
 
 // ReadCodexCLICredential is the optional-style loader.
@@ -417,8 +417,8 @@ func RefreshCodexCLICredential(ctx context.Context, refreshToken string) (LocalO
 	if status >= 400 {
 		return LocalOAuthCredential{}, fmt.Errorf("Codex token refresh failed: HTTP %d", status)
 	}
-	access := stringOnly(payload["access_token"])
-	refresh := stringOnly(payload["refresh_token"])
+	access := stringOnly(payload.Get("access_token"))
+	refresh := stringOnly(payload.Get("refresh_token"))
 	if refresh == "" {
 		refresh = refreshToken
 	}
@@ -433,25 +433,25 @@ func writeCodexUnlocked(cred LocalOAuthCredential, path, idToken string) error {
 	if data == nil {
 		data = JSONObject{}
 	}
-	tokens := wireObj(data["tokens"])
+	tokens := wireObj(data.Get("tokens"))
 	if tokens == nil {
 		tokens = JSONObject{}
 	}
-	tokens["access_token"] = cred.AccessToken
+	tokens.Set("access_token", cred.AccessToken)
 	if cred.RefreshToken != "" {
-		tokens["refresh_token"] = cred.RefreshToken
+		tokens.Set("refresh_token", cred.RefreshToken)
 	}
 	if cred.AccountID != "" {
-		tokens["account_id"] = cred.AccountID
+		tokens.Set("account_id", cred.AccountID)
 	}
 	if idToken != "" {
-		tokens["id_token"] = idToken
+		tokens.Set("id_token", idToken)
 	}
-	data["tokens"] = tokens
-	if _, has := data["auth_mode"]; !has {
-		data["auth_mode"] = "chatgpt"
+	data.Set("tokens", tokens)
+	if _, has := data.Lookup("auth_mode"); !has {
+		data.Set("auth_mode", "chatgpt")
 	}
-	data["last_refresh"] = time.Now().UTC().Format("2006-01-02T15:04:05.000000Z")
+	data.Set("last_refresh", time.Now().UTC().Format("2006-01-02T15:04:05.000000Z"))
 	return writePrivateJSON(path, data)
 }
 
@@ -497,7 +497,7 @@ func GetCodexCLIAccessToken(ctx context.Context, path string, refresh bool) (Loc
 	if err != nil {
 		return LocalOAuthCredential{}, AuthErrorf("openai-codex", nil, OpenAICodexLoginHint, "Codex CLI OAuth token is expired and the refresh attempt failed.").WithCause(err)
 	}
-	idToken := stringOnly(wireObj(readJSONFileOrNil(path)["tokens"])["id_token"])
+	idToken := stringOnly(wireObj(readJSONFileOrNil(path).Get("tokens")).Get("id_token"))
 	if err := writeCodexUnlocked(refreshed, path, idToken); err != nil {
 		return LocalOAuthCredential{}, err
 	}
@@ -513,13 +513,13 @@ func xaiEntryToCredential(entry any) *LocalOAuthCredential {
 	if obj == nil {
 		return nil
 	}
-	access := stringOnly(obj["access"])
+	access := stringOnly(obj.Get("access"))
 	if access == "" {
 		return nil
 	}
-	cred := &LocalOAuthCredential{AccessToken: access, RefreshToken: stringOnly(obj["refresh"])}
-	if _, isBool := obj["expires"].(bool); !isBool && obj["expires"] != nil {
-		if i, err := jsonInt(obj["expires"], ""); err == nil {
+	cred := &LocalOAuthCredential{AccessToken: access, RefreshToken: stringOnly(obj.Get("refresh"))}
+	if _, isBool := obj.Get("expires").(bool); !isBool && obj.Get("expires") != nil {
+		if i, err := jsonInt(obj.Get("expires"), ""); err == nil {
 			ms := int64(i)
 			cred.ExpiresAt = &ms
 		}
@@ -532,13 +532,13 @@ func xaiCredentialToEntry(cred LocalOAuthCredential, current JSONObject) JSONObj
 	if entry == nil {
 		entry = JSONObject{}
 	}
-	entry["type"] = "oauth"
-	entry["access"] = cred.AccessToken
+	entry.Set("type", "oauth")
+	entry.Set("access", cred.AccessToken)
 	if cred.RefreshToken != "" {
-		entry["refresh"] = cred.RefreshToken
+		entry.Set("refresh", cred.RefreshToken)
 	}
 	if cred.ExpiresAt != nil {
-		entry["expires"] = *cred.ExpiresAt
+		entry.Set("expires", *cred.ExpiresAt)
 	}
 	return entry
 }
@@ -550,7 +550,7 @@ func loadXaiWithSource(path string) (LocalOAuthCredential, string, error) {
 	}
 	for _, p := range paths {
 		if data := readJSONFileOrNil(p); data != nil {
-			if cred := xaiEntryToCredential(data["xai"]); cred != nil {
+			if cred := xaiEntryToCredential(data.Get("xai")); cred != nil {
 				return *cred, p, nil
 			}
 		}
@@ -597,17 +597,17 @@ func xaiStoredStateAt(path string, now time.Time) string {
 		if data == nil {
 			continue
 		}
-		if cred := xaiEntryToCredential(data["xai"]); cred != nil {
+		if cred := xaiEntryToCredential(data.Get("xai")); cred != nil {
 			expired := cred.ExpiresAt != nil && now.UnixMilli() >= *cred.ExpiresAt
 			if !expired || cred.RefreshToken != "" {
 				return "usable"
 			}
 			return "unusable"
 		}
-		if own := wireObj(data["_lm15"]); own != nil {
-			if slots := wireObj(own["slots"]); slots != nil {
-				if slot := wireObj(slots["xai"]); slot != nil {
-					marker := slot["logged_out"]
+		if own := wireObj(data.Get("_lm15")); own != nil {
+			if slots := wireObj(own.Get("slots")); slots != nil {
+				if slot := wireObj(slots.Get("xai")); slot != nil {
+					marker := slot.Get("logged_out")
 					if on, isBool := marker.(bool); marker != nil && (!isBool || on) {
 						return "logged_out"
 					}
@@ -619,17 +619,17 @@ func xaiStoredStateAt(path string, now time.Time) string {
 }
 
 func xaiCredentialFromToken(payload JSONObject, previousRefresh string) (LocalOAuthCredential, error) {
-	access := stringOnly(payload["access_token"])
+	access := stringOnly(payload.Get("access_token"))
 	if access == "" {
 		return LocalOAuthCredential{}, fmt.Errorf("xAI token response is missing access_token")
 	}
-	refresh := stringOnly(payload["refresh_token"])
+	refresh := stringOnly(payload.Get("refresh_token"))
 	if refresh == "" {
 		refresh = previousRefresh
 	}
 	lifetime := float64(xaiDefaultLifetimeS)
-	if _, isBool := payload["expires_in"].(bool); !isBool {
-		if f, err := jsonFloat64(payload["expires_in"], ""); err == nil && f > 0 {
+	if _, isBool := payload.Get("expires_in").(bool); !isBool {
+		if f, err := jsonFloat64(payload.Get("expires_in"), ""); err == nil && f > 0 {
 			lifetime = f
 		}
 	}
@@ -729,7 +729,7 @@ func (s *CredentialFileStore) readAll() (JSONObject, error) {
 	if err != nil {
 		return nil, valueErrorf("Credential store at %s is not valid JSON.", s.Path)
 	}
-	obj, ok := data.(map[string]any)
+	obj, ok := asObject(data)
 	if !ok {
 		return nil, valueErrorf("Credential store at %s must be a JSON object.", s.Path)
 	}
@@ -742,7 +742,7 @@ func (s *CredentialFileStore) Read(provider string) (JSONObject, error) {
 	if err != nil {
 		return nil, err
 	}
-	return copyObject(wireObj(all[provider])), nil
+	return copyObject(wireObj(all.Get(provider))), nil
 }
 
 // List returns the provider ids with stored credentials.
@@ -771,8 +771,8 @@ func (s *CredentialFileStore) Delete(ctx context.Context, provider string) error
 	if err != nil {
 		return err
 	}
-	if _, has := all[provider]; has {
-		delete(all, provider)
+	if _, has := all.Lookup(provider); has {
+		all.Delete(provider)
 		return writePrivateJSON(s.Path, all)
 	}
 	return nil
@@ -790,8 +790,8 @@ func (s *CredentialFileStore) Mutate(ctx context.Context, provider string, fn fu
 	if err != nil {
 		return nil, err
 	}
-	current := copyObject(wireObj(all[provider]))
-	if wireObj(all[provider]) == nil {
+	current := copyObject(wireObj(all.Get(provider)))
+	if wireObj(all.Get(provider)) == nil {
 		current = nil
 	}
 	replacement, err := fn(current)
@@ -801,7 +801,7 @@ func (s *CredentialFileStore) Mutate(ctx context.Context, provider string, fn fu
 	if replacement == nil {
 		return current, nil
 	}
-	all[provider] = replacement
+	all.Set(provider, replacement)
 	if err := writePrivateJSON(s.Path, all); err != nil {
 		return nil, err
 	}
@@ -936,7 +936,7 @@ func StartXaiDeviceLogin(ctx context.Context) (XaiDeviceAuthorization, error) {
 		return XaiDeviceAuthorization{}, err
 	}
 	if status >= 400 {
-		detail := firstStr(payload["error_description"], payload["error"])
+		detail := firstStr(payload.Get("error_description"), payload.Get("error"))
 		if detail == "" {
 			detail = "request failed"
 		}
@@ -944,29 +944,29 @@ func StartXaiDeviceLogin(ctx context.Context) (XaiDeviceAuthorization, error) {
 		e.Provider = "xai"
 		return XaiDeviceAuthorization{}, e
 	}
-	deviceCode := stringOnly(payload["device_code"])
-	userCode := stringOnly(payload["user_code"])
+	deviceCode := stringOnly(payload.Get("device_code"))
+	userCode := stringOnly(payload.Get("user_code"))
 	if deviceCode == "" || userCode == "" {
 		e := newError(KindAuth, "xAI device authorization response is missing required fields.")
 		e.Provider = "xai"
 		return XaiDeviceAuthorization{}, e
 	}
-	expiresIn, err := jsonFloat64(payload["expires_in"], "")
+	expiresIn, err := jsonFloat64(payload.Get("expires_in"), "")
 	if err != nil || expiresIn <= 0 {
 		e := newError(KindAuth, "xAI device authorization response is missing expires_in.")
 		e.Provider = "xai"
 		return XaiDeviceAuthorization{}, e
 	}
 	interval := 5.0
-	if f, err := jsonFloat64(payload["interval"], ""); err == nil && f > 0 {
+	if f, err := jsonFloat64(payload.Get("interval"), ""); err == nil && f > 0 {
 		interval = f
 	}
-	uri, err := httpsOrRaise(payload["verification_uri"])
+	uri, err := httpsOrRaise(payload.Get("verification_uri"))
 	if err != nil {
 		return XaiDeviceAuthorization{}, err
 	}
 	complete := ""
-	if s := stringOnly(payload["verification_uri_complete"]); s != "" {
+	if s := stringOnly(payload.Get("verification_uri_complete")); s != "" {
 		if complete, err = httpsOrRaise(s); err != nil {
 			return XaiDeviceAuthorization{}, err
 		}
@@ -988,12 +988,12 @@ func PollXaiDeviceLogin(ctx context.Context, device XaiDeviceAuthorization, slee
 			}
 			return DevicePollResult{Complete: true, Value: cred}, nil
 		}
-		switch stringOnly(payload["error"]) {
+		switch stringOnly(payload.Get("error")) {
 		case "authorization_pending":
 			return DevicePollResult{Pending: true}, nil
 		case "slow_down":
 			r := DevicePollResult{SlowDown: true}
-			if f, err := jsonFloat64(payload["interval"], ""); err == nil && f > 0 {
+			if f, err := jsonFloat64(payload.Get("interval"), ""); err == nil && f > 0 {
 				r.Interval = &f
 			}
 			return r, nil
@@ -1002,7 +1002,7 @@ func PollXaiDeviceLogin(ctx context.Context, device XaiDeviceAuthorization, slee
 		case "expired_token":
 			return DevicePollResult{Failed: true, Message: "xAI device code expired before it was approved."}, nil
 		}
-		detail := firstStr(payload["error_description"], payload["error"])
+		detail := firstStr(payload.Get("error_description"), payload.Get("error"))
 		if detail == "" {
 			detail = "request failed"
 		}

@@ -102,8 +102,8 @@ func mergeJSON(a, b JSONObject) JSONObject {
 		return a
 	}
 	out := copyObject(a)
-	for k, v := range b {
-		out[k] = v
+	for k, v := range b.All() {
+		out.Set(k, v)
 	}
 	return out
 }
@@ -516,24 +516,24 @@ func openaiResponsesCompatFromExtensions(ext JSONObject) *OpenAIResponsesCompat 
 	if len(ext) == 0 {
 		return nil
 	}
-	raw := ext["openai_responses_compat"]
+	raw := ext.Get("openai_responses_compat")
 	if raw == nil {
-		raw = ext["openai_compat"]
+		raw = ext.Get("openai_compat")
 	}
 	if raw == nil {
-		if compat, ok := ext["compat"].(map[string]any); ok {
-			raw = compat["openai_responses"]
+		if compat, ok := asObject(ext.Get("compat")); ok {
+			raw = compat.Get("openai_responses")
 			if raw == nil {
-				raw = compat["openai"]
+				raw = compat.Get("openai")
 			}
 		}
 	}
-	m, ok := raw.(map[string]any)
+	m, ok := asObject(raw)
 	if !ok {
 		return nil
 	}
 	get := func(key string) string {
-		s, _ := m[key].(string)
+		s, _ := m.Get(key).(string)
 		return s
 	}
 	out := &OpenAIResponsesCompat{
@@ -548,10 +548,10 @@ func openaiResponsesCompatFromExtensions(ext JSONObject) *OpenAIResponsesCompat 
 		BuiltinTools:         get("builtin_tools"),
 		ToolResultMedia:      get("tool_result_media"),
 	}
-	if r, ok := m["routing"].(map[string]any); ok {
+	if r, ok := asObject(m.Get("routing")); ok {
 		out.Routing = r
 	}
-	if e, ok := m["extensions"].(map[string]any); ok {
+	if e, ok := asObject(m.Get("extensions")); ok {
 		out.Extensions = e
 	}
 	return out

@@ -54,15 +54,15 @@ func (l *OpenAIChatLM) judgmentMessages(req *Request, j Judgment, answer string)
 	if err != nil {
 		return nil, err
 	}
-	messages = append(messages, JSONObject{"role": "user", "content": l.judgmentAsk(j)})
-	messages = append(messages, JSONObject{"role": "assistant", "content": answer})
+	messages = append(messages, JSONObject{{"role", "user"}, {"content", l.judgmentAsk(j)}})
+	messages = append(messages, JSONObject{{"role", "assistant"}, {"content", answer}})
 	return messages, nil
 }
 
 func (l *OpenAIChatLM) judgmentTokenizeRequest(model string, messages []any, continueFinal bool) (*TransportRequest, error) {
 	root := strings.TrimSuffix(strings.TrimRight(l.baseURL, "/"), "/v1")
 	return l.emit(emitSpec{method: "POST", url: root + "/tokenize", endpoint: "tokenize", model: model, headers: l.headers(),
-		payload: JSONObject{"model": model, "messages": messages, "add_generation_prompt": false, "continue_final_message": continueFinal}})
+		payload: JSONObject{{"model", model}, {"messages", messages}, {"add_generation_prompt", false}, {"continue_final_message", continueFinal}}})
 }
 
 func (l *OpenAIChatLM) judgmentReplyError(resp *HTTPResponse, detail string) *Error {
@@ -76,7 +76,7 @@ func (l *OpenAIChatLM) judgmentTokensFromBody(resp *HTTPResponse) ([]int, error)
 	if err != nil {
 		return nil, l.replyError(resp, err)
 	}
-	list, ok := data["tokens"].([]any)
+	list, ok := data.Get("tokens").([]any)
 	if !ok {
 		return nil, l.judgmentReplyError(resp, "tokenize reply carries no non-negative integer token list")
 	}
@@ -95,9 +95,9 @@ func (l *OpenAIChatLM) judgmentScoreRequest(model string, prompts [][]int, token
 	sorted := append([]int(nil), tokenIDs...)
 	sort.Ints(sorted)
 	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/completions", endpoint: "completions", model: model, headers: l.headers(),
-		payload: JSONObject{"model": model, "prompt": toAnyList(prompts, func(p []int) any { return toAnyList(p, func(t int) any { return t }) }),
-			"max_tokens": 1, "temperature": jsonFloat(1.0), "logprobs": 0, "return_tokens_as_token_ids": true,
-			"logprob_token_ids": toAnyList(sorted, func(t int) any { return t })}})
+		payload: JSONObject{{"model", model}, {"prompt", toAnyList(prompts, func(p []int) any { return toAnyList(p, func(t int) any { return t }) })},
+			{"max_tokens", 1}, {"temperature", jsonFloat(1.0)}, {"logprobs", 0}, {"return_tokens_as_token_ids", true},
+			{"logprob_token_ids", toAnyList(sorted, func(t int) any { return t })}}})
 }
 
 // judgmentScoresFromBody: per prompt, the measured token log-probs;
@@ -107,17 +107,17 @@ func (l *OpenAIChatLM) judgmentScoresFromBody(resp *HTTPResponse, nPrompts int) 
 	if err != nil {
 		return nil, Usage{}, "", l.replyError(resp, err)
 	}
-	choices, ok := data["choices"].([]any)
+	choices, ok := data.Get("choices").([]any)
 	if !ok || len(choices) != nPrompts {
 		return nil, Usage{}, "", l.judgmentReplyError(resp, "choices must contain every prompt index exactly once")
 	}
-	byIndex := make([]map[string]any, nPrompts)
+	byIndex := make([]JSONObject, nPrompts)
 	for _, c := range choices {
-		obj, ok := c.(map[string]any)
+		obj, ok := asObject(c)
 		if !ok {
 			return nil, Usage{}, "", l.judgmentReplyError(resp, "choices must contain every prompt index exactly once")
 		}
-		index, ok := jsonInteger(obj["index"])
+		index, ok := jsonInteger(obj.Get("index"))
 		if !ok || index < 0 || index >= nPrompts || byIndex[index] != nil {
 			return nil, Usage{}, "", l.judgmentReplyError(resp, "choices must contain every prompt index exactly once")
 		}
@@ -125,11 +125,11 @@ func (l *OpenAIChatLM) judgmentScoresFromBody(resp *HTTPResponse, nPrompts int) 
 	}
 	out := make([]map[int]float64, 0, nPrompts)
 	for _, choice := range byIndex {
-		var top map[string]any
-		switch lp := choice["logprobs"].(type) {
+		var top JSONObject
+		switch lp := jsonView(choice.Get("logprobs")).(type) {
 		case nil:
-		case map[string]any:
-			switch tl := lp["top_logprobs"].(type) {
+		case JSONObject:
+			switch tl := lp.Get("top_logprobs").(type) {
 			case nil:
 			case []any:
 				if len(tl) == 0 {
@@ -138,9 +138,9 @@ func (l *OpenAIChatLM) judgmentScoresFromBody(resp *HTTPResponse, nPrompts int) 
 				if len(tl) != 1 {
 					return nil, Usage{}, "", l.judgmentReplyError(resp, "expected one top_logprobs object")
 				}
-				switch first := tl[0].(type) {
+				switch first := jsonView(tl[0]).(type) {
 				case nil:
-				case map[string]any:
+				case JSONObject:
 					top = first
 				default:
 					return nil, Usage{}, "", l.judgmentReplyError(resp, "expected one top_logprobs object")
@@ -152,7 +152,7 @@ func (l *OpenAIChatLM) judgmentScoresFromBody(resp *HTTPResponse, nPrompts int) 
 			return nil, Usage{}, "", l.judgmentReplyError(resp, "logprobs must be an object or null")
 		}
 		scores := map[int]float64{}
-		for token, value := range top {
+		for token, value := range top.All() {
 			if !strings.HasPrefix(token, "token_id:") {
 				continue
 			}
@@ -174,8 +174,8 @@ func (l *OpenAIChatLM) judgmentScoresFromBody(resp *HTTPResponse, nPrompts int) 
 		out = append(out, scores)
 	}
 	usage := Usage{}
-	if raw, present := data["usage"]; present && raw != nil {
-		u, ok := raw.(map[string]any)
+	if raw, present := data.Lookup("usage"); present && raw != nil {
+		u, ok := asObject(raw)
 		if !ok {
 			return nil, Usage{}, "", l.judgmentReplyError(resp, "usage must be an object or null")
 		}
@@ -188,7 +188,7 @@ func (l *OpenAIChatLM) judgmentScoresFromBody(resp *HTTPResponse, nPrompts int) 
 		}
 	}
 	model := ""
-	if raw, present := data["model"]; present && raw != nil {
+	if raw, present := data.Lookup("model"); present && raw != nil {
 		s, ok := raw.(string)
 		if !ok || s == "" {
 			return nil, Usage{}, "", l.judgmentReplyError(resp, "model must be a non-empty string")
@@ -340,7 +340,7 @@ func (l *OpenAIChatLM) judgmentFold(req *Request, per []tokenizedJudgment, table
 		for _, v := range raw {
 			mass += math.Exp(v)
 		}
-		coverage[tj.judgment.Name] = jsonFloat(mass)
+		coverage.Set(tj.judgment.Name, jsonFloat(mass))
 		dist := normalizeLogprobs(raw)
 		probabilities[tj.judgment.Name] = dist
 		best, bestP := "", math.Inf(-1)
@@ -351,12 +351,12 @@ func (l *OpenAIChatLM) judgmentFold(req *Request, per []tokenizedJudgment, table
 		}
 		switch tj.judgment.Kind {
 		case JudgmentBoolean:
-			value[tj.judgment.Name] = best == "true"
+			value.Set(tj.judgment.Name, best == "true")
 		case JudgmentOrdered:
 			n, _ := strconv.Atoi(best)
-			value[tj.judgment.Name] = n
+			value.Set(tj.judgment.Name, n)
 		default:
-			value[tj.judgment.Name] = best
+			value.Set(tj.judgment.Name, best)
 		}
 	}
 	part := DataPart{Value: value, Probabilities: probabilities, Method: MethodCandidateSequenceLikelihood}
@@ -368,7 +368,7 @@ func (l *OpenAIChatLM) judgmentFold(req *Request, per []tokenizedJudgment, table
 		Message:      Message{Role: RoleAssistant, Parts: []Part{part}},
 		FinishReason: FinishStop,
 		Usage:        usage.Normalize(),
-		ProviderData: JSONObject{"coverage": coverage, "judgments": JSONObject{"nodes": nNodes, "tokenize_calls": tokenizeCalls, "method": MethodCandidateSequenceLikelihood}},
+		ProviderData: JSONObject{{"coverage", coverage}, {"judgments", JSONObject{{"nodes", nNodes}, {"tokenize_calls", tokenizeCalls}, {"method", MethodCandidateSequenceLikelihood}}}},
 	}, nil
 }
 

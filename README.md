@@ -6,10 +6,8 @@ names. Zero dependencies (standard library only). Builds for Linux, macOS,
 Windows and `GOOS=js GOARCH=wasm` (the browser).
 
 The contract commit this port is written against is in `CONTRACT_PIN`
-(2026-09-25). At that commit the port passes 1,469 of the contract's 1,492
-cases; the 23 it fails are all one stated deviation (Go writes JSON object
-keys in sorted order; see "Stated deviations" and
-[RELEASING.md](RELEASING.md)).
+(2026-09-25). At that commit the port passes all 1,492 of the contract's
+cases.
 
 ## Versions
 
@@ -39,7 +37,8 @@ endpoints. Custom endpoints use `openai-chat` with `base_url`. Local media
 paths are refused; use inline data, URLs or provider file IDs.
 
 `build_request` returns the vet wire shape plus **always** `body_b64`: the
-actual SDK bytes, including Go's sorted JSON keys, not reserialized JavaScript.
+actual SDK bytes (keys in the order the SDK wrote them), not reserialized
+JavaScript.
 `complete`/`stream` return `{canonical_response}`. Streaming delivers canonical
 JSON events immediately through `onEvent` and uses the SDK's stop handling,
 adaptations and final assembler. Failures resolve `{error:{name,code,message,
@@ -56,9 +55,7 @@ smoke verified with Go 1.26.7.
 
 ## Status
 
-**Implemented; the shared harness passes every direction except 23 cases
-that compare signed or multipart bytes** (see "Stated deviations": Go
-maps have no insertion order). Every module of `playbooks/port.md` is
+**Implemented; the shared harness passes every direction.** Every module of `playbooks/port.md` is
 written (1 types+serde, 2 errors, 3a core auth, 3b cloud chains, 4 the
 four chat dialects plus `typesafe`, 4b ingest, 5 response/stream
 assembly, 5c router, 6 models, 7 files/batch/cache, 8 generation/video,
@@ -77,11 +74,11 @@ go build -o bin/lm15-vet ./cmd/lm15-vet     # harness/shims.json runs ./bin/lm15
 cd ../lm15-contract && python3 harness/check.py --shim go --direction all
 ```
 
-Last run (2026-09-25): request 378/398 (20 fail, all SigV4 byte-order),
-response 308/308, stream 40/40, error 90/90, serde 129/129, auth 43/43,
-token 43/43, models 36/36, live 24/24, files 48/48, batch 39/41 (2
-multipart byte-order), generation 19/20 (1 multipart byte-order), video
-27/27, cache 11/11, router 22/22, ingest 169/169, managed (sign-in) 43/43.
+Last run (2026-09-25): request 398/398, response 308/308, stream 40/40,
+error 90/90, serde 129/129, auth 43/43, token 43/43, models 36/36, live
+24/24, files 48/48, batch 41/41, generation 20/20, video 27/27, cache
+11/11, router 22/22, ingest 169/169, managed (sign-in) 43/43. The request
+and serde directions include the opaque key-order check (INV-002).
 The shared consumer vectors `consumer/live-collection-limits.json`,
 `errors/diagnostic-headers.json` and `auth/named-credentials.json` pass
 natively (`go test ./...` for the first two; the third through the vet
@@ -138,6 +135,38 @@ lm, err := lm15.NewAnthropicLM(lm15.WithAPIKey(os.Getenv("MY_KEY")))
 Tool loop: run the function, answer with `lm15.ToolMessage(call.ID, result)`,
 call `Complete` again.
 
+JSON objects keep their order. Tool parameters, `ResponseFormat`,
+`Extensions`, tool-call input and `ProviderData` are `lm15.JSONObject`, a
+list of key/value members: a model fills structured output in the order
+the schema lists its properties, so write them in the order you want them
+answered.
+
+```go
+schema := lm15.JSONObject{
+    lm15.KV("type", "object"),
+    lm15.KV("properties", lm15.JSONObject{
+        lm15.KV("reasoning", lm15.JSONObject{lm15.KV("type", "string")}), // written first
+        lm15.KV("answer", lm15.JSONObject{lm15.KV("type", "string")}),
+    }),
+    lm15.KV("required", []any{"reasoning", "answer"}),
+}
+// Or keep the schema as JSON text; the order written is the order sent:
+//   schema, err := lm15.DecodeJSONObject([]byte(`{"type": "object", ...}`))
+
+req.Config.ResponseFormat = lm15.JSONObject{
+    lm15.KV("type", "json_schema"), lm15.KV("name", "verdict"), lm15.KV("schema", schema)}
+
+v, ok := resp.ProviderData.Lookup("id")        // read: Get, Lookup, Has, Keys
+for key, value := range schema.All() { fmt.Println(key, value) } // in order
+schema.Set("title", "Verdict")                 // write: Set (keeps a key's place), Delete
+```
+
+`Set` and `Delete` copy before they write, so an object you passed to lm15,
+or got back from it, never changes through another copy; to change a nested
+object, change it and `Set` it back. `lm15.ObjectFromMap(m)` converts a Go
+map (sorted keys: a map has no order). `lm15.KV` keeps `go vet` quiet;
+`{Key: "type", Value: "object"}` works too.
+
 Adaptations (MAP-13): change the model string and the program keeps
 working; what the wire got that differs from what was asked is on the
 response, never printed.
@@ -186,22 +215,15 @@ Each row names the spec line and the reason (port.md rule 8).
   fields are `*string`, and every required text field is a plain `string`
   whose `""` is emitted. Optional numbers and booleans are pointers
   (`lm15.I`, `lm15.F`, `lm15.B`): `0` and `false` are data.
-- **No key-order preservation in wire bodies.** `JSONObject` is
-  `map[string]any`, so every object lm15 builds or decodes serializes with
-  sorted keys where the reference emits insertion order. Canonical JSON
-  and unsigned wire bodies are compared parsed, so nothing pinned changes
-  there; but a SigV4 signature covers the body bytes and a multipart
-  upload embeds them, so the 20 `bedrock-chat` / `bedrock-mantle-chat`
-  request cases, `openai.batch[upload]`, `azure.batch[upload]` and
-  `openai.image_edit[build]` compare unequal to the pinned bytes. The
-  servers accept any key order and the signature Go computes covers the
-  bytes Go sends, so the calls are correct on the wire; what is not
-  reproduced is the reference's byte sequence. The honest fix is an
-  ordered object type through the builders and the decoder (Rust chose
-  `preserve_order`); it is a codebase-wide refactor and has not been done.
-  Consequence inside judgments: the MAP-14 property order is read from the
-  schema's `required` list (which `Judgments` and the reference's schemas
-  fill in declaration order), else sorted by name.
+- **Go maps have no key order.** A Go map placed inside a payload (a
+  nested `map[string]any`, `ObjectFromMap`) is accepted and written with
+  sorted keys, the way `encoding/json` writes it; build a `JSONObject` when
+  the order matters. Two typed fields are Go maps for lookup and are
+  written sorted in canonical JSON where the reference keeps insertion
+  order: `DataPart.Probabilities` (and `Response.Probabilities()`) and
+  `RateLimitHeaders` (net/http hands response headers over as a map, so
+  their arrival order is gone before lm15 sees them). Both are typed data,
+  compared order-free by the contract (serde-rules.md), not opaque payloads.
 - **Numbers:** every wire document is decoded with `UseNumber`, so opaque
   payloads round-trip `1` vs `1.0` verbatim; typed floats always emit a
   fraction (Number rule). User-built Go payloads with `float64(1)` emit `1`

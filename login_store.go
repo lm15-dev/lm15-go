@@ -39,45 +39,45 @@ func storageError(message, reason, stage string) *Error {
 
 // validateDocument rejects anything that is not the document shape.
 func validateDocument(data any, where string) (JSONObject, error) {
-	doc, ok := data.(map[string]any)
+	doc, ok := asObject(data)
 	if !ok {
 		return nil, storageError(fmt.Sprintf("Credential store at %s is not a JSON object; not touching it.", where), "", "")
 	}
-	if raw, present := doc[storeMetaKey]; present {
-		meta, ok := raw.(map[string]any)
+	if raw, present := doc.Lookup(storeMetaKey); present {
+		meta, ok := asObject(raw)
 		if !ok {
 			return nil, storageError(fmt.Sprintf("Credential store at %s has a malformed %q block; not touching it.", where, storeMetaKey), "", "")
 		}
-		version, isNumber := meta["version"].(json.Number)
+		version, isNumber := meta.Get("version").(json.Number)
 		if !isNumber {
-			if f, ok := meta["version"].(int); ok {
+			if f, ok := meta.Get("version").(int); ok {
 				version, isNumber = json.Number(strconv.Itoa(f)), true
 			}
 		}
 		if !isNumber || string(version) != strconv.Itoa(storeVersion) {
 			shown := "None"
-			if meta["version"] != nil {
-				shown = fmt.Sprint(meta["version"])
+			if meta.Get("version") != nil {
+				shown = fmt.Sprint(meta.Get("version"))
 			}
 			return nil, storageError(fmt.Sprintf("Credential store at %s is managed-store version %s; this lm15 reads version %d. Upgrade lm15 or point LM15_CREDENTIALS_PATH at another file.", where, shown, storeVersion), "unsupported_store_version", "")
 		}
-		if slots, present := meta["slots"]; present {
-			m, ok := slots.(map[string]any)
+		if slots, present := meta.Lookup("slots"); present {
+			m, ok := asObject(slots)
 			if !ok {
 				return nil, storageError(fmt.Sprintf("Credential store at %s has malformed slot metadata; not touching it.", where), "", "")
 			}
-			for _, v := range m {
-				if _, ok := v.(map[string]any); !ok {
+			for _, v := range m.All() {
+				if _, ok := asObject(v); !ok {
 					return nil, storageError(fmt.Sprintf("Credential store at %s has malformed slot metadata; not touching it.", where), "", "")
 				}
 			}
 		}
 	}
-	for key, value := range doc {
+	for key, value := range doc.All() {
 		if key == storeMetaKey {
 			continue
 		}
-		if _, ok := value.(map[string]any); !ok {
+		if _, ok := asObject(value); !ok {
 			return nil, storageError(fmt.Sprintf("Credential store at %s: entry %q is not an object; not touching it.", where, key), "", "")
 		}
 	}
@@ -85,11 +85,11 @@ func validateDocument(data any, where string) (JSONObject, error) {
 }
 
 func copyDocument(v any) any {
-	switch x := v.(type) {
-	case map[string]any:
-		out := make(map[string]any, len(x))
-		for k, item := range x {
-			out[k] = copyDocument(item)
+	switch x := jsonView(v).(type) {
+	case JSONObject:
+		out := make(JSONObject, len(x))
+		for i, m := range x {
+			out[i] = Member{m.Key, copyDocument(m.Value)}
 		}
 		return out
 	case []any:
@@ -102,12 +102,6 @@ func copyDocument(v any) any {
 		out := make([]any, len(x))
 		for i, item := range x {
 			out[i] = item
-		}
-		return out
-	case map[string]string:
-		out := make(map[string]any, len(x))
-		for k, item := range x {
-			out[k] = item
 		}
 		return out
 	}
@@ -146,7 +140,7 @@ func mutateStore(ctx context.Context, s Store, update func(JSONObject) (JSONObje
 	if err != nil {
 		return nil, err
 	}
-	next, err := update(copyDocument(current).(map[string]any))
+	next, err := update(copyDocument(current).(JSONObject))
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +170,7 @@ func (m *MemoryStore) Description() string { return "memory" }
 func (m *MemoryStore) Read() (JSONObject, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return copyDocument(m.data).(map[string]any), nil
+	return copyDocument(m.data).(JSONObject), nil
 }
 
 type memoryGuard struct{ store *MemoryStore }
@@ -316,32 +310,6 @@ func (f *FileStore) Reserve(ctx context.Context) error {
 	defer guard.Unlock()
 	_, err = f.load()
 	return err
-}
-
-// ─── Ordered JSON bodies (the reference's key order on the wire) ─────
-
-type orderedBody [][2]any
-
-func (o orderedBody) MarshalJSON() ([]byte, error) {
-	var buf bytes.Buffer
-	buf.WriteByte('{')
-	for i, kv := range o {
-		if i > 0 {
-			buf.WriteByte(',')
-		}
-		key, _ := json.Marshal(kv[0])
-		buf.Write(key)
-		buf.WriteByte(':')
-		var value bytes.Buffer
-		enc := json.NewEncoder(&value)
-		enc.SetEscapeHTML(false)
-		if err := enc.Encode(kv[1]); err != nil {
-			return nil, err
-		}
-		buf.Write(bytes.TrimRight(value.Bytes(), "\n"))
-	}
-	buf.WriteByte('}')
-	return buf.Bytes(), nil
 }
 
 func jsonNumberOf(s string) json.Number { return json.Number(s) }

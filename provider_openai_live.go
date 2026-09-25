@@ -11,7 +11,7 @@ import (
 // server frame → events) and the socket-backed session and completion.
 
 func liveUsageFromResponse(response JSONObject) *Usage {
-	usageData := wireObj(response["usage"])
+	usageData := wireObj(response.Get("usage"))
 	if usageData == nil {
 		return nil
 	}
@@ -57,53 +57,53 @@ func (l *OpenAILM) liveHeaders(ctx context.Context) ([][2]string, error) {
 
 func liveAudioFormat(f AudioFormat) JSONObject {
 	if f.Encoding == "pcm16" {
-		return JSONObject{"type": "audio/pcm", "rate": f.SampleRate}
+		return JSONObject{{"type", "audio/pcm"}, {"rate", f.SampleRate}}
 	}
-	return JSONObject{"type": "audio/" + f.Encoding}
+	return JSONObject{{"type", "audio/" + f.Encoding}}
 }
 
 func (l *OpenAILM) liveSessionUpdatePayload(config *LiveConfig) (JSONObject, error) {
-	session := JSONObject{"type": "realtime"}
+	session := JSONObject{{"type", "realtime"}}
 	if config.System != nil {
 		text, err := systemText(config.System, l.provider)
 		if err != nil {
 			return nil, err
 		}
-		session["instructions"] = text
+		session.Set("instructions", text)
 	}
 	audio := JSONObject{}
 	if config.OutputFormat != nil || config.Voice != "" {
-		session["output_modalities"] = []any{"audio"}
+		session.Set("output_modalities", []any{"audio"})
 		output := JSONObject{}
 		if config.OutputFormat != nil {
-			output["format"] = liveAudioFormat(*config.OutputFormat)
+			output.Set("format", liveAudioFormat(*config.OutputFormat))
 		}
 		if config.Voice != "" {
-			output["voice"] = config.Voice
+			output.Set("voice", config.Voice)
 		}
-		audio["output"] = output
+		audio.Set("output", output)
 	} else {
-		session["output_modalities"] = []any{"text"}
+		session.Set("output_modalities", []any{"text"})
 	}
 	if config.InputFormat != nil {
-		audio["input"] = JSONObject{"format": liveAudioFormat(*config.InputFormat), "turn_detection": nil}
+		audio.Set("input", JSONObject{{"format", liveAudioFormat(*config.InputFormat)}, {"turn_detection", nil}})
 	}
 	if len(audio) > 0 {
-		session["audio"] = audio
+		session.Set("audio", audio)
 	}
 	if len(config.Tools) > 0 {
 		var tools []any
 		for _, t := range config.Tools {
 			if ft, ok := t.(FunctionTool); ok {
-				tools = append(tools, JSONObject{"type": "function", "name": ft.Name, "description": nilIfEmpty(ft.Description), "parameters": ft.EffectiveParameters()})
+				tools = append(tools, JSONObject{{"type", "function"}, {"name", ft.Name}, {"description", nilIfEmpty(ft.Description)}, {"parameters", ft.EffectiveParameters()}})
 			}
 		}
-		session["tools"] = tools
+		session.Set("tools", tools)
 	}
-	for k, v := range config.Extensions {
-		session[k] = v
+	for k, v := range config.Extensions.All() {
+		session.Set(k, v)
 	}
-	return JSONObject{"type": "session.update", "session": session}, nil
+	return JSONObject{{"type", "session.update"}, {"session", session}}, nil
 }
 
 func (l *OpenAILM) liveSetupFrames(config *LiveConfig) ([]JSONObject, error) {
@@ -120,17 +120,17 @@ func (l *OpenAILM) liveEncoder(*LiveConfig) func(LiveClientEvent) ([]JSONObject,
 
 func (l *OpenAILM) encodeLiveClientEvent(event LiveClientEvent) ([]JSONObject, error) {
 	userMessage := func(content []any) JSONObject {
-		return JSONObject{"type": "conversation.item.create", "item": JSONObject{"type": "message", "role": "user", "content": content}}
+		return JSONObject{{"type", "conversation.item.create"}, {"item", JSONObject{{"type", "message"}, {"role", "user"}, {"content", content}}}}
 	}
 	switch e := event.(type) {
 	case LiveClientAudioEvent:
-		return []JSONObject{{"type": "input_audio_buffer.append", "audio": e.Data}}, nil
+		return []JSONObject{{{"type", "input_audio_buffer.append"}, {"audio", e.Data}}}, nil
 	case LiveClientEndAudioEvent:
-		return []JSONObject{{"type": "input_audio_buffer.commit"}, {"type": "response.create"}}, nil
+		return []JSONObject{{{"type", "input_audio_buffer.commit"}}, {{"type", "response.create"}}}, nil
 	case LiveClientInterruptEvent:
-		return []JSONObject{{"type": "response.cancel"}}, nil
+		return []JSONObject{{{"type", "response.cancel"}}}, nil
 	case LiveClientTextEvent:
-		return []JSONObject{userMessage([]any{JSONObject{"type": "input_text", "text": e.Text}}), {"type": "response.create"}}, nil
+		return []JSONObject{userMessage([]any{JSONObject{{"type", "input_text"}, {"text", e.Text}}}), {{"type", "response.create"}}}, nil
 	case LiveClientTurnEvent:
 		var content []any
 		for _, p := range e.Parts {
@@ -141,17 +141,17 @@ func (l *OpenAILM) encodeLiveClientEvent(event LiveClientEvent) ([]JSONObject, e
 			content = append(content, block)
 		}
 		if e.TurnComplete {
-			return []JSONObject{userMessage(content), {"type": "response.create"}}, nil
+			return []JSONObject{userMessage(content), {{"type", "response.create"}}}, nil
 		}
 		return []JSONObject{userMessage(content)}, nil
 	case LiveClientImageEvent:
-		return []JSONObject{userMessage([]any{JSONObject{"type": "input_image", "image_url": "data:" + e.EffectiveMediaType() + ";base64," + e.Data}}), {"type": "response.create"}}, nil
+		return []JSONObject{userMessage([]any{JSONObject{{"type", "input_image"}, {"image_url", "data:" + e.EffectiveMediaType() + ";base64," + e.Data}}}), {{"type", "response.create"}}}, nil
 	case LiveClientToolResultEvent:
 		output, err := partsToText(e.Content, l.provider, "a Realtime function_call_output")
 		if err != nil {
 			return nil, err
 		}
-		return []JSONObject{{"type": "conversation.item.create", "item": JSONObject{"type": "function_call_output", "call_id": e.ID, "output": output}}, {"type": "response.create"}}, nil
+		return []JSONObject{{{"type", "conversation.item.create"}, {"item", JSONObject{{"type", "function_call_output"}, {"call_id", e.ID}, {"output", output}}}}, {{"type", "response.create"}}}, nil
 	}
 	return nil, nil
 }
@@ -165,43 +165,43 @@ func (l *OpenAILM) liveDecode(raw []byte) ([]LiveServerEvent, error) {
 	if payload == nil {
 		return nil, nil
 	}
-	et := wireStr(payload["type"])
+	et := wireStr(payload.Get("type"))
 	var events []LiveServerEvent
 	switch et {
 	case "response.output_text.delta", "response.text.delta", "response.output_audio_transcript.delta", "response.audio_transcript.delta":
-		if delta := firstStr(payload["delta"], payload["text"]); delta != "" {
+		if delta := firstStr(payload.Get("delta"), payload.Get("text")); delta != "" {
 			events = append(events, LiveServerTextEvent{Text: delta})
 		}
 	case "response.output_audio.delta":
-		if delta := wireStr(payload["delta"]); delta != "" {
+		if delta := wireStr(payload.Get("delta")); delta != "" {
 			events = append(events, LiveServerAudioEvent{Data: delta})
 		}
 	case "response.function_call_arguments.delta":
-		if delta := wireStr(payload["delta"]); delta != "" {
-			events = append(events, LiveServerToolCallDeltaEvent{InputDelta: delta, ID: firstStr(payload["call_id"], payload["id"]), Name: wireStr(payload["name"])})
+		if delta := wireStr(payload.Get("delta")); delta != "" {
+			events = append(events, LiveServerToolCallDeltaEvent{InputDelta: delta, ID: firstStr(payload.Get("call_id"), payload.Get("id")), Name: wireStr(payload.Get("name"))})
 		}
 	case "response.output_item.done":
-		item := wireObj(payload["item"])
-		if wireStr(item["type"]) == "function_call" {
-			if callID := firstStr(item["call_id"], item["id"]); callID != "" {
-				name := wireStr(item["name"])
+		item := wireObj(payload.Get("item"))
+		if wireStr(item.Get("type")) == "function_call" {
+			if callID := firstStr(item.Get("call_id"), item.Get("id")); callID != "" {
+				name := wireStr(item.Get("name"))
 				if name == "" {
 					name = "tool"
 				}
-				events = append(events, LiveServerToolCallEvent{ID: callID, Name: name, Input: parseJSONObject(item["arguments"])})
+				events = append(events, LiveServerToolCallEvent{ID: callID, Name: name, Input: parseJSONObject(item.Get("arguments"))})
 			}
 		}
 	case "response.done", "response.completed":
-		response := wireObj(payload["response"])
+		response := wireObj(payload.Get("response"))
 		usage := liveUsageFromResponse(response)
 		hasCall := false
-		for _, i := range wireList(response["output"]) {
-			if obj := wireObj(i); obj != nil && wireStr(obj["type"]) == "function_call" {
+		for _, i := range wireList(response.Get("output")) {
+			if obj := wireObj(i); obj != nil && wireStr(obj.Get("type")) == "function_call" {
 				hasCall = true
 			}
 		}
 		switch {
-		case wireStr(response["status"]) == "cancelled":
+		case wireStr(response.Get("status")) == "cancelled":
 			if usage != nil {
 				events = append(events, LiveServerUsageEvent{Usage: *usage})
 			}
@@ -267,7 +267,7 @@ func (l *OpenAILM) liveMessageFramesForRequest(req *Request) ([]JSONObject, erro
 				if err != nil {
 					return nil, err
 				}
-				frames = append(frames, JSONObject{"type": "conversation.item.create", "item": JSONObject{"type": "function_call_output", "call_id": tr.ID, "output": toolResultErrorText(tr, text)}})
+				frames = append(frames, JSONObject{{"type", "conversation.item.create"}, {"item", JSONObject{{"type", "function_call_output"}, {"call_id", tr.ID}, {"output", toolResultErrorText(tr, text)}}}})
 			}
 			continue
 		}
@@ -284,17 +284,17 @@ func (l *OpenAILM) liveMessageFramesForRequest(req *Request) ([]JSONObject, erro
 			content = append(content, block)
 		}
 		if len(content) > 0 {
-			frames = append(frames, JSONObject{"type": "conversation.item.create", "item": JSONObject{"type": "message", "role": m.Role, "content": content}})
+			frames = append(frames, JSONObject{{"type", "conversation.item.create"}, {"item", JSONObject{{"type", "message"}, {"role", m.Role}, {"content", content}}}})
 		}
 		for _, p := range m.Parts {
 			if tc, ok := p.(ToolCallPart); ok {
-				frames = append(frames, JSONObject{"type": "conversation.item.create", "item": JSONObject{"type": "function_call", "call_id": tc.ID, "name": tc.Name, "arguments": jsonRaw(tc.Input)}})
+				frames = append(frames, JSONObject{{"type", "conversation.item.create"}, {"item", JSONObject{{"type", "function_call"}, {"call_id", tc.ID}, {"name", tc.Name}, {"arguments", jsonRaw(tc.Input)}}}})
 			}
 		}
 	}
-	create := JSONObject{"type": "response.create"}
-	if wireStr(req.Config.Extensions["output"]) == "audio" {
-		create["response"] = JSONObject{"output_modalities": []any{"audio"}}
+	create := JSONObject{{"type", "response.create"}}
+	if wireStr(req.Config.Extensions.Get("output")) == "audio" {
+		create.Set("response", JSONObject{{"output_modalities", []any{"audio"}}})
 	}
 	return append(frames, create), nil
 }
@@ -308,31 +308,31 @@ func (l *OpenAILM) decodeLiveCompletionEvents(raw []byte) []StreamEvent {
 	if payload == nil {
 		return nil
 	}
-	et := wireStr(payload["type"])
+	et := wireStr(payload.Get("type"))
 	switch et {
 	case "response.output_text.delta", "response.text.delta", "response.output_audio_transcript.delta", "response.audio_transcript.delta":
-		if delta := firstStr(payload["delta"], payload["text"]); delta != "" {
+		if delta := firstStr(payload.Get("delta"), payload.Get("text")); delta != "" {
 			return []StreamEvent{StreamDeltaEvent{Delta: TextDelta{Text: delta}}}
 		}
 	case "response.output_audio.delta":
-		if delta := wireStr(payload["delta"]); delta != "" {
+		if delta := wireStr(payload.Get("delta")); delta != "" {
 			return []StreamEvent{StreamDeltaEvent{Delta: AudioDelta{Data: S(delta), MediaType: "audio/wav"}}}
 		}
 	case "response.output_item.added", "response.output_item.done", "response.function_call_arguments.delta", "response.function_call_arguments.done":
 		var callID, name, args string
 		if et == "response.output_item.added" || et == "response.output_item.done" {
-			item := wireObj(payload["item"])
-			if wireStr(item["type"]) != "function_call" {
+			item := wireObj(payload.Get("item"))
+			if wireStr(item.Get("type")) != "function_call" {
 				return nil
 			}
-			callID, name = firstStr(item["call_id"], item["id"]), wireStr(item["name"])
-			args = wireStr(item["arguments"])
+			callID, name = firstStr(item.Get("call_id"), item.Get("id")), wireStr(item.Get("name"))
+			args = wireStr(item.Get("arguments"))
 		} else {
-			callID, name = firstStr(payload["call_id"], payload["id"]), wireStr(payload["name"])
+			callID, name = firstStr(payload.Get("call_id"), payload.Get("id")), wireStr(payload.Get("name"))
 			if strings.HasSuffix(et, "delta") {
-				args = wireStr(payload["delta"])
+				args = wireStr(payload.Get("delta"))
 			} else {
-				args = wireStr(payload["arguments"])
+				args = wireStr(payload.Get("arguments"))
 			}
 		}
 		if name == "" {
@@ -340,8 +340,8 @@ func (l *OpenAILM) decodeLiveCompletionEvents(raw []byte) []StreamEvent {
 		}
 		return []StreamEvent{StreamDeltaEvent{Delta: ToolCallDelta{Input: args, ID: callID, Name: name}}}
 	case "response.done", "response.completed":
-		response := wireObj(payload["response"])
-		usage := openaiUsage(wireObj(response["usage"]))
+		response := wireObj(payload.Get("response"))
+		usage := openaiUsage(wireObj(response.Get("usage")))
 		return []StreamEvent{StreamEndEvent{FinishReason: FinishStop, Usage: &usage, ProviderData: response}}
 	case "error", "response.error":
 		code, message := openaiStreamErrorFields(payload)
@@ -364,9 +364,9 @@ func (l *OpenAILM) streamViaLiveCompletion(ctx context.Context, req *Request) it
 		}
 		defer conn.Close()
 		ext := copyObject(req.Config.Extensions)
-		delete(ext, "transport")
-		delete(ext, "prompt_caching")
-		delete(ext, "output")
+		ext.Delete("transport")
+		ext.Delete("prompt_caching")
+		ext.Delete("output")
 		if len(ext) == 0 {
 			ext = nil
 		}

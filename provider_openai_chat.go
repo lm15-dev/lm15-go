@@ -90,8 +90,8 @@ func (l *OpenAIChatLM) normalizeError(status int, body string) *Error {
 		// xAI's own envelope is {"code": str, "error": str}: refold it.
 		if data, err := DecodeJSON([]byte(body)); err == nil {
 			if obj := wireObj(data); obj != nil {
-				if msg, ok := obj["error"].(string); ok {
-					body = jsonRaw(JSONObject{"error": JSONObject{"message": msg, "code": obj["code"]}})
+				if msg, ok := obj.Get("error").(string); ok {
+					body = jsonRaw(JSONObject{{"error", JSONObject{{"message", msg}, {"code", obj.Get("code")}}}})
 				}
 			}
 		}
@@ -110,7 +110,7 @@ func (l *OpenAIChatLM) modelsFromBody(body string) ([]ModelInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return modelInfosFromEntries(data["data"], l.provider, "openai_chat", func(e map[string]any) string { return stringOnly(e["id"]) }), nil
+	return modelInfosFromEntries(data.Get("data"), l.provider, "openai_chat", func(e JSONObject) string { return stringOnly(e.Get("id")) }), nil
 }
 
 // ─── Request serialization ───────────────────────────────────────────
@@ -127,11 +127,11 @@ func chatImageBlock(img ImagePart, provider string) (JSONObject, error) {
 		}
 		src = uri
 	}
-	payload := JSONObject{"url": src}
+	payload := JSONObject{{"url", src}}
 	if img.Detail != "" {
-		payload["detail"] = img.Detail
+		payload.Set("detail", img.Detail)
 	}
-	return JSONObject{"type": "image_url", "image_url": payload}, nil
+	return JSONObject{{"type", "image_url"}, {"image_url", payload}}, nil
 }
 
 // chatContentParts maps a non-assistant message to chat content: a bare
@@ -157,9 +157,9 @@ func chatContentParts(msg Message, forceArray bool, provider string) (any, error
 	for _, p := range parts {
 		switch x := p.(type) {
 		case TextPart:
-			out = append(out, JSONObject{"type": "text", "text": x.Text})
+			out = append(out, JSONObject{{"type", "text"}, {"text", x.Text}})
 		case DataPart:
-			out = append(out, JSONObject{"type": "text", "text": DataPartText(x)})
+			out = append(out, JSONObject{{"type", "text"}, {"text", DataPartText(x)}})
 		case ImagePart:
 			block, err := chatImageBlock(x, provider)
 			if err != nil {
@@ -176,7 +176,7 @@ func chatContentParts(msg Message, forceArray bool, provider string) (any, error
 			if err != nil {
 				return nil, err
 			}
-			out = append(out, JSONObject{"type": "text", "text": text})
+			out = append(out, JSONObject{{"type", "text"}, {"text", text}})
 		}
 	}
 	if out == nil {
@@ -209,38 +209,38 @@ func toolRowContent(provider string, part ToolResultPart, policy string) (any, e
 			if err != nil {
 				return nil, err
 			}
-			blocks = append(blocks, JSONObject{"type": "text", "text": text})
+			blocks = append(blocks, JSONObject{{"type", "text"}, {"text", text}})
 		}
 	}
 	if part.IsError {
 		found := false
-		for _, b := range blocks {
-			if b["type"] == "text" {
-				b["text"] = "[error] " + wireStr(b["text"])
+		for i := range blocks {
+			if blocks[i].Get("type") == "text" {
+				blocks[i].Set("text", "[error] "+wireStr(blocks[i].Get("text")))
 				found = true
 				break
 			}
 		}
 		if !found {
-			blocks = append([]JSONObject{{"type": "text", "text": "[error]"}}, blocks...)
+			blocks = append([]JSONObject{{{"type", "text"}, {"text", "[error]"}}}, blocks...)
 		}
 	}
 	return toAnyList(blocks, func(b JSONObject) any { return b }), nil
 }
 
 func responseFormatToChat(f JSONObject) JSONObject {
-	if f["type"] == "json_object" {
-		return JSONObject{"type": "json_object"}
+	if f.Get("type") == "json_object" {
+		return JSONObject{{"type", "json_object"}}
 	}
-	name := wireStr(f["name"])
+	name := wireStr(f.Get("name"))
 	if name == "" {
 		name = "response"
 	}
-	inner := JSONObject{"name": name, "schema": f["schema"]}
-	if strict, ok := f["strict"]; ok {
-		inner["strict"] = strict
+	inner := JSONObject{{"name", name}, {"schema", f.Get("schema")}}
+	if strict, ok := f.Lookup("strict"); ok {
+		inner.Set("strict", strict)
 	}
-	return JSONObject{"type": "json_schema", "json_schema": inner}
+	return JSONObject{{"type", "json_schema"}, {"json_schema", inner}}
 }
 
 func (l *OpenAIChatLM) buildMessages(req *Request, compat ResolvedOpenAIChatCompat, breakpoint *int) ([]any, error) {
@@ -251,9 +251,9 @@ func (l *OpenAIChatLM) buildMessages(req *Request, compat ResolvedOpenAIChatComp
 			return nil, err
 		}
 		if cacheStablePrefix(req, compat.CacheControl) {
-			messages = append(messages, JSONObject{"role": compat.InstructionRole, "content": []any{JSONObject{"type": "text", "text": text, "prompt_cache_breakpoint": JSONObject{"mode": "explicit"}}}})
+			messages = append(messages, JSONObject{{"role", compat.InstructionRole}, {"content", []any{JSONObject{{"type", "text"}, {"text", text}, {"prompt_cache_breakpoint", JSONObject{{"mode", "explicit"}}}}}}})
 		} else {
-			messages = append(messages, JSONObject{"role": compat.InstructionRole, "content": text})
+			messages = append(messages, JSONObject{{"role", compat.InstructionRole}, {"content", text}})
 		}
 	}
 	for msgIndex, msg := range req.Messages {
@@ -272,9 +272,9 @@ func (l *OpenAIChatLM) buildMessages(req *Request, compat ResolvedOpenAIChatComp
 				if err != nil {
 					return nil, err
 				}
-				item := JSONObject{"role": "tool", "tool_call_id": tr.ID, "content": content}
+				item := JSONObject{{"role", "tool"}, {"tool_call_id", tr.ID}, {"content", content}}
 				if compat.ToolResultName == "include" && tr.Name != "" {
-					item["name"] = tr.Name
+					item.Set("name", tr.Name)
 				}
 				messages = append(messages, item)
 			}
@@ -298,23 +298,23 @@ func (l *OpenAIChatLM) buildMessages(req *Request, compat ResolvedOpenAIChatComp
 						thinkingBits = append(thinkingBits, p.Text)
 					}
 				case ToolCallPart:
-					toolCalls = append(toolCalls, JSONObject{"id": p.ID, "type": "function", "function": JSONObject{"name": p.Name, "arguments": jsonRaw(p.Input)}})
+					toolCalls = append(toolCalls, JSONObject{{"id", p.ID}, {"type", "function"}, {"function", JSONObject{{"name", p.Name}, {"arguments", jsonRaw(p.Input)}}}})
 				}
 			}
-			item := JSONObject{"role": "assistant"}
+			item := JSONObject{{"role", "assistant"}}
 			if len(textBits) > 0 {
-				item["content"] = strings.Join(textBits, "\n")
+				item.Set("content", strings.Join(textBits, "\n"))
 			} else {
-				item["content"] = nil
+				item.Set("content", nil)
 			}
 			if compat.ThinkingReplay == "native" {
 				thinking := strings.Join(thinkingBits, "\n")
 				if thinking != "" || compat.AssistantReasoningContent == "include_empty" {
-					item["reasoning_content"] = thinking
+					item.Set("reasoning_content", thinking)
 				}
 			}
 			if len(toolCalls) > 0 {
-				item["tool_calls"] = toolCalls
+				item.Set("tool_calls", toolCalls)
 			}
 			messages = append(messages, item)
 		default:
@@ -331,13 +331,14 @@ func (l *OpenAIChatLM) buildMessages(req *Request, compat ResolvedOpenAIChatComp
 				if !ok || len(list) == 0 {
 					return nil, breakpointUnsupported(l.provider, msgIndex, msg.Role)
 				}
-				last, _ := list[len(list)-1].(JSONObject)
-				if last["type"] != "text" {
+				last, _ := asObject(list[len(list)-1])
+				if last.Get("type") != "text" {
 					return nil, breakpointUnsupported(l.provider, msgIndex, msg.Role)
 				}
-				last["prompt_cache_breakpoint"] = JSONObject{"mode": "explicit"}
+				last.Set("prompt_cache_breakpoint", JSONObject{{"mode", "explicit"}})
+				list[len(list)-1] = last // the adapter's own list, built above
 			}
-			messages = append(messages, JSONObject{"role": role, "content": content})
+			messages = append(messages, JSONObject{{"role", role}, {"content", content}})
 		}
 	}
 	if messages == nil {
@@ -352,9 +353,9 @@ func (l *OpenAIChatLM) builtinToolPayload(tool BuiltinTool, compat ResolvedOpenA
 		if !ok {
 			return nil, UnsupportedFeature(l.provider, "tools["+tool.Name+"]", "%s: builtin tool %q has no Groq wire mapping — supported: %v", l.provider, tool.Name, sortStrings([]string{"code_execution", "web_search"}))
 		}
-		entry := JSONObject{"type": wireType}
-		for k, v := range tool.Config {
-			entry[k] = v
+		entry := JSONObject{{"type", wireType}}
+		for k, v := range tool.Config.All() {
+			entry.Set(k, v)
 		}
 		return entry, nil
 	}
@@ -383,13 +384,13 @@ func (l *OpenAIChatLM) toolChoicePayload(req *Request) (any, error) {
 			return nil, UnsupportedFeature(l.provider, "config.tool_choice.allowed", "%s: cannot force builtin tools %v — the Chat Completions wire has no hosted-tool tool_choice form (OpenAI Responses and Anthropic carry it)", l.provider, builtins)
 		}
 		if len(entries) == 1 && tc.EffectiveMode() == "required" {
-			return JSONObject{"type": "function", "function": JSONObject{"name": entries[0].ToolName()}}, nil
+			return JSONObject{{"type", "function"}, {"function", JSONObject{{"name", entries[0].ToolName()}}}}, nil
 		}
 		var tools []any
 		for _, t := range entries {
-			tools = append(tools, JSONObject{"type": "function", "function": JSONObject{"name": t.ToolName()}})
+			tools = append(tools, JSONObject{{"type", "function"}, {"function", JSONObject{{"name", t.ToolName()}}}})
 		}
-		return JSONObject{"type": "allowed_tools", "allowed_tools": JSONObject{"mode": tc.EffectiveMode(), "tools": tools}}, nil
+		return JSONObject{{"type", "allowed_tools"}, {"allowed_tools", JSONObject{{"mode", tc.EffectiveMode()}, {"tools", tools}}}}, nil
 	}
 	if tc.EffectiveMode() == "required" {
 		return "required", nil
@@ -469,22 +470,22 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool, scope *adaptScope) (JS
 	if err != nil {
 		return nil, err
 	}
-	payload := JSONObject{"model": req.Model, "messages": messages}
+	payload := JSONObject{{"model", req.Model}, {"messages", messages}}
 	if stream {
-		payload["stream"] = true
+		payload.Set("stream", true)
 		if compat.StreamUsage == "include" {
-			payload["stream_options"] = JSONObject{"include_usage": true}
+			payload.Set("stream_options", JSONObject{{"include_usage", true}})
 		}
 	}
 	cfg := req.Config
 	if cfg.MaxTokens != nil {
-		payload[compat.MaxTokensField] = *cfg.MaxTokens
+		payload.Set(compat.MaxTokensField, *cfg.MaxTokens)
 	}
 	if cfg.Temperature != nil {
-		payload["temperature"] = jsonFloat(*cfg.Temperature)
+		payload.Set("temperature", jsonFloat(*cfg.Temperature))
 	}
 	if cfg.TopP != nil {
-		payload["top_p"] = jsonFloat(*cfg.TopP)
+		payload.Set("top_p", jsonFloat(*cfg.TopP))
 	}
 	if cfg.TopK != nil {
 		// MAP-13: a sampling hint with no field on this wire; servers that
@@ -494,21 +495,21 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool, scope *adaptScope) (JS
 		}
 	}
 	if cfg.Seed != nil {
-		payload["seed"] = *cfg.Seed
+		payload.Set("seed", *cfg.Seed)
 	}
 	if cfg.FrequencyPenalty != nil {
-		payload["frequency_penalty"] = jsonFloat(*cfg.FrequencyPenalty)
+		payload.Set("frequency_penalty", jsonFloat(*cfg.FrequencyPenalty))
 	}
 	if cfg.PresencePenalty != nil {
-		payload["presence_penalty"] = jsonFloat(*cfg.PresencePenalty)
+		payload.Set("presence_penalty", jsonFloat(*cfg.PresencePenalty))
 	}
 	if len(cfg.Stop) > 0 {
-		payload["stop"] = toAnyList(cfg.Stop, func(s string) any { return s })
+		payload.Set("stop", toAnyList(cfg.Stop, func(s string) any { return s }))
 	}
 	if cfg.Logprobs != nil {
-		payload["logprobs"] = true
+		payload.Set("logprobs", true)
 		if *cfg.Logprobs > 0 {
-			payload["top_logprobs"] = *cfg.Logprobs
+			payload.Set("top_logprobs", *cfg.Logprobs)
 		}
 	}
 	if len(req.Tools) > 0 {
@@ -516,11 +517,11 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool, scope *adaptScope) (JS
 		for _, t := range req.Tools {
 			switch x := t.(type) {
 			case FunctionTool:
-				fn := JSONObject{"name": x.Name, "description": nilIfEmpty(x.Description), "parameters": x.EffectiveParameters()}
+				fn := JSONObject{{"name", x.Name}, {"description", nilIfEmpty(x.Description)}, {"parameters", x.EffectiveParameters()}}
 				if compat.StrictTools == "include" {
-					fn["strict"] = false
+					fn.Set("strict", false)
 				}
-				tools = append(tools, JSONObject{"type": "function", "function": fn})
+				tools = append(tools, JSONObject{{"type", "function"}, {"function", fn}})
 			case BuiltinTool:
 				entry, err := l.builtinToolPayload(x, compat)
 				if err != nil {
@@ -530,7 +531,7 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool, scope *adaptScope) (JS
 			}
 		}
 		if len(tools) > 0 {
-			payload["tools"] = tools
+			payload.Set("tools", tools)
 		}
 	}
 	toolChoice, err := l.toolChoicePayload(req)
@@ -553,12 +554,12 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool, scope *adaptScope) (JS
 				if err := scope.clientSide("config.tool_choice.mode", "this server ignores tool_choice='none'; no tools were sent, which is the same outcome", "none", "no tools sent"); err != nil {
 					return nil, err
 				}
-				delete(payload, "tools")
+				payload.Delete("tools")
 			default:
 				var kept []any
 				var names []any
-				for _, t := range wireList(payload["tools"]) {
-					name := wireStr(wireObj(wireObj(t)["function"])["name"])
+				for _, t := range wireList(payload.Get("tools")) {
+					name := wireStr(wireObj(wireObj(t).Get("function")).Get("name"))
 					if inVocab(name, tc.Allowed) {
 						kept = append(kept, t)
 						names = append(names, name)
@@ -567,20 +568,20 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool, scope *adaptScope) (JS
 				if err := scope.clientSide("config.tool_choice.allowed", "this server ignores tool_choice allowlists; only the allowed tools were sent, which is what the allowlist means", toAnyList(tc.Allowed, func(s string) any { return s }), names); err != nil {
 					return nil, err
 				}
-				payload["tools"] = kept
+				payload.Set("tools", kept)
 			}
 			toolChoice = "auto"
 		}
-		payload["tool_choice"] = toolChoice
+		payload.Set("tool_choice", toolChoice)
 	}
 	if cfg.ToolChoice != nil && cfg.ToolChoice.Parallel != nil {
-		payload["parallel_tool_calls"] = *cfg.ToolChoice.Parallel
+		payload.Set("parallel_tool_calls", *cfg.ToolChoice.Parallel)
 	}
 	if len(cfg.ResponseFormat) > 0 {
-		if compat.JSONSchema == "reject" && cfg.ResponseFormat["type"] != "json_object" {
+		if compat.JSONSchema == "reject" && cfg.ResponseFormat.Get("type") != "json_object" {
 			// The server accepts response_format.type=json_schema and ignores
 			// it (Z.AI, live 2026-09-03). MAP-13: omit and record.
-			if err := scope.dropped("config.response_format", "this server accepts response_format type "+strconv.Quote(wireStr(cfg.ResponseFormat["type"]))+" and does not apply it; use {'type': 'json_object'} and describe the shape in the prompt", cfg.ResponseFormat); err != nil {
+			if err := scope.dropped("config.response_format", "this server accepts response_format type "+strconv.Quote(wireStr(cfg.ResponseFormat.Get("type")))+" and does not apply it; use {'type': 'json_object'} and describe the shape in the prompt", cfg.ResponseFormat); err != nil {
 				return nil, err
 			}
 		} else {
@@ -593,7 +594,7 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool, scope *adaptScope) (JS
 					return nil, err
 				}
 			}
-			payload["response_format"] = responseFormatToChat(cfg.ResponseFormat)
+			payload.Set("response_format", responseFormatToChat(cfg.ResponseFormat))
 		}
 	}
 	if r := cfg.Reasoning; r != nil {
@@ -601,7 +602,7 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool, scope *adaptScope) (JS
 			// No reasoning dial on this server. MAP-13: the dial is dropped
 			// and recorded — the model may reason at its own default and
 			// the tokens show in usage.
-			if err := scope.dropped("config.reasoning", "this server has no reasoning dial on its wire (compat thinking_format='none'); the model reasons at its own default; pass the server's own knob through extensions", JSONObject{"effort": r.Effort}); err != nil {
+			if err := scope.dropped("config.reasoning", "this server has no reasoning dial on its wire (compat thinking_format='none'); the model reasons at its own default; pass the server's own knob through extensions", JSONObject{{"effort", r.Effort}}); err != nil {
 				return nil, err
 			}
 			r = nil
@@ -634,57 +635,57 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool, scope *adaptScope) (JS
 				r.Effort = nearest
 			}
 			if compat.BuiltinTools == "groq" && r.Summary == "auto" {
-				payload["reasoning_format"] = "parsed"
+				payload.Set("reasoning_format", "parsed")
 			}
 			switch compat.ThinkingFormat {
 			case "reasoning_effort", "kimi":
-				payload["reasoning_effort"] = r.Effort
+				payload.Set("reasoning_effort", r.Effort)
 			case "openrouter":
-				payload["reasoning"] = JSONObject{"effort": r.Effort}
+				payload.Set("reasoning", JSONObject{{"effort", r.Effort}})
 			case "deepseek":
-				payload["thinking"] = JSONObject{"type": "enabled"}
-				payload["reasoning_effort"] = r.Effort
+				payload.Set("thinking", JSONObject{{"type", "enabled"}})
+				payload.Set("reasoning_effort", r.Effort)
 			case "qwen":
-				payload["enable_thinking"] = true
+				payload.Set("enable_thinking", true)
 			case "qwen_chat_template":
-				payload["chat_template_kwargs"] = JSONObject{"enable_thinking": true, "preserve_thinking": true}
+				payload.Set("chat_template_kwargs", JSONObject{{"enable_thinking", true}, {"preserve_thinking", true}})
 			}
 		} else if r != nil {
 			switch compat.ThinkingFormat {
 			case "reasoning_effort":
-				payload["reasoning_effort"] = "none"
+				payload.Set("reasoning_effort", "none")
 			case "openrouter":
-				payload["reasoning"] = JSONObject{"enabled": false}
+				payload.Set("reasoning", JSONObject{{"enabled", false}})
 			case "deepseek", "kimi":
-				payload["thinking"] = JSONObject{"type": "disabled"}
+				payload.Set("thinking", JSONObject{{"type", "disabled"}})
 			case "qwen":
-				payload["enable_thinking"] = false
+				payload.Set("enable_thinking", false)
 			case "qwen_chat_template":
-				payload["chat_template_kwargs"] = JSONObject{"enable_thinking": false}
+				payload.Set("chat_template_kwargs", JSONObject{{"enable_thinking", false}})
 			}
 		}
 	}
-	if err := cacheCommonPayload(req, payload, compat.CacheControl, l.provider, breakpoint, scope); err != nil {
+	if err := cacheCommonPayload(req, &payload, compat.CacheControl, l.provider, breakpoint, scope); err != nil {
 		return nil, err
 	}
 	if compat.Routing != nil {
-		payload["provider"] = compat.Routing
+		payload.Set("provider", compat.Routing)
 	}
 	if cfg.ServiceTier != "" {
-		payload["service_tier"] = cfg.ServiceTier
+		payload.Set("service_tier", cfg.ServiceTier)
 	}
 	if cfg.UserID != "" {
-		payload[compat.UserField] = cfg.UserID
+		payload.Set(compat.UserField, cfg.UserID)
 	}
 	if cfg.Store != nil {
-		payload["store"] = *cfg.Store
+		payload.Set("store", *cfg.Store)
 	}
-	for k, v := range cfg.Extensions {
+	for k, v := range cfg.Extensions.All() {
 		switch k {
 		case "prompt_caching", "cache", "compat", "openai_compat", "openai_chat_compat":
 			continue
 		}
-		payload[k] = v
+		payload.Set(k, v)
 	}
 	return payload, nil
 }
@@ -720,28 +721,28 @@ func chatFinishReason(raw any, hasToolCall bool, unmapped *[]JSONObject, path st
 }
 
 func usageFromChat(u JSONObject) Usage {
-	prompt := wireObj(u["prompt_tokens_details"])
-	completion := wireObj(u["completion_tokens_details"])
+	prompt := wireObj(u.Get("prompt_tokens_details"))
+	completion := wireObj(u.Get("completion_tokens_details"))
 	return Usage{
-		InputTokens:       wireIntPtr(u["prompt_tokens"]),
-		OutputTokens:      wireIntPtr(u["completion_tokens"]),
-		TotalTokens:       wireIntPtr(u["total_tokens"]),
-		ReasoningTokens:   wireIntPtr(completion["reasoning_tokens"]),
-		CacheReadTokens:   wireIntPtr(prompt["cached_tokens"]),
-		CacheWriteTokens:  wireIntPtr(prompt["cache_write_tokens"]),
-		InputAudioTokens:  wireIntPtr(prompt["audio_tokens"]),
-		OutputAudioTokens: wireIntPtr(completion["audio_tokens"]),
+		InputTokens:       wireIntPtr(u.Get("prompt_tokens")),
+		OutputTokens:      wireIntPtr(u.Get("completion_tokens")),
+		TotalTokens:       wireIntPtr(u.Get("total_tokens")),
+		ReasoningTokens:   wireIntPtr(completion.Get("reasoning_tokens")),
+		CacheReadTokens:   wireIntPtr(prompt.Get("cached_tokens")),
+		CacheWriteTokens:  wireIntPtr(prompt.Get("cache_write_tokens")),
+		InputAudioTokens:  wireIntPtr(prompt.Get("audio_tokens")),
+		OutputAudioTokens: wireIntPtr(completion.Get("audio_tokens")),
 	}.Normalize()
 }
 
 // responseFromChatBody is the one Chat Completions response reader.
 func responseFromChatBody(provider string, data JSONObject, model string, choice *int, onError func(code, message string) *Error) (*Response, error) {
-	if e := wireObj(data["error"]); e != nil {
-		return nil, onError(wireStr(e["code"]), firstStr(e["message"], mustJSONString(e)))
+	if e := wireObj(data.Get("error")); e != nil {
+		return nil, onError(wireStr(e.Get("code")), firstStr(e.Get("message"), mustJSONString(e)))
 	}
 	var unmapped []JSONObject
-	choices := wireList(data["choices"])
-	if _, isList := data["choices"].([]any); !isList && data["choices"] != nil {
+	choices := wireList(data.Get("choices"))
+	if _, isList := data.Get("choices").([]any); !isList && data.Get("choices") != nil {
 		return nil, typeErrorf("choices must be an array")
 	}
 	index := 0
@@ -763,12 +764,12 @@ func responseFromChatBody(provider string, data JSONObject, model string, choice
 			recordUnmapped(&unmapped, path, jsonTypeName(choices[index]))
 		}
 	}
-	message := wireObj(chosen["message"])
+	message := wireObj(chosen.Get("message"))
 	var parts []Part
-	if reasoning := firstStr(message["reasoning_content"], message["reasoning"]); reasoning != "" {
+	if reasoning := firstStr(message.Get("reasoning_content"), message.Get("reasoning")); reasoning != "" {
 		parts = append(parts, ThinkingPart{Text: reasoning})
 	}
-	switch content := message["content"].(type) {
+	switch content := message.Get("content").(type) {
 	case string:
 		if content != "" {
 			parts = append(parts, TextPart{Text: content})
@@ -776,10 +777,10 @@ func responseFromChatBody(provider string, data JSONObject, model string, choice
 	case []any:
 		for i, item := range content {
 			obj := wireObj(item)
-			if obj != nil && wireStr(obj["type"]) == "text" {
-				parts = append(parts, TextPart{Text: wireStr(obj["text"])})
+			if obj != nil && wireStr(obj.Get("type")) == "text" {
+				parts = append(parts, TextPart{Text: wireStr(obj.Get("text"))})
 			} else if obj != nil {
-				recordUnmapped(&unmapped, path+".message.content["+strconv.Itoa(i)+"]", obj["type"])
+				recordUnmapped(&unmapped, path+".message.content["+strconv.Itoa(i)+"]", obj.Get("type"))
 			} else {
 				recordUnmapped(&unmapped, path+".message.content["+strconv.Itoa(i)+"]", jsonTypeName(item))
 			}
@@ -788,17 +789,17 @@ func responseFromChatBody(provider string, data JSONObject, model string, choice
 	default:
 		recordUnmapped(&unmapped, path+".message.content", jsonTypeName(content))
 	}
-	if refusal := wireStr(message["refusal"]); refusal != "" && message["refusal"] != nil {
+	if refusal := wireStr(message.Get("refusal")); refusal != "" && message.Get("refusal") != nil {
 		parts = append(parts, RefusalPart{Text: refusal})
 	}
-	for i, rawCall := range wireList(message["tool_calls"]) {
+	for i, rawCall := range wireList(message.Get("tool_calls")) {
 		call := wireObj(rawCall)
 		callPath := path + ".message.tool_calls[" + strconv.Itoa(i) + "]"
 		if call == nil {
 			recordUnmapped(&unmapped, callPath, jsonTypeName(rawCall))
 			continue
 		}
-		callType := wireStr(call["type"])
+		callType := wireStr(call.Get("type"))
 		if callType == "" {
 			callType = "function"
 		}
@@ -806,33 +807,33 @@ func responseFromChatBody(provider string, data JSONObject, model string, choice
 			recordUnmapped(&unmapped, callPath, callType)
 			continue
 		}
-		fn := wireObj(call["function"])
-		if !truthy(fn["name"]) {
+		fn := wireObj(call.Get("function"))
+		if !truthy(fn.Get("name")) {
 			return nil, unnamedToolCallError(provider, callPath)
 		}
-		id := wireStr(call["id"])
-		if id == "" || call["id"] == nil {
+		id := wireStr(call.Get("id"))
+		if id == "" || call.Get("id") == nil {
 			id = "call_" + strconv.Itoa(len(parts))
 		}
-		parts = append(parts, ToolCallPart{ID: id, Name: wireStr(fn["name"]), Input: parseJSONObject(fn["arguments"])})
+		parts = append(parts, ToolCallPart{ID: id, Name: wireStr(fn.Get("name")), Input: parseJSONObject(fn.Get("arguments"))})
 	}
 	if len(parts) == 0 {
 		parts = []Part{TextPart{}}
 	}
-	usage := usageFromChat(wireObj(data["usage"]))
-	logprobs := openaiTokenLogprobs(wireObj(chosen["logprobs"])["content"])
-	resolvedModel := wireStr(data["model"])
-	if resolvedModel == "" || data["model"] == nil {
+	usage := usageFromChat(wireObj(data.Get("usage")))
+	logprobs := openaiTokenLogprobs(wireObj(chosen.Get("logprobs")).Get("content"))
+	resolvedModel := wireStr(data.Get("model"))
+	if resolvedModel == "" || data.Get("model") == nil {
 		resolvedModel = model
 	}
 	if resolvedModel == "" {
 		return nil, valueErrorf("the body carries no model; pass model=")
 	}
 	return &Response{
-		ID:           wireStr(data["id"]),
+		ID:           wireStr(data.Get("id")),
 		Model:        resolvedModel,
 		Message:      Message{Role: RoleAssistant, Parts: parts},
-		FinishReason: chatFinishReason(chosen["finish_reason"], hasToolCall(parts), &unmapped, path),
+		FinishReason: chatFinishReason(chosen.Get("finish_reason"), hasToolCall(parts), &unmapped, path),
 		Usage:        usage,
 		Logprobs:     logprobs,
 		ProviderData: attachUnmapped(data, unmapped),
@@ -854,10 +855,10 @@ func (l *OpenAIChatLM) parseResponse(req *Request, resp *HTTPResponse) (*Respons
 // foldJudgments is MAP-14 §3: the single text part of a judgment answer
 // becomes a DataPart.
 func foldJudgments(resp *Response, responseFormat JSONObject) *Response {
-	if resp == nil || responseFormat == nil || responseFormat["type"] != "json_schema" {
+	if resp == nil || responseFormat == nil || responseFormat.Get("type") != "json_schema" {
 		return resp
 	}
-	found := JudgmentsInSchema(responseFormat["schema"])
+	found := JudgmentsInSchema(responseFormat.Get("schema"))
 	if len(found) == 0 {
 		return resp
 	}
@@ -919,36 +920,36 @@ func (l *OpenAIChatLM) parseStreamEvents(_ *Request, ev sse.Event) ([]StreamEven
 	if payload == nil {
 		return nil, nil
 	}
-	if e := wireObj(payload["error"]); e != nil {
-		code := firstStr(e["code"], e["type"])
+	if e := wireObj(payload.Get("error")); e != nil {
+		code := firstStr(e.Get("code"), e.Get("type"))
 		if code == "" {
 			code = "provider"
 		}
-		return []StreamEvent{StreamErrorEvent{Error: openaiErrorDetail(code, wireStr(e["message"]))}}, nil
+		return []StreamEvent{StreamErrorEvent{Error: openaiErrorDetail(code, wireStr(e.Get("message")))}}, nil
 	}
 	var events []StreamEvent
-	choices := wireList(payload["choices"])
+	choices := wireList(payload.Get("choices"))
 	var choice JSONObject
 	if len(choices) > 0 {
 		choice = wireObj(choices[0])
 	}
-	delta := wireObj(choice["delta"])
-	if reasoning := firstStr(delta["reasoning_content"], delta["reasoning"]); reasoning != "" {
+	delta := wireObj(choice.Get("delta"))
+	if reasoning := firstStr(delta.Get("reasoning_content"), delta.Get("reasoning")); reasoning != "" {
 		events = append(events, StreamDeltaEvent{Delta: ThinkingDelta{Text: reasoning}})
 	}
-	if content, ok := delta["content"].(string); ok && content != "" {
-		events = append(events, StreamDeltaEvent{Delta: TextDelta{Text: content, Logprobs: openaiTokenLogprobs(wireObj(choice["logprobs"])["content"])}})
+	if content, ok := delta.Get("content").(string); ok && content != "" {
+		events = append(events, StreamDeltaEvent{Delta: TextDelta{Text: content, Logprobs: openaiTokenLogprobs(wireObj(choice.Get("logprobs")).Get("content"))}})
 	}
-	for _, rawCall := range wireList(delta["tool_calls"]) {
+	for _, rawCall := range wireList(delta.Get("tool_calls")) {
 		call := wireObj(rawCall)
 		if call == nil {
 			continue
 		}
-		fn := wireObj(call["function"])
-		events = append(events, StreamDeltaEvent{Delta: ToolCallDelta{Input: wireStr(fn["arguments"]), PartIndex: wireInt(call["index"], 0), ID: wireStr(call["id"]), Name: wireStr(fn["name"])}})
+		fn := wireObj(call.Get("function"))
+		events = append(events, StreamDeltaEvent{Delta: ToolCallDelta{Input: wireStr(fn.Get("arguments")), PartIndex: wireInt(call.Get("index"), 0), ID: wireStr(call.Get("id")), Name: wireStr(fn.Get("name"))}})
 	}
-	usageData := wireObj(payload["usage"])
-	if finishRaw := wireStr(choice["finish_reason"]); finishRaw != "" && choice["finish_reason"] != nil {
+	usageData := wireObj(payload.Get("usage"))
+	if finishRaw := wireStr(choice.Get("finish_reason")); finishRaw != "" && choice.Get("finish_reason") != nil {
 		finish, ok := chatFinishReasonMap[finishRaw]
 		if !ok {
 			finish = FinishStop
@@ -970,16 +971,16 @@ func (l *OpenAIChatLM) parseStreamEvents(_ *Request, ev sse.Event) ([]StreamEven
 
 func xaiImageInput(part ImagePart) (JSONObject, error) {
 	if part.URL != "" {
-		return JSONObject{"url": part.URL}, nil
+		return JSONObject{{"url", part.URL}}, nil
 	}
 	if part.FileID != "" {
-		return JSONObject{"file_id": part.FileID}, nil
+		return JSONObject{{"file_id", part.FileID}}, nil
 	}
 	uri, err := mediaDataURI(part.Media)
 	if err != nil {
 		return nil, UnsupportedFeatureErrorf("xai", "xai: input image carries no content")
 	}
-	return JSONObject{"url": uri}, nil
+	return JSONObject{{"url", uri}}, nil
 }
 
 func (l *OpenAIChatLM) imageGenerateRequest(req *ImageGenerationRequest) (*TransportRequest, error) {
@@ -987,9 +988,9 @@ func (l *OpenAIChatLM) imageGenerateRequest(req *ImageGenerationRequest) (*Trans
 		return nil, l.unsupported("image generation")
 	}
 	base := strings.TrimRight(l.baseURL, "/")
-	payload := JSONObject{"model": req.Model, "prompt": req.Prompt}
-	for k, v := range req.Extensions {
-		payload[k] = v
+	payload := JSONObject{{"model", req.Model}, {"prompt", req.Prompt}}
+	for k, v := range req.Extensions.All() {
+		payload.Set(k, v)
 	}
 	if req.Size != "" {
 		return nil, UnsupportedFeatureErrorf(l.provider, "xai: size has no wire slot; use extensions for xAI's quality/resolution fields")
@@ -1004,7 +1005,7 @@ func (l *OpenAIChatLM) imageGenerateRequest(req *ImageGenerationRequest) (*Trans
 	if err != nil {
 		return nil, err
 	}
-	payload["image"] = img
+	payload.Set("image", img)
 	return l.emit(emitSpec{method: "POST", url: base + "/images/edits", headers: l.headers(), payload: payload})
 }
 
@@ -1017,18 +1018,18 @@ func (l *OpenAIChatLM) imageGenerationFromResponse(_ *ImageGenerationRequest, re
 		return ImageGenerationResponse{}, err
 	}
 	var images []ImagePart
-	for _, e := range wireList(data["data"]) {
+	for _, e := range wireList(data.Get("data")) {
 		item := wireObj(e)
 		if item == nil {
 			continue
 		}
-		mediaType := stringOnly(item["mime_type"])
+		mediaType := stringOnly(item.Get("mime_type"))
 		if mediaType == "" {
 			mediaType = "application/octet-stream"
 		}
-		if b64 := stringOnly(item["b64_json"]); b64 != "" {
+		if b64 := stringOnly(item.Get("b64_json")); b64 != "" {
 			images = append(images, ImagePart{Media: Media{MediaType: mediaType, Data: b64}})
-		} else if url := stringOnly(item["url"]); url != "" {
+		} else if url := stringOnly(item.Get("url")); url != "" {
 			images = append(images, ImagePart{Media: Media{MediaType: mediaType, URL: url}})
 		}
 	}
@@ -1050,9 +1051,9 @@ func (l *OpenAIChatLM) videoSubmitRequest(req *VideoGenerationRequest) (*Transpo
 	if len(req.Images) > 0 {
 		return nil, UnsupportedFeatureErrorf(l.provider, "xai: video input images are not mapped yet; use extensions until the mapping is live-receipted")
 	}
-	payload := JSONObject{"model": req.Model, "prompt": req.Prompt}
-	for k, v := range req.Extensions {
-		payload[k] = v
+	payload := JSONObject{{"model", req.Model}, {"prompt", req.Prompt}}
+	for k, v := range req.Extensions.All() {
+		payload.Set(k, v)
 	}
 	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/videos/generations", headers: l.headers(), payload: payload})
 }
@@ -1065,25 +1066,25 @@ func (l *OpenAIChatLM) videoJobFromBody(body string, videoID string) (VideoJobIn
 	if err != nil {
 		return VideoJobInfo{}, err
 	}
-	if requestID := stringOnly(data["request_id"]); requestID != "" {
+	if requestID := stringOnly(data.Get("request_id")); requestID != "" {
 		return VideoJobInfo{ID: requestID, Status: "queued", ProviderData: data}, nil
 	}
 	if videoID == "" {
 		return VideoJobInfo{}, l.providerError(KindProvider, "xai: video body carries no request_id", 0, "", "")
 	}
-	wireStatus := wireStr(data["status"])
+	wireStatus := wireStr(data.Get("status"))
 	status, ok := xaiVideoStatusMap[wireStatus]
 	if !ok {
 		return VideoJobInfo{}, l.providerError(KindProvider, "xai: unknown video status "+strconv.Quote(wireStatus), 0, "", "")
 	}
 	var progress *int
-	if _, isBool := data["progress"].(bool); !isBool {
-		if f, err := jsonFloat64(data["progress"], ""); err == nil {
+	if _, isBool := data.Get("progress").(bool); !isBool {
+		if f, err := jsonFloat64(data.Get("progress"), ""); err == nil {
 			p := int(f)
 			progress = &p
 		}
 	}
-	return VideoJobInfo{ID: videoID, Status: status, Progress: progress, Model: stringOnly(data["model"]), ProviderData: data}, nil
+	return VideoJobInfo{ID: videoID, Status: status, Progress: progress, Model: stringOnly(data.Get("model")), ProviderData: data}, nil
 }
 
 func (l *OpenAIChatLM) videoStatusRequest(videoID string) (*TransportRequest, error) {
@@ -1111,7 +1112,7 @@ func (l *OpenAIChatLM) videoPart(statusBody JSONObject, _ *HTTPResponse) (VideoP
 	if !l.isXai() {
 		return VideoPart{}, l.unsupported("video generation")
 	}
-	url := stringOnly(wireObj(statusBody["video"])["url"])
+	url := stringOnly(wireObj(statusBody.Get("video")).Get("url"))
 	if url == "" {
 		return VideoPart{}, l.providerError(KindProvider, "xai: terminal video carries no url", 0, "", "")
 	}

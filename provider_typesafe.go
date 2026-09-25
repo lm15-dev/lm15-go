@@ -95,11 +95,11 @@ func (l *TypeSafeLM) state(req *Request) (any, error) {
 
 func (l *TypeSafeLM) questions(req *Request, scope *adaptScope) (JSONObject, error) {
 	f := req.Config.ResponseFormat
-	if f == nil || f["type"] != "json_schema" {
+	if f == nil || f.Get("type") != "json_schema" {
 		return nil, l.refuse("config.response_format", "Jev answers declared judgments only; give a json_schema response_format whose properties are enums / booleans / ordered levels (MAP-14), e.g. lm15.Judgments(...)")
 	}
 	found := RequestJudgments(req)
-	extra := nonJudgmentProperties(f["schema"], found)
+	extra := nonJudgmentProperties(f.Get("schema"), found)
 	if len(found) == 0 || len(extra) > 0 {
 		what := "no property declares a judgment"
 		if len(extra) > 0 {
@@ -118,7 +118,7 @@ func (l *TypeSafeLM) questions(req *Request, scope *adaptScope) (JSONObject, err
 		}
 		switch j.Kind {
 		case JudgmentBoolean:
-			questions[j.Name] = JSONObject{"type": "noul", "instructions": instruction}
+			questions.Set(j.Name, JSONObject{{"type", "noul"}, {"instructions", instruction}})
 		case JudgmentChoice:
 			if len(j.Keys) > MaxChoiceKeys {
 				return nil, l.refuse("config.response_format.schema.properties."+j.Name, "a Jev choice takes at most %d keys, got %d", MaxChoiceKeys, len(j.Keys))
@@ -126,12 +126,12 @@ func (l *TypeSafeLM) questions(req *Request, scope *adaptScope) (JSONObject, err
 			criteria := JSONObject{}
 			for _, k := range j.Keys {
 				if d, ok := j.Descriptions[k]; ok && d != "" {
-					criteria[k] = d
+					criteria.Set(k, d)
 				} else {
-					criteria[k] = nil
+					criteria.Set(k, nil)
 				}
 			}
-			questions[j.Name] = JSONObject{"type": "choice", "instructions": instruction, "criteria": criteria}
+			questions.Set(j.Name, JSONObject{{"type", "choice"}, {"instructions", instruction}, {"criteria", criteria}})
 		default:
 			if len(j.Keys) > MaxOrderedLevels {
 				return nil, l.refuse("config.response_format.schema.properties."+j.Name, "a Jev score takes at most %d levels, got %d", MaxOrderedLevels, len(j.Keys))
@@ -144,7 +144,7 @@ func (l *TypeSafeLM) questions(req *Request, scope *adaptScope) (JSONObject, err
 					criteria = append(criteria, k)
 				}
 			}
-			questions[j.Name] = JSONObject{"type": "score", "instructions": instruction, "criteria": criteria}
+			questions.Set(j.Name, JSONObject{{"type", "score"}, {"instructions", instruction}, {"criteria", criteria}})
 		}
 	}
 	return questions, nil
@@ -195,14 +195,14 @@ func (l *TypeSafeLM) payload(req *Request, scope *adaptScope) (JSONObject, error
 	if err != nil {
 		return nil, err
 	}
-	payload := JSONObject{"model": req.Model, "state": state, "questions": questions}
-	for key, value := range cfg.Extensions {
+	payload := JSONObject{{"model", req.Model}, {"state", state}, {"questions", questions}}
+	for key, value := range cfg.Extensions.All() {
 		if key == "n" {
 			if n, err := jsonFloat64(value, "n"); err == nil && n > 1 {
 				return nil, l.refuse("config.extensions.n", "n > 1 has no canonical multiple-response representation")
 			}
 		}
-		payload[key] = value
+		payload.Set(key, value)
 	}
 	return payload, nil
 }
@@ -259,7 +259,7 @@ func (l *TypeSafeLM) parseResponse(req *Request, resp *HTTPResponse) (*Response,
 		}
 		return p, nil
 	}
-	answers, ok := data["answers"].(map[string]any)
+	answers, ok := asObject(data.Get("answers"))
 	if !ok {
 		return nil, invalid("answers", "expected an object containing every declared judgment")
 	}
@@ -269,34 +269,34 @@ func (l *TypeSafeLM) parseResponse(req *Request, resp *HTTPResponse) (*Response,
 	value := JSONObject{}
 	probabilities := map[string]map[string]float64{}
 	for _, j := range found {
-		answer, ok := answers[j.Name].(map[string]any)
+		answer, ok := asObject(answers.Get(j.Name))
 		path := "answers." + j.Name
 		if !ok {
-			if _, present := answers[j.Name]; !present {
+			if _, present := answers.Lookup(j.Name); !present {
 				return nil, invalid("answers", "keys must match the declared judgments exactly")
 			}
 			return nil, invalid(path, "expected an answer object")
 		}
 		expected := map[JudgmentKind]string{JudgmentBoolean: "noul", JudgmentChoice: "choice", JudgmentOrdered: "score"}[j.Kind]
-		if answer["type"] != expected {
+		if answer.Get("type") != expected {
 			return nil, invalid(path+".type", "expected "+strconv.Quote(expected))
 		}
 		if j.Kind == JudgmentBoolean {
-			p, perr := probability(answer["noul"], path+".noul")
+			p, perr := probability(answer.Get("noul"), path+".noul")
 			if perr != nil {
 				return nil, perr
 			}
-			value[j.Name] = p >= 0.5
+			value.Set(j.Name, p >= 0.5)
 			probabilities[j.Name] = map[string]float64{"true": p, "false": 1.0 - p}
 			continue
 		}
-		dist, ok := answer["probabilities"].(map[string]any)
+		dist, ok := asObject(answer.Get("probabilities"))
 		if !ok || len(dist) != len(j.Keys) {
 			return nil, invalid(path+".probabilities", "expected one probability for every declared key, and no other keys")
 		}
 		probs := make(map[string]float64, len(j.Keys))
 		for _, k := range j.Keys {
-			raw, present := dist[k]
+			raw, present := dist.Lookup(k)
 			if !present {
 				return nil, invalid(path+".probabilities", "expected one probability for every declared key, and no other keys")
 			}
@@ -309,11 +309,11 @@ func (l *TypeSafeLM) parseResponse(req *Request, resp *HTTPResponse) (*Response,
 		}
 		probabilities[j.Name] = probs
 		if j.Kind == JudgmentChoice {
-			pick, ok := answer["choice"].(string)
+			pick, ok := answer.Get("choice").(string)
 			if !ok || !inVocab(pick, j.Keys) {
 				return nil, invalid(path+".choice", "expected a declared choice key")
 			}
-			value[j.Name] = pick
+			value.Set(j.Name, pick)
 		} else {
 			best, bestP := "", math.Inf(-1)
 			for _, k := range j.Keys { // declared order breaks ties, like the reference's max
@@ -322,7 +322,7 @@ func (l *TypeSafeLM) parseResponse(req *Request, resp *HTTPResponse) (*Response,
 				}
 			}
 			n, _ := strconv.Atoi(best)
-			value[j.Name] = n
+			value.Set(j.Name, n)
 		}
 	}
 	part := DataPart{Value: value}
@@ -334,8 +334,8 @@ func (l *TypeSafeLM) parseResponse(req *Request, resp *HTTPResponse) (*Response,
 		return nil, invalid("answers", err.Error())
 	}
 	usage := Usage{}
-	if raw, present := data["usage"]; present && raw != nil {
-		u, ok := raw.(map[string]any)
+	if raw, present := data.Lookup("usage"); present && raw != nil {
+		u, ok := asObject(raw)
 		if !ok {
 			return nil, invalid("usage", "expected an object or null")
 		}
@@ -348,7 +348,7 @@ func (l *TypeSafeLM) parseResponse(req *Request, resp *HTTPResponse) (*Response,
 		}
 	}
 	model := req.Model
-	if raw, present := data["model"]; present && raw != nil {
+	if raw, present := data.Lookup("model"); present && raw != nil {
 		s, ok := raw.(string)
 		if !ok || s == "" {
 			return nil, invalid("model", "expected a non-empty string")
@@ -361,7 +361,7 @@ func (l *TypeSafeLM) parseResponse(req *Request, resp *HTTPResponse) (*Response,
 		Message:      Message{Role: RoleAssistant, Parts: []Part{part}},
 		FinishReason: FinishStop,
 		Usage:        usage.Normalize(),
-		ProviderData: JSONObject{"typesafe": JSONObject{"answers": answers}},
+		ProviderData: JSONObject{{"typesafe", JSONObject{{"answers", answers}}}},
 	}
 	if err := out.Validate(); err != nil {
 		return nil, invalid("$", err.Error())
@@ -390,12 +390,12 @@ func (l *TypeSafeLM) normalizeError(status int, body string) *Error {
 	code := ""
 	if raw, err := DecodeJSON([]byte(body)); err == nil {
 		if payload := wireObj(raw); payload != nil {
-			switch detail := payload["detail"].(type) {
-			case map[string]any:
-				if s, ok := detail["error_type"].(string); ok {
+			switch detail := jsonView(payload.Get("detail")).(type) {
+			case JSONObject:
+				if s, ok := detail.Get("error_type").(string); ok {
 					code = s
 				}
-				if s, ok := detail["message"].(string); ok {
+				if s, ok := detail.Get("message").(string); ok {
 					message = s
 				}
 			case []any:
@@ -403,12 +403,12 @@ func (l *TypeSafeLM) normalizeError(status int, body string) *Error {
 				if len(detail) > 0 {
 					first := wireObj(detail[0])
 					var loc []string
-					for _, x := range wireList(first["loc"]) {
+					for _, x := range wireList(first.Get("loc")) {
 						if s := wireStr(x); s != "body" {
 							loc = append(loc, s)
 						}
 					}
-					msg := wireStr(first["msg"])
+					msg := wireStr(first.Get("msg"))
 					if msg == "" {
 						msg = "validation error"
 					}
@@ -452,5 +452,5 @@ func (l *TypeSafeLM) modelsFromBody(body string) ([]ModelInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return modelInfosFromEntries(data["models"], l.provider, "typesafe_systemone", func(e map[string]any) string { return stringOnly(e["name"]) }), nil
+	return modelInfosFromEntries(data.Get("models"), l.provider, "typesafe_systemone", func(e JSONObject) string { return stringOnly(e.Get("name")) }), nil
 }

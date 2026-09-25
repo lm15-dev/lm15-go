@@ -15,35 +15,36 @@ func invalid(message string) error { return lm15.Errorf(lm15.KindInvalidRequest,
 
 // Failure preserves the SDK's formatted diagnostics and bounded header evidence.
 func Failure(err error) lm15.JSONObject {
-	d := lm15.JSONObject{"name": "Error", "code": "invalid_request", "message": err.Error()}
+	d := lm15.JSONObject{lm15.KV("name", "Error"), lm15.KV("code", "invalid_request"), lm15.KV("message", err.Error())}
 	if e := lm15.AsError(err); e != nil {
-		d["name"], d["code"] = e.ClassName(), e.Code
+		d.Set("name", e.ClassName())
+		d.Set("code", e.Code)
 		if e.Status != 0 {
-			d["status"] = e.Status
+			d.Set("status", e.Status)
 		}
 		if e.ProviderCode != "" {
-			d["provider_code"] = e.ProviderCode
+			d.Set("provider_code", e.ProviderCode)
 		}
 		if e.Feature != "" {
-			d["feature"] = e.Feature
+			d.Set("feature", e.Feature)
 		}
 		h := lm15.JSONObject{}
 		if e.RequestID != "" {
-			h["request_id"] = e.RequestID
+			h.Set("request_id", e.RequestID)
 		}
 		if e.RetryAfter != nil {
-			h["retry_after"] = *e.RetryAfter
+			h.Set("retry_after", *e.RetryAfter)
 		}
 		if len(e.RateLimitHeaders) > 0 {
-			h["rate_limit_headers"] = e.RateLimitHeaders.Clone()
+			h.Set("rate_limit_headers", e.RateLimitHeaders.Clone())
 		}
 		if len(h) > 0 {
-			d["http_response"] = h
+			d.Set("http_response", h)
 		}
 	} else if name := lm15.NativeErrorKind(err); name != "" {
-		d["name"] = name
+		d.Set("name", name)
 	}
-	return lm15.JSONObject{"error": d}
+	return lm15.JSONObject{lm15.KV("error", d)}
 }
 
 // JSON returns a reply string, including when serialization itself fails.
@@ -65,7 +66,7 @@ func Call(ctx context.Context, op, input string, transport lm15.Transport, emit 
 	}()
 	out, err := call(ctx, op, input, transport, emit)
 	if ctx.Err() != nil {
-		return JSON(lm15.JSONObject{"error": lm15.JSONObject{"name": "AbortError", "code": "transport", "message": "request aborted"}})
+		return JSON(lm15.JSONObject{lm15.KV("error", lm15.JSONObject{lm15.KV("name", "AbortError"), lm15.KV("code", "transport"), lm15.KV("message", "request aborted")})})
 	}
 	if err != nil {
 		return JSON(Failure(err))
@@ -78,7 +79,7 @@ func call(ctx context.Context, op, input string, transport lm15.Transport, emit 
 		return nil, err
 	}
 	if op == "version" {
-		return lm15.JSONObject{"version": lm15.Version, "language": "go"}, nil
+		return lm15.JSONObject{lm15.KV("version", lm15.Version), lm15.KV("language", "go")}, nil
 	}
 	if op != "build_request" && op != "complete" && op != "stream" {
 		return nil, invalid("unknown operation: " + op)
@@ -87,27 +88,27 @@ func call(ctx context.Context, op, input string, transport lm15.Transport, emit 
 	if err != nil {
 		return nil, err
 	}
-	provider, ok := msg["provider"].(string)
+	provider, ok := msg.Get("provider").(string)
 	if !ok || provider == "" {
 		return nil, invalid("provider must be a non-empty string")
 	}
-	key, ok := msg["api_key"].(string)
+	key, ok := msg.Get("api_key").(string)
 	if !ok || key == "" {
 		return nil, lm15.NotConfiguredErrorf(provider, nil, "", "pass an explicit non-empty api_key (a placeholder for keyless endpoints)")
 	}
 	baseURL := ""
-	if v := msg["base_url"]; v != nil {
+	if v := msg.Get("base_url"); v != nil {
 		if baseURL, ok = v.(string); !ok {
 			return nil, invalid("base_url must be a string")
 		}
 	}
 	settings := map[string]string{}
-	if v := msg["settings"]; v != nil {
-		obj, ok := v.(map[string]any)
+	if v := msg.Get("settings"); v != nil {
+		obj, ok := v.(lm15.JSONObject)
 		if !ok {
 			return nil, invalid("settings must be an object of strings")
 		}
-		for k, v := range obj {
+		for k, v := range obj.All() {
 			s, ok := v.(string)
 			if !ok {
 				return nil, invalid(fmt.Sprintf("settings.%s must be a string", k))
@@ -116,12 +117,12 @@ func call(ctx context.Context, op, input string, transport lm15.Transport, emit 
 		}
 	}
 	stream := false
-	if v := msg["stream"]; v != nil {
+	if v := msg.Get("stream"); v != nil {
 		if stream, ok = v.(bool); !ok {
 			return nil, invalid("stream must be a boolean")
 		}
 	}
-	canonical, ok := msg["canonical_request"].(map[string]any)
+	canonical, ok := msg.Get("canonical_request").(lm15.JSONObject)
 	if !ok {
 		return nil, invalid("canonical_request must be an object")
 	}
@@ -145,15 +146,15 @@ func call(ctx context.Context, op, input string, transport lm15.Transport, emit 
 			return nil, err
 		}
 		out := lm15.NormalizeTransportRequest(wire)
-		out["body_b64"] = base64.StdEncoding.EncodeToString(wire.Body)
+		out.Set("body_b64", base64.StdEncoding.EncodeToString(wire.Body))
 		if len(adaptations) > 0 {
 			records := make([]any, 0, len(adaptations))
 			for _, a := range adaptations {
 				d := lm15.AdaptationToDict(a)
-				delete(d, "reason") // same shape as the vet build_request protocol
+				d.Delete("reason") // same shape as the vet build_request protocol
 				records = append(records, d)
 			}
-			out["adaptations"] = records
+			out.Set("adaptations", records)
 		}
 		return out, nil
 	}
@@ -180,7 +181,7 @@ func call(ctx context.Context, op, input string, transport lm15.Transport, emit 
 	if err != nil {
 		return nil, err
 	}
-	return lm15.JSONObject{"canonical_response": lm15.ResponseToDict(resp, false)}, nil
+	return lm15.JSONObject{lm15.KV("canonical_response", lm15.ResponseToDict(resp, false))}, nil
 }
 
 func hasLocalPath(req *lm15.Request) bool {

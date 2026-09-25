@@ -295,6 +295,17 @@ type lmCore struct {
 // Provider returns the canonical provider string.
 func (c *lmCore) Provider() string { return c.provider }
 
+// wireRequest strips exactly this binding's own "provider:" prefix, once, at
+// the codec boundary (a CachedPrefix's qualified request sent straight to
+// the LM a router built); any other colon-bearing model id is opaque.
+func (c *lmCore) wireRequest(req *Request) *Request {
+	head, model, ok := strings.Cut(req.Model, ":")
+	if ok && model != "" && CanonicalProvider(head) == CanonicalProvider(c.provider) {
+		return req.WithModel(model)
+	}
+	return req
+}
+
 // Access returns the bound access policy.
 func (c *lmCore) Access() AccessPolicy { return c.access }
 
@@ -674,6 +685,7 @@ func (c *lmCore) Build(req *Request, stream bool) (*TransportRequest, []Adaptati
 // request and the record of what differs from what was asked. The one
 // place a scope is opened.
 func (c *lmCore) build(req *Request, stream bool, planning bool) (*TransportRequest, []Adaptation, error) {
+	req = c.wireRequest(req)
 	scope := newAdaptScope(c.adaptations, c.provider, planning)
 	wire, err := c.self.buildRequest(req, stream, scope)
 	if err != nil {

@@ -1863,6 +1863,9 @@ func CachedPrefixToDict(c CachedPrefix) JSONObject {
 	if c.Resource != nil {
 		d["resource"] = CacheInfoToDict(*c.Resource)
 	}
+	if c.Provider != "" {
+		d["provider"] = c.Provider
+	}
 	return JSONObject(d)
 }
 
@@ -1880,6 +1883,13 @@ func CachedPrefixFromDict(d JSONObject) (CachedPrefix, error) {
 		return CachedPrefix{}, err
 	}
 	c := CachedPrefix{Prefix: prefix}
+	if raw, present := d["provider"]; present && raw != nil {
+		provider, ok := raw.(string)
+		if !ok {
+			return CachedPrefix{}, typeErrorf("CachedPrefix.provider must be a string")
+		}
+		c.Provider = provider
+	}
 	if res, ok := d["resource"].(map[string]any); ok {
 		info, err := CacheInfoFromDict(res)
 		if err != nil {

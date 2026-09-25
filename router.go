@@ -1214,7 +1214,12 @@ func (r *LMRouter) Cache(ctx context.Context, prefix *Request, ttlSeconds *int, 
 	if err != nil {
 		return CachedPrefix{}, err
 	}
-	return lm.Cache(ctx, routedRequest(prefix, res), ttlSeconds, label)
+	cached, err := lm.Cache(ctx, routedRequest(prefix, res), ttlSeconds, label)
+	if err != nil {
+		return CachedPrefix{}, err
+	}
+	cached.Provider = res.Provider
+	return cached, nil
 }
 
 // ─── The OpenAI-shaped door (api-family § Ingest) ────────────────────

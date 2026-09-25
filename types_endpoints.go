@@ -156,10 +156,19 @@ func (p CachePage) Validate() error {
 type CachedPrefix struct {
 	Prefix   *Request
 	Resource *CacheInfo
+	// Provider (optional) is the router destination the prefix was cached
+	// through (LMRouter.Cache sets it; router-local names included). Prefix
+	// and Resource models stay wire names; Request emits "provider:model".
+	// It carries no credential, endpoint or provider declaration: reuse it
+	// with the same router configuration.
+	Provider string
 }
 
 // Validate checks the prefix carries a default Config and the resource matches.
 func (c CachedPrefix) Validate() error {
+	if c.Provider != "" && strings.ContainsAny(c.Provider, " \t\n\r:/") {
+		return valueErrorf("CachedPrefix.provider must be a non-empty provider name without routing separators")
+	}
 	if c.Prefix == nil {
 		return typeErrorf("CachedPrefix.prefix must be a Request")
 	}
@@ -218,13 +227,19 @@ func (c CachedPrefix) Request(messages []Message, config *Config) (*Request, err
 	cc := c.CacheConfigFor()
 	base.Cache = &cc
 	all := append(append([]Message(nil), c.Prefix.Messages...), messages...)
-	req := &Request{Model: c.Prefix.Model, System: c.Prefix.System, Tools: c.Prefix.Tools, Messages: all, Config: base}
+	model := c.Prefix.Model
+	if c.Provider != "" {
+		model = CanonicalProvider(c.Provider) + ":" + c.Prefix.Model
+	}
+	req := &Request{Model: model, System: c.Prefix.System, Tools: c.Prefix.Tools, Messages: all, Config: base}
 	return req, req.Validate()
 }
 
 // RequestFrom appends a suffix Request (same model, no system, no tools).
 func (c CachedPrefix) RequestFrom(suffix *Request, config *Config) (*Request, error) {
-	if suffix.Model != c.Prefix.Model {
+	head, rest, qualified := strings.Cut(suffix.Model, ":")
+	sameRoute := c.Provider != "" && qualified && CanonicalProvider(head) == CanonicalProvider(c.Provider) && rest == c.Prefix.Model
+	if suffix.Model != c.Prefix.Model && !sameRoute {
 		return nil, valueErrorf("suffix Request model must equal the prefix model")
 	}
 	if suffix.System != nil || len(suffix.Tools) > 0 {

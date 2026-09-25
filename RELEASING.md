@@ -25,15 +25,14 @@ retracted, `go get` installs `main` as a pseudo-version; a module pinned to
 
 The port must pass the contract at its `CONTRACT_PIN`
 (`python3 harness/check.py --shim go --direction all` in lm15-contract). At
-`b0ff3c0` it fails 24 cases:
-
-- 23 where Go writes JSON object keys in sorted order and the recorded bytes
-  keep insertion order: 20 Bedrock Chat / Mantle requests (the SigV4 signature
-  covers the body bytes), 2 batch JSONL uploads, 1 image-edit multipart field
-  order. Providers accept either order; a signature or an uploaded file pins
-  the bytes.
-- 1: `cached_prefix.routed`, the `CachedPrefix.provider` field (contract
-  2026-09-20).
+the 2026-09-25 pin it fails 23 cases, all where Go writes JSON object keys in
+sorted order and the recorded bytes keep insertion order: 20 Bedrock Chat /
+Mantle requests (the SigV4 signature covers the body bytes), 2 batch JSONL
+uploads, 1 image-edit multipart field order. Providers accept either order;
+a signature or an uploaded file pins the bytes. The same sorting loses a
+JSON schema's property order (the order a model fills structured output
+in): the fix is an ordered JSON object type through the decoder and the
+builders, and it is the release blocker.
 
 ## Cutting a release
 

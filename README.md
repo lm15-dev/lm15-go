@@ -6,9 +6,10 @@ names. Zero dependencies (standard library only). Builds for Linux, macOS,
 Windows and `GOOS=js GOARCH=wasm` (the browser).
 
 The contract commit this port is written against is in `CONTRACT_PIN`
-(`b0ff3c0`, 2026-09-24). At that commit the port passes 1,425 of the
-contract's 1,449 cases; the 24 it fails are listed in
-[RELEASING.md](RELEASING.md). The byte-order deviations below are most of them.
+(2026-09-25). At that commit the port passes 1,469 of the contract's 1,492
+cases; the 23 it fails are all one stated deviation (Go writes JSON object
+keys in sorted order; see "Stated deviations" and
+[RELEASING.md](RELEASING.md)).
 
 ## Versions
 
@@ -76,15 +77,21 @@ go build -o bin/lm15-vet ./cmd/lm15-vet     # harness/shims.json runs ./bin/lm15
 cd ../lm15-contract && python3 harness/check.py --shim go --direction all
 ```
 
-Last run (2026-09-20): request 366/386 (20 fail, all SigV4 byte-order),
-response 308/308, stream 40/40, error 87/87, serde 128/128, auth 43/43,
+Last run (2026-09-25): request 378/398 (20 fail, all SigV4 byte-order),
+response 308/308, stream 40/40, error 90/90, serde 129/129, auth 43/43,
 token 43/43, models 36/36, live 24/24, files 48/48, batch 39/41 (2
 multipart byte-order), generation 19/20 (1 multipart byte-order), video
-27/27, cache 11/11, router 22/22, ingest 168/168. The shared consumer
-vectors `consumer/live-collection-limits.json`,
+27/27, cache 11/11, router 22/22, ingest 169/169, managed (sign-in) 43/43.
+The shared consumer vectors `consumer/live-collection-limits.json`,
 `errors/diagnostic-headers.json` and `auth/named-credentials.json` pass
 natively (`go test ./...` for the first two; the third through the vet
 shim's `explain_auth`).
+
+Sign in once, use everywhere: `Auth`, `Connect`, `BoundClient` and
+`RouterConfig.Auth` are the managed authentication lm15-python, lm15-ts and
+lm15-rs have — same rules, same store file, graded by the same contract runs
+and by mixed-language runs on one store (`login_*.go`,
+[managed login](docs/managed-login.md)).
 
 | Module | Where |
 |---|---|
@@ -95,6 +102,7 @@ shim's `explain_auth`).
 | errors, rate-limit diagnostics | `errors.go` (`*lm15.Error`, `ErrorKind`, `errors.As`), `rate_limits.go` |
 | credentials, access policies, presets, registry | `credentials.go`, `features.go`, `access.go`, `compat.go`, `registry.go` |
 | auth stores, refresh under lock, PKCE, device code, `Login` | `auth_store.go`, `internal/fslock` |
+| managed sign-in (`Auth`, `Connect`, `BoundClient`, the flows, the loopback listener) | `login_*.go` |
 | doctor (`ExplainAuth`) | `doctor.go` |
 | cloud chains, named credentials, hosts, endpoints, SigV4, RS256 | `cloud_chains.go`, `cloud_hosts.go`, `internal/sigv4`, `internal/rs256` |
 | dialects | `provider_openai*.go`, `provider_openai_chat*.go`, `provider_anthropic.go`, `provider_gemini*.go`, `provider_typesafe.go` |

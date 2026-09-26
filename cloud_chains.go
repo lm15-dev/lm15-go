@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -15,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -240,13 +242,58 @@ func formBody(pairs [][2]string) []byte {
 	return []byte(strings.Join(parts, "&"))
 }
 
+// oauthErrorWords: AUTH-21 (clarified 2026-09-24). From a failed
+// auth-endpoint exchange only the status and, when the reply's error (or
+// error.code / error.type) is one of these fixed words, that word. An error
+// description can reflect the request (a refresh token, a signed
+// assertion); a fixed word cannot.
+var oauthErrorWords = map[string]bool{
+	"invalid_request": true, "invalid_client": true, "invalid_grant": true, "unauthorized_client": true,
+	"unsupported_grant_type": true, "invalid_scope": true, "access_denied": true, "server_error": true,
+	"temporarily_unavailable": true, "authorization_pending": true, "slow_down": true, "expired_token": true,
+}
+
+func oauthErrorWord(data JSONObject) string {
+	errValue := data.Get("error")
+	candidates := []any{errValue}
+	if obj := wireObj(errValue); obj != nil {
+		candidates = []any{obj.Get("code"), obj.Get("type")}
+	}
+	for _, c := range candidates {
+		if w, ok := c.(string); ok && oauthErrorWords[w] {
+			return w
+		}
+	}
+	return ""
+}
+
 func exchange(ctx *ChainContext, method, url string, headers map[string]string, body []byte, what string) (JSONObject, error) {
+	return exchangeHint(ctx, method, url, headers, body, what, "")
+}
+
+// exchangeHint is one token-endpoint round trip whose refusal carries the
+// status, a fixed OAuth word (AUTH-21) and, when the caller knows it, the
+// one action that fixes it instead of the API-key guidance.
+func exchangeHint(ctx *ChainContext, method, url string, headers map[string]string, body []byte, what, hint string) (JSONObject, error) {
 	status, _, raw, err := ctx.HTTP(method, url, headers, body, 30*time.Second)
 	if err != nil {
 		return nil, err
 	}
 	if status < 200 || status >= 300 {
-		return nil, chainAuthError(fmt.Sprintf("%s: HTTP %d", what, status))
+		data := jsonBody(raw)
+		word := oauthErrorWord(data)
+		msg := fmt.Sprintf("%s: HTTP %d", what, status)
+		if word != "" {
+			msg += " (" + word + ")"
+		}
+		var e *Error
+		if hint != "" {
+			e = AuthErrorf("", nil, hint, "%s", msg)
+		} else {
+			e = chainAuthError(msg)
+		}
+		e.ProviderCode = word
+		return nil, e
 	}
 	return jsonBody(raw), nil
 }
@@ -1511,7 +1558,8 @@ func gcpFromInfo(ctx *ChainContext, info JSONObject, where string) (Credential, 
 			tokenURI = gcpTokenURL
 		}
 		pairs := [][2]string{{"grant_type", "refresh_token"}, {"client_id", wireStr(info.Get("client_id"))}, {"client_secret", wireStr(info.Get("client_secret"))}, {"refresh_token", wireStr(info.Get("refresh_token"))}}
-		data, err := exchange(ctx, "POST", tokenURI, map[string]string{"content-type": "application/x-www-form-urlencoded"}, formBody(pairs), "Google OAuth refresh")
+		data, err := exchangeHint(ctx, "POST", tokenURI, map[string]string{"content-type": "application/x-www-form-urlencoded"}, formBody(pairs),
+			"Google OAuth refresh ("+where+")", gcpUserLoginHint(where))
 		if err != nil {
 			return nil, err
 		}
@@ -1521,7 +1569,9 @@ func gcpFromInfo(ctx *ChainContext, info JSONObject, where string) (Credential, 
 		if err != nil {
 			return nil, err
 		}
-		data, err := exchange(ctx, "POST", tokenURI, map[string]string{"content-type": "application/x-www-form-urlencoded"}, formBody([][2]string{{"grant_type", jwtBearerGrant}, {"assertion", assertion}}), "Google service account")
+		data, err := exchangeHint(ctx, "POST", tokenURI, map[string]string{"content-type": "application/x-www-form-urlencoded"}, formBody([][2]string{{"grant_type", jwtBearerGrant}, {"assertion", assertion}}),
+			"Google service account key ("+where+")",
+			"the key in "+where+" may have been deleted or disabled, or this machine's clock is off; create a new key (Cloud console: IAM & Admin > Service accounts > Keys) or use another identity")
 		if err != nil {
 			return nil, err
 		}
@@ -1537,17 +1587,19 @@ func gcpFromInfo(ctx *ChainContext, info JSONObject, where string) (Credential, 
 		if err != nil {
 			return nil, err
 		}
-		return gcpImpersonate(ctx, base.(BearerToken), wireStr(info.Get("service_account_impersonation_url")), wireList(info.Get("delegates")))
+		return gcpImpersonate(ctx, base.(BearerToken), wireStr(info.Get("service_account_impersonation_url")), wireList(info.Get("delegates")), where)
 	}
 	return nil, NotConfiguredErrorf("", nil, "", "%s: credential type %q is not supported by lm15 (external_account_authorized_user and gdch_service_account are stated gaps)", where, wireStr(info.Get("type")))
 }
 
-func gcpImpersonate(ctx *ChainContext, source BearerToken, impersonationURL string, delegates []any) (Credential, error) {
+func gcpImpersonate(ctx *ChainContext, source BearerToken, impersonationURL string, delegates []any, where string) (Credential, error) {
 	if delegates == nil {
 		delegates = []any{}
 	}
 	body := mustJSON(JSONObject{{"delegates", delegates}, {"scope", []any{gcpScope}}, {"lifetime", "3600s"}})
-	data, err := exchange(ctx, "POST", impersonationURL, map[string]string{"content-type": "application/json", "authorization": "Bearer " + source.Value}, body, "generateAccessToken")
+	data, err := exchangeHint(ctx, "POST", impersonationURL, map[string]string{"content-type": "application/json", "authorization": "Bearer " + source.Value}, body,
+		"service account impersonation ("+where+"; generateAccessToken)",
+		"the service account named in "+where+" must exist, and the source identity needs roles/iam.serviceAccountTokenCreator on it (roles/iam.workloadIdentityUser for a workload identity pool), and the IAM Credentials API (iamcredentials.googleapis.com) enabled; a new grant can take several minutes to apply")
 	if err != nil {
 		return nil, err
 	}
@@ -1626,7 +1678,8 @@ func gcpExternalAccount(ctx *ChainContext, info JSONObject, where string) (Crede
 	if tokenURL == "" {
 		tokenURL = gcpSTSURL
 	}
-	data, err := exchange(ctx, "POST", tokenURL, map[string]string{"content-type": "application/json"}, body, "Google STS exchange")
+	data, err := exchangeHint(ctx, "POST", tokenURL, map[string]string{"content-type": "application/json"}, body, "Google STS exchange ("+where+")",
+		"the workload identity pool refused the external token: check the provider's issuer, allowed audience and attribute condition, and that the subject token is fresh")
 	if err != nil {
 		return nil, err
 	}
@@ -1635,7 +1688,7 @@ func gcpExternalAccount(ctx *ChainContext, info JSONObject, where string) (Crede
 		return nil, err
 	}
 	if u := stringOnly(info.Get("service_account_impersonation_url")); u != "" {
-		return gcpImpersonate(ctx, token, u, nil)
+		return gcpImpersonate(ctx, token, u, nil, where)
 	}
 	return token, nil
 }
@@ -1669,12 +1722,23 @@ func gcloudAcquire(ctx *ChainContext) (Credential, error) {
 	}
 	out, err := ctx.Run([]string{"gcloud", "auth", "print-access-token"}, 30*time.Second)
 	if err != nil {
+		var e *Error
+		if errors.As(err, &e) && e.Kind.IsA(KindAuth) {
+			// gcloud's own words stay unread (AUTH-5: a command's stderr is not shown).
+			base, _, _ := strings.Cut(e.Message, guidanceMarker)
+			return nil, AuthErrorf("", nil, "run `gcloud auth print-access-token` yourself to see gcloud's reason; usually `gcloud auth login` fixes it (or `gcloud auth application-default login`, which lm15 reads first)",
+				"`gcloud auth print-access-token` failed: %s", base)
+		}
 		return nil, err
 	}
 	if token := strings.TrimSpace(out); token != "" {
 		return BearerToken{Value: token}, nil
 	}
 	return nil, nil
+}
+
+func gcpUserLoginHint(where string) string {
+	return "the saved Google login in " + where + " has expired or was revoked; run `gcloud auth application-default login` (Google ends these sessions on its own schedule)"
 }
 
 func adcFilePath(ctx *ChainContext) string {
@@ -1751,34 +1815,115 @@ func gcpChain(policy AccessPolicy) []Rung {
 
 // ─── Settings from the cloud profile ─────────────────────────────────
 
-// ProfileSettings returns the setting values the cloud's own config files
-// carry (AWS region, GCP project).
-func ProfileSettings(policy AccessPolicy, ctx *ChainContext) func(string) string {
-	return func(name string) string {
+var gcloudConfigName = regexp.MustCompile(`^[a-z][-a-z0-9]*$`) // gcloud's own rule (named_configs.py:37); keeps the name inside the directory
+
+// gcloudConfigProject is the project `gcloud config get project` prints,
+// read from the files gcloud reads (AUTH-10, amended 2026-09-26):
+// CLOUDSDK_CORE_PROJECT, then [core] project in
+// $CLOUDSDK_CONFIG/configurations/config_<name>, <name> from
+// CLOUDSDK_ACTIVE_CONFIG_NAME, else the active_config file, else default.
+func gcloudConfigProject(ctx *ChainContext) (value, from string) {
+	if v := strings.TrimSpace(ctx.Env["CLOUDSDK_CORE_PROJECT"]); v != "" {
+		return v, "env:CLOUDSDK_CORE_PROJECT"
+	}
+	base := ctx.Env["CLOUDSDK_CONFIG"]
+	if base == "" {
+		base = "~/.config/gcloud"
+	}
+	base = strings.TrimRight(base, "/")
+	name := strings.TrimSpace(ctx.Env["CLOUDSDK_ACTIVE_CONFIG_NAME"])
+	if name == "" {
+		active, _ := ctx.read(base + "/active_config")
+		name = strings.TrimSpace(active)
+	}
+	if name == "" {
+		name = "default"
+	}
+	if !gcloudConfigName.MatchString(name) {
+		return "", ""
+	}
+	raw, ok := ctx.read(base + "/configurations/config_" + name)
+	if !ok || raw == "" {
+		return "", ""
+	}
+	ini, err := parseINI(raw)
+	if err != nil {
+		return "", ""
+	}
+	if v := strings.TrimSpace(ini.section("core")["project"]); v != "" {
+		return v, "gcloud-config"
+	}
+	return "", ""
+}
+
+// gcpMetadataProject is project/project-id from the metadata server: the
+// project a Cloud Run service, GKE pod or VM runs in. Offline (the
+// doctor) it is ("", "metadata"): unprobed.
+func gcpMetadataProject(ctx *ChainContext) (value, from string) {
+	if gceCheckDisabled(ctx) {
+		return "", ""
+	}
+	if ctx.HTTP == nil {
+		return "", "metadata"
+	}
+	host := ctx.Env["GCE_METADATA_HOST"]
+	if host == "" {
+		host = ctx.Env["GCE_METADATA_ROOT"]
+	}
+	if host == "" {
+		host = "metadata.google.internal"
+	}
+	status, _, raw, err := ctx.HTTP("GET", "http://"+host+"/computeMetadata/v1/project/project-id", map[string]string{"Metadata-Flavor": "Google"}, nil, time.Second)
+	if err != nil || status != 200 {
+		return "", ""
+	}
+	v := strings.TrimSpace(string(raw))
+	if v == "" || strings.ContainsAny(v, " \t\r\n/?#") {
+		return "", ""
+	}
+	return v, "metadata"
+}
+
+// ProfileSettings returns the setting values the cloud's own configuration
+// carries, as (value, from) in the AUTH-10 vocabulary. AWS region: the
+// active profile. Google project (amended 2026-09-26, the order google-auth
+// and gcloud give it): the GOOGLE_APPLICATION_CREDENTIALS file's project_id
+// (then quota_project_id); gcloud's active configuration; the ADC file's
+// quota_project_id / project_id; the metadata server (online at
+// construction; offline ("", "metadata") = unprobed). Nothing for Azure.
+func ProfileSettings(policy AccessPolicy, ctx *ChainContext) func(string) (string, string) {
+	return func(name string) (string, string) {
 		switch {
 		case policy.EffectiveCredentialPolicy() == "aws-chain" && name == "region":
 			creds, conf, profile, err := awsConfig(ctx)
 			if err != nil {
-				return ""
+				return "", ""
 			}
 			if v := awsProfileSection(conf, profile)["region"]; v != "" {
-				return v
+				return v, "aws-profile"
 			}
 			if creds.has(profile) {
-				return creds.section(profile)["region"]
+				if v := creds.section(profile)["region"]; v != "" {
+					return v, "aws-profile"
+				}
 			}
 		case policy.EffectiveCredentialPolicy() == "gcp-chain" && name == "project":
-			for _, path := range []string{ctx.Env["GOOGLE_APPLICATION_CREDENTIALS"], adcFilePath(ctx)} {
-				if path == "" {
-					continue
-				}
+			if path := ctx.Env["GOOGLE_APPLICATION_CREDENTIALS"]; path != "" {
 				info, _ := gcpCredentialFile(ctx, path)
-				if v := firstStr(info.Get("quota_project_id"), info.Get("project_id")); v != "" {
-					return v
+				if v := firstStr(info.Get("project_id"), info.Get("quota_project_id")); v != "" {
+					return v, "adc-env"
 				}
 			}
+			if v, from := gcloudConfigProject(ctx); v != "" {
+				return v, from
+			}
+			info, _ := gcpCredentialFile(ctx, adcFilePath(ctx))
+			if v := firstStr(info.Get("quota_project_id"), info.Get("project_id")); v != "" {
+				return v, "adc-file"
+			}
+			return gcpMetadataProject(ctx)
 		}
-		return ""
+		return "", ""
 	}
 }
 
@@ -2078,11 +2223,44 @@ func ResolveChainNamed(policy AccessPolicy, ctx *ChainContext, named string) (Cr
 			policy.Provider, named, NamedMeaningFor(policy, named), probedSummary(ctx, rungs), policy.EffectiveCredentialPolicy())
 		return nil, CredentialSource{}, e
 	}
-	hint := "configure the cloud SDK"
-	if len(policy.EnvKeys) > 0 {
-		hint = "set " + policy.EnvKeys[0] + " or configure the cloud SDK"
+	return nil, CredentialSource{}, NotConfiguredErrorf(policy.Provider, policy.EnvKeys, nothingFoundHint(policy),
+		"%s: no credential found in the %s chain (%s)", policy.Provider, policy.EffectiveCredentialPolicy(), probedSummary(ctx, rungs))
+}
+
+// nothingFoundHints: what to do when a whole chain answers nothing — the
+// command that creates a credential the chain reads, then the deployed
+// alternatives.
+var nothingFoundHints = map[string]string{
+	"gcp-chain":   "on a laptop: `gcloud auth application-default login`; elsewhere: set GOOGLE_APPLICATION_CREDENTIALS to a service-account or workload-identity file, run on Google Cloud with an attached service account, or pass RouterConfig APIKeys{\"<provider>\": <token, key or provider>}",
+	"azure-chain": "on a laptop: `az login`; elsewhere: a managed identity, AZURE_TENANT_ID + AZURE_CLIENT_ID with a secret or certificate, or RouterConfig APIKeys{\"<provider>\": <token provider>}",
+	"aws-chain":   "on a laptop: `aws sso login` or `aws configure`; elsewhere: the instance or container role, AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY, or RouterConfig APIKeys{\"<provider>\": <credentials provider>}",
+}
+
+func nothingFoundHint(policy AccessPolicy) string {
+	hint := nothingFoundHints[policy.EffectiveCredentialPolicy()]
+	if hint != "" && len(policy.EnvKeys) > 0 {
+		hint = "set " + policy.EnvKeys[0] + ", or " + hint
 	}
-	return nil, CredentialSource{}, NotConfiguredErrorf(policy.Provider, policy.EnvKeys, "", "%s: no credential found in the %s chain; %s", policy.Provider, policy.EffectiveCredentialPolicy(), hint)
+	return strings.Replace(hint, "<provider>", policy.Provider, 1)
+}
+
+// wireAuthHint: how a cloud door's wire refusal (HTTP 401/403 after a
+// credential was obtained) is fixed; replaces the generic API-key guidance.
+// sent is what the adapter knows it sent: "key", "token", or "" (a provider
+// function decides per request).
+func wireAuthHint(policy AccessPolicy, status int, sent string) string {
+	if policy.EffectiveCredentialPolicy() != "gcp-chain" {
+		return ""
+	}
+	switch {
+	case status == 403:
+		return "give the identity named above the Vertex AI User role (roles/aiplatform.user) on the project and enable the Vertex AI API (aiplatform.googleapis.com); a new project or a new grant can take a few minutes to apply. To use another identity: `gcloud auth application-default login`, or GOOGLE_APPLICATION_CREDENTIALS=<file>"
+	case status != 401:
+		return ""
+	case sent == "key":
+		return "Google refused this API key: use a Vertex AI key (Cloud console > APIs & Services > Credentials, restricted to the Vertex AI API or bound to a service account); Claude on Vertex takes no keys. If the value is an access token that does not start with `ya29.`, pass lm15.BearerToken{Value: value}"
+	}
+	return "Google refused this access token: it expired (they last an hour; pass a provider, or let lm15's chain refresh it) or it is not an OAuth token. Sign in again with `gcloud auth application-default login`"
 }
 
 // cachingProvider is the AUTH-2 provider over a cloud chain (or a named

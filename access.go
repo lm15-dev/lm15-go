@@ -364,13 +364,17 @@ var AzureAnthropic = AccessPolicy{
 	},
 }
 
-// Vertex is Gemini on Google Cloud.
+// Vertex is Gemini on Google Cloud. API keys (amended 2026-09-26): a Vertex
+// API key in x-goog-api-key on the project-scoped hosts; key first, a
+// token-shaped string still bearer (AuthHeaderFor). No env key:
+// GOOGLE_API_KEY belongs to the Gemini API and vertex-express, and reading
+// it here would silently replace the ADC identity.
 var Vertex = AccessPolicy{
 	Provider:         "vertex",
 	Supports:         EndpointSupport{Complete: true, Stream: true},
 	CredentialPolicy: "gcp-chain",
-	AuthModes:        []string{"google-oauth"},
-	AuthScheme:       []string{"bearer"},
+	AuthModes:        []string{"x-goog-api-key", "google-oauth"},
+	AuthScheme:       []string{"x-api-key", "bearer"},
 	Backend:          "vertex",
 	Host:             &HostSpec{BaseURL: vertexBase + "/publishers/google", Settings: []HostSetting{gcpProject, gcpLocation}},
 }
@@ -444,6 +448,20 @@ func SelectScheme(policy AccessPolicy, credential Credential) (string, error) {
 		policy.Provider, credential.Kind(), strings.Join(schemes, "/"), strings.Join(accepted, "/"))
 }
 
+// looksLikeAccessToken is the token shape a plain string has, if any
+// (AUTH-2, amended 2026-09-19 and 2026-09-26): "JWT" (JWS compact) or
+// "Google access token" (ya29., what every Google token endpoint issues).
+// No key any door issues has either shape.
+func looksLikeAccessToken(text string) string {
+	if strings.HasPrefix(text, "ya29.") {
+		return "Google access token"
+	}
+	if looksLikeJWT(text) {
+		return "JWT"
+	}
+	return ""
+}
+
 func looksLikeJWT(text string) bool {
 	parts := strings.Split(text, ".")
 	if len(parts) != 3 {
@@ -487,7 +505,7 @@ func AuthHeaderFor(policy AccessPolicy, credential Credential, apiKeyHeader stri
 	default:
 		return "", "", false, nil
 	}
-	if (scheme == "api-key" || scheme == "x-api-key") && inVocab("bearer", policy.EffectiveAuthScheme()) && looksLikeJWT(raw) {
+	if (scheme == "api-key" || scheme == "x-api-key") && inVocab("bearer", policy.EffectiveAuthScheme()) && looksLikeAccessToken(raw) != "" {
 		// AUTH-2, amended 2026-09-19: a JWS compact JWT is never an API key
 		// on any door lm15 has; it is an Entra/OAuth access token a
 		// token-provider callable handed over as a string. Sent as a key it

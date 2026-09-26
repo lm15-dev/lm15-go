@@ -39,6 +39,32 @@ type AuthReport struct {
 	// where it came from ("base_urls", "env $VAR", or "template").
 	BaseURL       string
 	BaseURLSource string
+	// SettingSources says where each setting came from (AUTH-10 "from",
+	// amended 2026-09-26): explicit, env:<VAR>, adc-env, gcloud-config,
+	// adc-file, metadata, aws-profile, default; unprobed:metadata when only
+	// the metadata server could answer; missing.
+	SettingSources [][2]string
+}
+
+var settingFromText = map[string]string{
+	"explicit":          "settings",
+	"adc-env":           "the GOOGLE_APPLICATION_CREDENTIALS file",
+	"gcloud-config":     "gcloud's active configuration",
+	"adc-file":          "the gcloud application default credentials file",
+	"metadata":          "the Google Cloud metadata server",
+	"unprobed:metadata": "the Google Cloud metadata server",
+	"aws-profile":       "the active AWS profile",
+	"default":           "default",
+}
+
+func settingFrom(origin string) string {
+	if strings.HasPrefix(origin, "env:") {
+		return "env $" + origin[4:]
+	}
+	if text, ok := settingFromText[origin]; ok {
+		return text
+	}
+	return origin
 }
 
 // Selected returns the winning step.
@@ -75,8 +101,21 @@ func (r AuthReport) Describe() string {
 	default:
 		lines = append(lines, "  configured: no")
 	}
+	origins := map[string]string{}
+	for _, s := range r.SettingSources {
+		origins[s[0]] = s[1]
+	}
 	for _, s := range r.Settings {
-		lines = append(lines, "  setting "+s[0]+": "+s[1])
+		line := "  setting " + s[0] + ": " + s[1]
+		if o := origins[s[0]]; o != "" && o != "missing" {
+			line += " (from " + settingFrom(o) + ")"
+		}
+		lines = append(lines, line)
+	}
+	for _, s := range r.SettingSources {
+		if strings.HasPrefix(s[1], "unprobed:") {
+			lines = append(lines, "  setting "+s[0]+": not found offline; "+settingFrom(s[1])+" is asked at request time")
+		}
 	}
 	if r.Named != "" {
 		lines = append(lines, fmt.Sprintf("  named credential %q: %s — the chain is not walked", r.Named, r.NamedMeaning))
@@ -305,7 +344,17 @@ func explainCloud(canonical string, def ProviderDefinition, config RouterConfig,
 		}
 	}
 	settingError := ""
-	resolved, err := resolveSettingsWithEndpoint(def.Access.Host, opts.Settings, env, canonical, ProfileSettings(def.Access, ctx), endpoint)
+	sources := map[string]string{}
+	var problems []*Error
+	resolved, err := resolveSettingsFull(def.Access.Host, opts.Settings, env, canonical, ProfileSettings(def.Access, ctx),
+		settingsOptions{endpoint: endpoint, sources: sources, problems: &problems, unprobedOK: true})
+	if err == nil && len(problems) > 0 {
+		settingError = firstLine(problems[0])
+	}
+	pending := false
+	for _, o := range sources {
+		pending = pending || strings.HasPrefix(o, "unprobed:")
+	}
 	if err != nil {
 		if IsKind(err, KindNotConfigured) {
 			settingError = firstLine(err)
@@ -316,7 +365,7 @@ func explainCloud(canonical string, def ProviderDefinition, config RouterConfig,
 	}
 	ctx.Settings = resolved
 	rendered, renderedSource := "", ""
-	if def.Access.Host != nil && settingError == "" {
+	if def.Access.Host != nil && settingError == "" && !pending {
 		if url, err := renderBaseURLAt(*def.Access.Host, resolved, endpoint, canonical); err != nil {
 			if IsKind(err, KindNotConfigured) {
 				settingError = firstLine(err)
@@ -377,7 +426,16 @@ func explainCloud(canonical string, def ProviderDefinition, config RouterConfig,
 	if settingError != "" {
 		shown = append(shown, [2]string{"error", settingError})
 	}
-	report := AuthReport{Provider: canonical, Steps: steps, Configured: configured, Settings: shown, BaseURL: rendered, BaseURLSource: renderedSource}
+	sourceNames := make([]string, 0, len(sources))
+	for k := range sources {
+		sourceNames = append(sourceNames, k)
+	}
+	sort.Strings(sourceNames)
+	var settingSources [][2]string
+	for _, k := range sourceNames {
+		settingSources = append(settingSources, [2]string{k, sources[k]})
+	}
+	report := AuthReport{Provider: canonical, Steps: steps, Configured: configured, Settings: shown, BaseURL: rendered, BaseURLSource: renderedSource, SettingSources: settingSources}
 	if opts.Credential != "" {
 		report.Named = opts.Credential
 		report.NamedMeaning = NamedMeaningFor(def.Access, opts.Credential)

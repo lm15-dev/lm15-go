@@ -1048,7 +1048,25 @@ func vetExplainAuth(msg JSONObject) (JSONObject, error) {
 	}
 	steps := toAnyList(report.Steps, func(s AuthStep) any { return JSONObject{{"kind", s.Kind}, {"state", s.State}} })
 	text := report.Describe()
-	out := JSONObject{{"configured", report.Configured}, {"steps", steps}, {"report_text", strings.Join([]string{text, fmt.Sprintf("%+v", report.Steps), text}, "\n")}}
+	// PROTOCOL.md explain_auth settings (2026-09-26): value and origin per host setting.
+	values := map[string]string{}
+	for _, s := range report.Settings {
+		if s[0] != "error" {
+			values[s[0]] = s[1]
+		}
+	}
+	settings := JSONObject{}
+	for _, s := range report.SettingSources {
+		switch {
+		case s[1] == "missing":
+			settings.Set(s[0], JSONObject{{"value", nil}, {"from", nil}})
+		case strings.HasPrefix(s[1], "unprobed:"):
+			settings.Set(s[0], JSONObject{{"value", nil}, {"from", strings.TrimPrefix(s[1], "unprobed:")}, {"state", "unprobed"}})
+		default:
+			settings.Set(s[0], JSONObject{{"value", values[s[0]]}, {"from", s[1]}})
+		}
+	}
+	out := JSONObject{{"configured", report.Configured}, {"steps", steps}, {"settings", settings}, {"report_text", strings.Join([]string{text, fmt.Sprintf("%+v", report.Steps), text}, "\n")}}
 	if report.BaseURL != "" {
 		out.Set("base_url", report.BaseURL)
 	}

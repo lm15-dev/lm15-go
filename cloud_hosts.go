@@ -13,17 +13,40 @@ import (
 // functions, in the order an adapter calls them: resolveSettings,
 // renderBaseURL, finishRequest (then signRequest after serialization).
 
-// resolveSettings fills the host's settings from explicit values, then env
-// (when given), then a profile lookup, then defaults; a required setting
-// with no value raises NotConfiguredError naming the variable.
-func resolveSettings(host *HostSpec, given map[string]string, env map[string]string, provider string, profile func(string) string) (map[string]string, error) {
-	return resolveSettingsWithEndpoint(host, given, env, provider, profile, "")
+// profileFunc is the cloud's own configuration for a setting, as (value,
+// from) in the AUTH-10 vocabulary; ("", "metadata") means only the
+// metadata server could answer and this context is offline.
+type profileFunc func(string) (string, string)
+
+// settingsOptions are resolveSettingsFull's optional parts.
+type settingsOptions struct {
+	endpoint string
+	// sources receives each setting's origin: explicit, env:<VAR>, adc-env,
+	// gcloud-config, adc-file, metadata, aws-profile, default, missing,
+	// unprobed:<from>.
+	sources map[string]string
+	// problems (the doctor) receives missing-setting errors instead of a
+	// return error; the settings that did resolve are returned.
+	problems *[]*Error
+	// unprobedOK (the doctor): a setting only a network source could supply
+	// is left out and recorded unprobed.
+	unprobedOK bool
+}
+
+// resolveSettings: explicit values, then env (when given), then the
+// cloud's own configuration, then defaults (AUTH-10).
+func resolveSettings(host *HostSpec, given map[string]string, env map[string]string, provider string, profile profileFunc) (map[string]string, error) {
+	return resolveSettingsFull(host, given, env, provider, profile, settingsOptions{})
 }
 
 // resolveSettingsWithEndpoint is resolveSettings when the caller named an
 // endpoint root: the settings only the URL root needed are optional
 // (HostSpec.URLOnlySettings; AUTH-10, amended 2026-09-19).
-func resolveSettingsWithEndpoint(host *HostSpec, given map[string]string, env map[string]string, provider string, profile func(string) string, endpoint string) (map[string]string, error) {
+func resolveSettingsWithEndpoint(host *HostSpec, given map[string]string, env map[string]string, provider string, profile profileFunc, endpoint string) (map[string]string, error) {
+	return resolveSettingsFull(host, given, env, provider, profile, settingsOptions{endpoint: endpoint})
+}
+
+func resolveSettingsFull(host *HostSpec, given map[string]string, env map[string]string, provider string, profile profileFunc, opts settingsOptions) (map[string]string, error) {
 	out := map[string]string{}
 	if host == nil {
 		for k, v := range given {
@@ -32,59 +55,90 @@ func resolveSettingsWithEndpoint(host *HostSpec, given map[string]string, env ma
 		return out, nil
 	}
 	relaxed := map[string]bool{}
-	if endpoint != "" {
+	if opts.endpoint != "" {
 		relaxed = host.URLOnlySettings()
 	}
 	remaining := map[string]string{}
 	for k, v := range given {
 		remaining[k] = v
 	}
+	record := opts.sources
+	if record == nil {
+		record = map[string]string{}
+	}
+	name := provider
+	if name == "" {
+		name = "host"
+	}
+	var missing *Error
 	for _, setting := range host.Settings {
 		value := remaining[setting.Name]
 		delete(remaining, setting.Name)
+		origin := ""
+		if value != "" {
+			origin = "explicit"
+		}
 		if value == "" && env != nil {
 			for _, v := range setting.Env {
 				if candidate := env[v]; candidate != "" {
-					value = candidate
+					value, origin = candidate, "env:"+v
 					break
 				}
 			}
 		}
+		unprobed := ""
 		if value == "" && profile != nil {
-			value = profile(setting.Name)
+			v, from := profile(setting.Name)
+			if v != "" {
+				value, origin = v, from
+			} else {
+				unprobed = from
+			}
 		}
-		if value == "" {
-			value = setting.Default
+		if value == "" && setting.Default != "" {
+			value, origin = setting.Default, "default"
 		}
 		if value == "" {
 			if relaxed[setting.Name] {
 				continue
 			}
-			name := provider
-			if name == "" {
-				name = "host"
+			if unprobed != "" && opts.unprobedOK {
+				record[setting.Name] = "unprobed:" + unprobed
+				continue
 			}
 			hint := "pass settings={'" + setting.Name + "': ...}"
 			if len(setting.Env) > 0 {
 				hint = "set " + strings.Join(setting.Env, " or ")
 			}
+			if setting.Name == "project" {
+				// The Google project also comes from gcloud, the credential
+				// files and the metadata server; those said nothing (AUTH-10).
+				hint += ", run `gcloud config set project <id>`, or pass settings={'project': ...}"
+			}
 			if host.URLOnlySettings()[setting.Name] && len(host.EndpointEnv) > 0 {
 				hint += ", or the endpoint: " + strings.Join(host.EndpointEnv, " or ")
 			}
-			return nil, NotConfiguredErrorf(provider, nil, hint, "%s: setting %q is required and has no default; %s", name, setting.Name, hint)
+			record[setting.Name] = "missing"
+			if missing == nil {
+				missing = NotConfiguredErrorf(provider, nil, hint, "%s: setting %q is required and has no default; %s", name, setting.Name, hint)
+			}
+			continue
 		}
 		out[setting.Name] = value
+		record[setting.Name] = origin
 	}
 	if len(remaining) > 0 {
 		var unknown []string
 		for k := range remaining {
 			unknown = append(unknown, k)
 		}
-		name := provider
-		if name == "" {
-			name = "host"
-		}
 		return nil, valueErrorf("%s: unknown host setting(s) %v; known: %v", name, sortStrings(unknown), host.SettingNames())
+	}
+	if missing != nil {
+		if opts.problems == nil {
+			return nil, missing
+		}
+		*opts.problems = append(*opts.problems, missing)
 	}
 	return out, nil
 }

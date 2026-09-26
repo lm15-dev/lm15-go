@@ -662,7 +662,36 @@ func (c *lmCore) withLoginHint(e *Error) *Error {
 	if hint != "" && (c.access.EffectiveCredentialPolicy() == "oauth" || c.credentialSource == "stored") {
 		return WithCredentialHint(e, hint)
 	}
+	if e != nil && e.Kind.IsA(KindAuth) && c.access.CloudChain() {
+		// A cloud door refusing an identity is an IAM or token question, not
+		// a mistyped key: say which role, or which kind of credential.
+		if wire := wireAuthHint(c.access, e.Status, c.sentCredentialKind()); wire != "" {
+			return WithCredentialHint(e, wire)
+		}
+	}
 	return e
+}
+
+// sentCredentialKind is "key", "token", or "" when a provider function
+// decides per request.
+func (c *lmCore) sentCredentialKind() string {
+	if _, ok := c.credential.(*cachingProvider); ok {
+		return "token"
+	}
+	static, ok := c.credential.(StaticCredential)
+	if !ok {
+		return ""
+	}
+	switch v := static.Value.(type) {
+	case BearerToken:
+		return "token"
+	case APIKey:
+		if looksLikeAccessToken(v.Value) != "" {
+			return "token"
+		}
+		return "key"
+	}
+	return ""
 }
 
 // ─── Public surface ──────────────────────────────────────────────────

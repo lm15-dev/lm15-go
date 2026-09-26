@@ -181,6 +181,37 @@ response, err := client.Ask(ctx, "Explain drought stress in oaks.")
 
 See [docs/managed-login.md](docs/managed-login.md).
 
+### Azure, AWS and Google Cloud
+
+The cloud doors (`azure:`, `bedrock-anthropic:`, `vertex:` …) find the
+identity your machine already has, the way each cloud's own SDK does. Google
+Cloud, for example:
+
+```go
+// Laptop: `gcloud auth application-default login` and
+// `gcloud config set project my-project`, nothing else.
+router, err := lm15.NewRouterWithConfig(lm15.RouterConfig{})
+response, err := router.Complete(ctx, &lm15.Request{Model: "vertex:gemini-2.5-flash",
+	Messages: []lm15.Message{lm15.UserMessage("hi")}})
+
+// Cloud Run, GKE, a VM: the attached service account and the project both come
+// from the metadata server. Naming it fails fast if it is missing.
+deployed, err := lm15.NewRouterWithConfig(lm15.RouterConfig{Credentials: map[string]string{"vertex": "platform"}})
+
+// A Vertex API key, in your project and a region you choose.
+keyed, err := lm15.NewRouterWithConfig(lm15.RouterConfig{
+	APIKeys:  map[string]lm15.CredentialLike{"vertex": os.Getenv("MY_VERTEX_KEY")},
+	Settings: map[string]map[string]string{"vertex": {"location": "europe-west4"}},
+})
+```
+
+`lm15.ExplainAuth("vertex", lm15.ExplainOptions{})` says which identity and
+which project lm15 would use, without a network call. When sign-in fails, the
+error names the fix. The whole path (project setup, workload identity
+federation, Claude on Vertex) is in the
+[cloud hosts guide](https://lm15-dev.github.io/lm15-python/cloud-hosts/#google-cloud-start-to-finish);
+the Go names are the Python ones in Go spelling.
+
 ### More
 
 Judgments with probabilities (`lm15.Judgments`, `Response.Probabilities`),

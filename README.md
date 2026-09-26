@@ -35,14 +35,14 @@ examples) · API reference:
 Requires Go 1.26.2 or newer.
 
 ```bash
-go get github.com/lm15-dev/lm15-go@v1.1.0-rc.1
+go get github.com/lm15-dev/lm15-go@v1.1.0-rc.2
 ```
 
 ```go
 import lm15 "github.com/lm15-dev/lm15-go"
 ```
 
-**v1.1.0-rc.1 is a release candidate**: the first release of lm15 for Go,
+**v1.1.0-rc.2 is a release candidate** (v1.1.0-rc.1 was the first release of lm15 for Go),
 open for trying before v1.1.0. Python's lm15 1.0 is stable; TypeScript and
 Rust are release candidates too. Why Go starts at 1.1: see
 [Versions](#versions).

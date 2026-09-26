@@ -26,6 +26,17 @@ retracted, `go get` installs `main` as a pseudo-version; a module pinned to
 | Version | Date | Contract pin | Notes |
 |---|---|---|---|
 | `v1.1.0-rc.1` | 2026-09-26 | `3763eec` | The first release. 1,583 of 1,583 contract checks. |
+| `v1.1.0-rc.2` | 2026-09-26 | `fe5cdf9` | DeepInfra, Together AI, Fireworks AI, Parasail; the Google Cloud pass. 1,788 of 1,788 contract checks. |
+
+### `v1.1.0-rc.2`: what was checked
+
+- `go vet ./...`, `go test ./...`, `gofmt`, the wasm build (CI on Linux,
+  macOS and Windows).
+- The contract at the pin: 1,788 of 1,788 checks.
+- Live: the four open-model hosts, 16 of 16 checks
+  (`receipts/2026-09-26-inference-hosts-live-smoke`); Google Cloud, the 13
+  identity setups of lm15-contract `changes/2026-09-26-vertex-live.md`, all
+  200 through Go's own chain.
 
 ### `v1.1.0-rc.1`: what was checked
 

@@ -202,8 +202,8 @@ caches, realtime sessions, Chat Completions ingest and sign-in.
 ## Conformance
 
 This module is graded by [lm15-contract](https://github.com/lm15-dev/lm15-contract)
-at the commit in `CONTRACT_PIN`: **1,583 of 1,583 checks pass**, the same
-count as Python, TypeScript and Rust. The checks compare the exact requests
+at the commit in `CONTRACT_PIN`: **1,583 of 1,583 checks pass** (2026-09-26),
+as Python, TypeScript and Rust pass every check at theirs. The checks compare the exact requests
 lm15 builds and the responses it reads against recorded provider traffic.
 
 ```bash

@@ -21,29 +21,31 @@ retracted, `go get` installs `main` as a pseudo-version; a module pinned to
 `v1.0.0` sees "(retracted)" and the reason; once `v1.1.0-rc.1` exists,
 `go get ...@latest` selects it.
 
-## Before `v1.1.0-rc.1`
+## Releases
 
-The port must pass the contract at its `CONTRACT_PIN`
-(`python3 harness/check.py --shim go --direction all` in lm15-contract).
-It does: 1,583 of 1,583 checks at the pin set on 2026-09-26, including the
-opaque key-order check (2026-09-25) and the Gemini schema-field vectors
-(MAP-16, 2026-09-26). The blocker this
-section used to name (JSON objects written with sorted keys, which broke 23
-byte-pinned cases and a schema's property order) was fixed by making
-`JSONObject` an ordered type through the decoder and the builders.
+| Version | Date | Contract pin | Notes |
+|---|---|---|---|
+| `v1.1.0-rc.1` | 2026-09-26 | `3763eec` | The first release. 1,583 of 1,583 contract checks. |
 
-Live traffic (2026-09-26, `receipts/2026-09-26-live-smoke`, run with
-`go run ./examples/live_smoke -managed -control`): every API-key provider
-family, the Codex CLI's login file and five saved sign-ins, 77 checks, no
-Go defect; Go renewed three saved connections and lm15-python used them
-afterwards.
+### `v1.1.0-rc.1`: what was checked
 
-What remains before tagging:
+- `go vet ./...`, `go test ./...` on Linux, macOS and Windows (CI), the
+  wasm build and its smoke test, `gofmt`.
+- The contract at the pin: 1,583 of 1,583 checks, including the opaque
+  key-order check (2026-09-25) and the Gemini schema-field vectors
+  (MAP-16, 2026-09-26). Mixed-language sign-in runs with Python: pass.
+- Live traffic (`receipts/2026-09-26-live-smoke`, and
+  `receipts/2026-09-26-live-smoke-map16`): every API-key provider family,
+  the Codex CLI's login file and five saved sign-ins, 77 checks, no Go
+  defect; Go renewed three saved connections and lm15-python used them
+  afterwards.
 
-1. A new sign-in per account flow through Go (xAI and Copilot device
-   code, Claude and ChatGPT browser, OpenRouter loopback, Kimi Code,
-   Meta). Each needs a person to approve it; the saved connections Go
-   renewed and used were created by lm15-python.
+Released at the maintainer's request without one step this file listed:
+a fresh sign-in through Go for each account flow (xAI and Copilot device
+code, Claude and ChatGPT browser, OpenRouter loopback, Kimi Code, Meta).
+Each needs a person to approve it. Go's flows are graded by the shared
+managed runs, and Go renewed and used real connections that lm15-python
+had created; a fresh Go sign-in per flow remains to do before v1.1.0.
 
 ## Cutting a release
 

@@ -1,0 +1,149 @@
+{
+  "binding": "typesafe",
+  "check": "judgments",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "jev-latest",
+          "state": "Tasting note: deep ruby, blackcurrant and cedar, firm tannins, long finish, 2019 Pauillac.",
+          "questions": {
+            "style": {
+              "type": "choice",
+              "instructions": "Dominant style?",
+              "criteria": {
+                "fruit": null,
+                "oak": null,
+                "mineral": null
+              }
+            },
+            "quality": {
+              "type": "score",
+              "instructions": "How good is this wine?",
+              "criteria": [
+                "0",
+                "1",
+                "2"
+              ]
+            },
+            "ageing": {
+              "type": "noul",
+              "instructions": "Will it improve with age?"
+            }
+          }
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.typesafe.ai/v1/systemone"
+      },
+      "status": 200,
+      "response_headers": {
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411d0171f22c03e-YUL",
+        "connection": "keep-alive",
+        "content-length": "388",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:08:49 GMT",
+        "server": "cloudflare",
+        "set-cookie": "\u003credacted\u003e",
+        "x-envoy-upstream-service-time": "72",
+        "x-typesafe-request-id": "req_01a0dd674a917bccb2b2200cba85f58d"
+      },
+      "body": {
+        "model": "jev-1.13.0",
+        "answers": {
+          "style": {
+            "type": "choice",
+            "choice": "fruit",
+            "confidence": 0.53,
+            "probabilities": {
+              "mineral": 0.01,
+              "oak": 0.31,
+              "fruit": 0.6799999999999999
+            }
+          },
+          "quality": {
+            "type": "score",
+            "score": 1.88,
+            "confidence": 0.82,
+            "legend": {
+              "0": "0",
+              "1": "1",
+              "2": "2"
+            },
+            "probabilities": {
+              "0": 0.02,
+              "1": 0.08,
+              "2": 0.9
+            }
+          },
+          "ageing": {
+            "type": "noul",
+            "noul": 0.87
+          }
+        },
+        "usage": {
+          "input_tokens": 374,
+          "output_tokens": 70
+        }
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "req_01a0dd674a917bccb2b2200cba85f58d",
+        "model": "jev-1.13.0",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "data",
+              "value": {
+                "style": "fruit",
+                "quality": 2,
+                "ageing": true
+              },
+              "probabilities": {
+                "ageing": {
+                  "false": 0.13,
+                  "true": 0.87
+                },
+                "quality": {
+                  "0": 0.02,
+                  "1": 0.08,
+                  "2": 0.9
+                },
+                "style": {
+                  "fruit": 0.6799999999999999,
+                  "mineral": 0.01,
+                  "oak": 0.31
+                }
+              },
+              "method": "provider_classification"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 374,
+          "output_tokens": 70,
+          "total_tokens": 444
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "typesafe:jev-latest",
+  "notes": [
+    "answer keys in order [style quality ageing]",
+    "data {\"style\":\"fruit\",\"quality\":2,\"ageing\":true}; expected quality 1.88; style map[fruit:0.6799999999999999 mineral:0.01 oak:0.31]"
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:08:49Z",
+  "verdict": "ok"
+}

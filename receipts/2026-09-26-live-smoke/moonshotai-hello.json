@@ -1,0 +1,193 @@
+{
+  "binding": "moonshotai",
+  "check": "hello",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "kimi-k3",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Reply with exactly the two words: hello world"
+            }
+          ],
+          "max_completion_tokens": 2000
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.moonshot.ai/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411cf218d96a294-YUL",
+        "connection": "keep-alive",
+        "content-length": "550",
+        "content-type": "application/json; charset=utf-8",
+        "date": "Sat, 26 Sep 2026 11:08:13 GMT",
+        "msh-context-cache-token-boosted-nvme": "0",
+        "msh-gid": "enterprise-tier-2",
+        "msh-org-id": "org-2d81b908daee4ecd89737068dbe45f75",
+        "msh-project-id": "proj-c00c4b5712a8482a86fe23010c93783e",
+        "msh-request-id": "8f10e59c-b99a-11f1-bb9e-de621f9d8dfd",
+        "msh-trace-mode": "on",
+        "msh-uid": "d9cjddbmrb776abja5p0",
+        "msh-usage-cache-write-tokens-1h": "0",
+        "msh-usage-cache-write-tokens-5m": "0",
+        "server": "cloudflare",
+        "server-timing": "cfCacheStatus;desc=\"DYNAMIC\", cfEdge;dur=236,cfOrigin;dur=3054",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "vary": "Origin",
+        "x-internal-adhoc-canary": "274176817",
+        "x-msh-trace-id": "294ee3af75a9c36665cb65b1a22ec700"
+      },
+      "body": {
+        "id": "chatcmpl-6ab7a79adfe11bad51150321",
+        "object": "chat.completion",
+        "created": 1790420891,
+        "model": "kimi-k3",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "hello world",
+              "reasoning_content": "The user wants me to reply with exactly two words: \"hello world\". This is a simple, clear request. No tools needed beyond responding correctly."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 94,
+          "completion_tokens": 48,
+          "total_tokens": 142,
+          "completion_tokens_details": {
+            "reasoning_tokens": 31
+          },
+          "prompt_tokens_details": {
+            "cache_write_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "sent": {
+        "body": {
+          "model": "kimi-k3",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Reply with exactly the two words: hello world"
+            }
+          ],
+          "stream": true,
+          "stream_options": {
+            "include_usage": true
+          },
+          "max_completion_tokens": 2000
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.moonshot.ai/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "cache-control": "no-cache",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411cf3628faa294-YUL",
+        "connection": "keep-alive",
+        "content-type": "text/event-stream",
+        "date": "Sat, 26 Sep 2026 11:08:17 GMT",
+        "msh-context-cache-token-boosted-nvme": "0",
+        "msh-gid": "enterprise-tier-2",
+        "msh-org-id": "org-2d81b908daee4ecd89737068dbe45f75",
+        "msh-project-id": "proj-c00c4b5712a8482a86fe23010c93783e",
+        "msh-request-id": "910b1de3-b99a-11f1-bb9e-de621f9d8dfd",
+        "msh-trace-mode": "on",
+        "msh-uid": "d9cjddbmrb776abja5p0",
+        "msh-usage-cache-write-tokens-1h": "0",
+        "msh-usage-cache-write-tokens-5m": "0",
+        "server": "cloudflare",
+        "server-timing": "cfCacheStatus;desc=\"DYNAMIC\", cfEdge;dur=250,cfOrigin;dur=3967",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "vary": "Origin",
+        "x-internal-adhoc-canary": "274176817",
+        "x-msh-trace-id": "a69c74c47910e6a93b0eb98c5711d8bb"
+      },
+      "body": "data: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"The\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" user\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" wants\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" me\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" to\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" reply\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" with\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" exactly\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" the\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" two\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" words\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\":\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" \\\"\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"hello\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" world\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"\\\".\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" This\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" is\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" a\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" simple\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" instruction\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" I\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" should\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" just\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" respond\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" with\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" those\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" two\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" words\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hello\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world\"},\"finish_reason\":null}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\",\"usage\":{\"prompt_tokens\":94,\"completion_tokens\":49,\"total_tokens\":143,\"completion_tokens_details\":{\"reasoning_tokens\":32},\"prompt_tokens_details\":{\"cache_write_tokens\":0}}}],\"system_fingerprint\":\"fpv0_df2f7ec7\"}\n\ndata: {\"id\":\"chatcmpl-6ab7a79f1b08c765c91b685b\",\"object\":\"chat.completion.chunk\",\"created\":1790420896,\"model\":\"kimi-k3\",\"choices\":[],\"usage\":{\"prompt_tokens\":94,\"completion_tokens\":49,\"total_tokens\":143,\"completion_tokens_details\":{\"reasoning_tokens\":32},\"prompt_tokens_details\":{\"cache_write_tokens\":0}}}\n\ndata: [DONE]\n\n"
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "chatcmpl-6ab7a79adfe11bad51150321",
+        "model": "kimi-k3",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "The user wants me to reply with exactly two words: \"hello world\". This is a simple, clear request. No tools needed beyond responding correctly."
+            },
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 94,
+          "output_tokens": 48,
+          "total_tokens": 142,
+          "cache_write_tokens": 0,
+          "reasoning_tokens": 31
+        }
+      }
+    },
+    {
+      "response": {
+        "model": "kimi-k3",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "The user wants me to reply with exactly the two words: \"hello world\". This is a simple instruction. I should just respond with those two words."
+            },
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 94,
+          "output_tokens": 49,
+          "total_tokens": 143,
+          "cache_write_tokens": 0,
+          "reasoning_tokens": 32
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "moonshotai:kimi-k3",
+  "notes": [
+    "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:08:18Z",
+  "verdict": "ok"
+}

@@ -1,0 +1,23 @@
+{
+  "binding": "openai-codex-account",
+  "check": "order",
+  "exchanges": null,
+  "lm15": [
+    {
+      "error": {
+        "class": "AuthOperationError",
+        "code": "auth_operation",
+        "message": "openai-codex: signed out; sign in again (Auth.Login) or pass a key explicitly (APIKeys)"
+      }
+    }
+  ],
+  "managed": true,
+  "model": "openai-codex:gpt-5.5",
+  "notes": [
+    "AuthOperationError (auth_operation): openai-codex: signed out; sign in again (Auth.Login) or pass a key explicitly (APIKeys)"
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:09:37Z",
+  "verdict": "signed-out"
+}

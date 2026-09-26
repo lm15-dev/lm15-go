@@ -1,0 +1,254 @@
+{
+  "binding": "openai",
+  "check": "order",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "gpt-5-mini",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer in JSON."
+                }
+              ]
+            }
+          ],
+          "stream": false,
+          "max_output_tokens": 4000,
+          "text": {
+            "format": {
+              "type": "json_schema",
+              "name": "worked_answer",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reasoning": {
+                    "type": "string",
+                    "description": "Work the problem out step by step before answering."
+                  },
+                  "answer": {
+                    "type": "string",
+                    "description": "The final answer only."
+                  }
+                },
+                "required": [
+                  "reasoning",
+                  "answer"
+                ],
+                "additionalProperties": false
+              },
+              "strict": true
+            }
+          }
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-expose-headers": "X-Request-ID, CF-Ray, CF-Ray",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411cc724f565b53-YUL",
+        "connection": "keep-alive",
+        "content-length": "6049",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:06:24 GMT",
+        "openai-organization": "user-5ie5j0kecta5ywlt7gnzvvvu",
+        "openai-processing-ms": "4264",
+        "openai-project": "proj_lUCuxJwZ8FrA21hP8ZMzGWMo",
+        "openai-version": "2020-10-01",
+        "server": "cloudflare",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+        "x-content-type-options": "nosniff",
+        "x-ratelimit-limit-requests": "10000",
+        "x-ratelimit-limit-tokens": "10000000",
+        "x-ratelimit-remaining-requests": "9999",
+        "x-ratelimit-remaining-tokens": "9999732",
+        "x-ratelimit-reset-requests": "6ms",
+        "x-ratelimit-reset-tokens": "1ms",
+        "x-request-id": "req_a4e553e0f5bb48588472aa808237d348"
+      },
+      "body": {
+        "id": "resp_0baa1e2b47bff394006ab7a72bf72c87d28f32bbdb3f42f984",
+        "object": "response",
+        "created_at": 1790420780,
+        "status": "completed",
+        "access_programs": null,
+        "background": false,
+        "billing": {
+          "payer": "developer"
+        },
+        "completed_at": 1790420784,
+        "error": null,
+        "frequency_penalty": 0.0,
+        "incomplete_details": null,
+        "instructions": null,
+        "max_output_tokens": 4000,
+        "max_tool_calls": null,
+        "model": "gpt-5-mini-2025-08-07",
+        "moderation": null,
+        "output": [
+          {
+            "id": "rs_0baa1e2b47bff394006ab7a72c8f3c87d29d0d87bf1bdd26c9",
+            "type": "reasoning",
+            "content": [],
+            "encrypted_content": "gAAAAABqt6cwTSUAFz1ujQ2eoScLIVWd5iNCpF358mWaFWGWQ27hSyvhQMs1RnRwUNC8HcWy1jHk8BVL5PyO_CfkhgcAy1zEq1YPEzHFJ3KPFBiatmiheWzq6R7yprXZLn-bmkiz8TX3qsMs-FO8Af8A_-Hmr3tOCtZpxBR4VnDhMSbZSRiZu9Vlirch1Kh2jjZPcqIqhBuqOR3Kt9qURFqAMajWSGgytP7yg5DhKi2HYFT8tdraYK-EAMpe_OyuJ1pW97oBzRSoXPbKIiNawUBIiX1jjvpj-Lp_G7PiLCgMSj9s0s58fSIHJd0r5WpY_L-SVKR8c4k0vuMlBQe6Zx_2X74oMO55sF6K6Ev8JUgO4WPnww1s7NlY3XNi9pTzVjJFiyVDaVi0w4IGn_-um44cRm0a49_ifc-v-rTi0CtnDPJYvALyMifkmrPsl-d29EFR43Xp4PI8-12y36LaOVQWl3mGaZkROGzEZ-jOL2CTGTSmIHALqqTAY85-hwEMzWIJ6RRABmGWInHhO3FBVOtuhJ9gbfm6AvOMHRx20PIrYHEcsnPkZhJLOw7Ec2dCqfzIr2cwATbcmG5Lv9Ws5bYImlG55wPHbpdoZRHWRUZWTVYIiflpAtrIIfILvhTLr2g7uGrRf9Uep9Byy-6wDnohLNbj7VRAVLOAKoEOs72_TRmWZhcNftA0gDLaCGzglk_Clo3dg7AvJ__vggstAa7T8_BZZtZPqx-mKvJJLxeDh3CagtihSZxmLQKYO7eXVkdTh1UtEyBCbKpUjglASzNN7U9QYqHZb4KjmEliX3yMZFUHjDZ48ns7x2TmY-s0REP3df4M39ti-IF1roLWf3ty5alYy474Ab5Wv7S0mGV8F3QP_9JQ1ybiyMka3mO3tZIjx_CcziOluJKhc9XTXd-c7nXQrOfx7omja0lm2brHwy3CQK8IRjLcPK0MGWktLFVFBQckb48b0302qoOBFPq7x5Hub558LHsL4ujouM6MUg0x8ag4II-jHixJH60dELgfiEj9CugpZjTrl0bkJR8zdMoT8KZhTgGXQh3CSZBDAdlLAQ0af4pwX9uHY4l6AUV5pIF6z7MAWt5Q4TkDaSEVChIGRI-aP6N-Qgh4DrraQOJU7KkyGhWsX_o7so8sG8Z50FA2HctV03CElOZ_WWUrexP-dpbcleKkkmHO4K_lhePC812qySMAsva8_sqIB_0kXzSQPZvO96656S3i4hyOMnKlTpaOj4e-ns8Pl64oZVLKAVbWj0K5_DJrCOjvJ1C-WaqoEU3a0RpaRUCMyvo4yXJU6gmVAkOaLAKaXLYyhATxuPF2DHzpIhHRKKd_Kd0V2k7MaU-kxP5bRmwixAgK_w-463aD1304MDKMT8qiMFt--J4yn0hRoLnNlBeFNIyeLlSNBhYd0rvm-6FEDlOX-NB-2KAOYboT0RScPcjdtHJ--GWaggkl32vMi8hh9MaL6XavpdkCzmtnRhhZjNKJIJwd1JjHWs9DX8x3NShtGpyCO_daLiQAwV-NywcmSVGPMqao1Bs0UEMlR2tzgJ4jJzdWom3SIlyX2QyXrdbxtUkxSvuUHlZn9MRevNGqQ-u4sllKNpfHiLg43CXHjqA56LUKH93Kgr01nD9-Ov_OEHfS4TZ0ctPtgNrNKvAXS6-maoydTpAkJ4Be1t11HeNyCkDuuoJnIZVUQe8KG38YDQoMMDk4L2QIvOe38uWLJMr1L7M7ZVVsAaXUNFi38Lb0ysvGaVfuD8Xfdake5QCKk8aJ7qV2kSvcc2DqKlHIo7yFDAZ5QO1Dl3-SMaiFnIVcTMXesHsBDpQ0Q-NsLarNGFnQPHnkjuM2saERrP8yUxFC5mSzLBrs3Wq8Wtw8MGKCLM043bYxuRH-nnOOsUs_ozoFXdvX1DElweSSw-VFiBKrSETH9qKH9xfuQkHLRwJGF7KgMOX0XOXFyBHQ1UihMh59MXpHVxa8vISE4JmW_pmVS5M83boO6Bj3tSOzFp9qdxVE4VPEhXR82VsGCbsXK0VSMlH-BjwdODqmNlYqPYkreuy-gTGTcCIt4e0JIBG_iSodHeQ8FZb1AjDgaZyFFJV--wUd-BCQKq5QjLUCxe5XQHvq92VF4VUi7Q9BxRZz8oN_LTo4k1yMnsDC2_JGxXX-Jsj4QvtIPIZhZBbdrcQ36Tr5p1omEWvqYYhYPQMVwe-i2p9yq6MTvSfI04RC6ZPvvjZiiBEhAuUmysToCm9QSA1U1UDIhP808rgpoCcDpMSMWLkn_ryHD4xHDThZrNZ0AMbITmv__H8LDC_XsdrT4Ih75iT3_tt6pKVMZq6-xY9GPvex5PAgtRiiVnP9Tw9jyOESYn5L2M0hnaPo05RlCJ1tPiZOHLPqWk56SDCfCnsNsb0bureTpQ8fAC6uUMPbvMMoRH44uDn5UFvPZv1vwA8JvbVO9S7sk8SJhcWnnidGxO3oWpF4vwXORlZvmXGcWKSAHmLD2KY0dRxCB7CBbXoiInR5SuEiIVPz-I7fXhTTT_B1lNjx682_JOB-fR8V9kprmtvs8iJXp53ni8EfZiDWFArTfA_zEfw3GYNRA4KzxJf6Kp7cGz3ZGPmcGwEuSwsGP40TKLQeWAyX0x7aMfJHNpdtGh6NiyKyU0kMhgxGCWXmYFepJo9tg7Sa4m9Qzzq-RketHJ2zk-qRAgScwCexmYvcf08fxoXqFiKyCvcivHgMOYcZX3lLmT2fwLAmGTlRXC9uW91NGOhbrk_sfLyd4ZXW1gRjhxJGkp64HE-jkXZgvCDfo7t4vnBDpAooT2Wflv8fw26GnoASTuEsMigrIXv1udd-SN5W9SbEJHyny01HZrH_e7E305VXcltnik_JgU7kdgg-YhNQwe6lBWgXhUpM6cwevJJ6P0-bXTB9kguv60srR_FMG4EZ2C2uphgzDz4gHbqjZjMXMsZA3j3ABdHmVd3Ze84M2mlnkyWh3e4COqwL-QeTrOXFbX5SsToUCu1X4oEnPnUvwHHl18Gli2aPW4EattdCIm-7Q7ZYWBMjSMkNET7TCOqLHE2TAJ7q48A=",
+            "summary": []
+          },
+          {
+            "id": "msg_0baa1e2b47bff394006ab7a72f729487d28acfdf33e9ea9f52",
+            "type": "message",
+            "status": "completed",
+            "content": [
+              {
+                "type": "output_text",
+                "annotations": [],
+                "logprobs": [],
+                "text": "{\"reasoning\":\"Let the ball cost x dollars. Then the bat costs x + 1.00. Together: x + (x + 1.00) = 1.10 → 2x + 1.00 = 1.10 → 2x = 0.10 → x = 0.05. So the ball costs $0.05.\",\"answer\":\"$0.05\"}"
+              }
+            ],
+            "role": "assistant"
+          }
+        ],
+        "parallel_tool_calls": true,
+        "presence_penalty": 0.0,
+        "previous_response_id": null,
+        "prompt_cache_key": null,
+        "prompt_cache_retention": "in_memory",
+        "reasoning": {
+          "context": "current_turn",
+          "effort": "medium",
+          "mode": "standard",
+          "summary": null
+        },
+        "safety_identifier": null,
+        "service_tier": "default",
+        "store": true,
+        "temperature": 1.0,
+        "text": {
+          "format": {
+            "type": "json_schema",
+            "description": null,
+            "name": "worked_answer",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "reasoning": {
+                  "type": "string",
+                  "description": "Work the problem out step by step before answering."
+                },
+                "answer": {
+                  "type": "string",
+                  "description": "The final answer only."
+                }
+              },
+              "required": [
+                "reasoning",
+                "answer"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          },
+          "verbosity": "medium"
+        },
+        "tool_choice": "auto",
+        "tool_usage": {
+          "image_gen": {
+            "input_tokens": 0,
+            "input_tokens_details": {
+              "image_tokens": 0,
+              "text_tokens": 0
+            },
+            "output_tokens": 0,
+            "output_tokens_details": {
+              "image_tokens": 0,
+              "text_tokens": 0
+            },
+            "total_tokens": 0
+          },
+          "web_search": {
+            "num_requests": 0
+          }
+        },
+        "tools": [],
+        "top_logprobs": 0,
+        "top_p": 1.0,
+        "truncation": "disabled",
+        "usage": {
+          "input_tokens": 92,
+          "input_tokens_details": {
+            "cache_write_tokens": 0,
+            "cached_tokens": 0
+          },
+          "output_tokens": 485,
+          "output_tokens_details": {
+            "reasoning_tokens": 384
+          },
+          "total_tokens": 577
+        },
+        "user": null,
+        "metadata": {}
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "resp_0baa1e2b47bff394006ab7a72bf72c87d28f32bbdb3f42f984",
+        "model": "gpt-5-mini-2025-08-07",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "",
+              "continuation": [
+                {
+                  "provider": "openai",
+                  "kind": "reasoning_item",
+                  "data": {
+                    "id": "rs_0baa1e2b47bff394006ab7a72c8f3c87d29d0d87bf1bdd26c9",
+                    "encrypted_content": "gAAAAABqt6cwTSUAFz1ujQ2eoScLIVWd5iNCpF358mWaFWGWQ27hSyvhQMs1RnRwUNC8HcWy1jHk8BVL5PyO_CfkhgcAy1zEq1YPEzHFJ3KPFBiatmiheWzq6R7yprXZLn-bmkiz8TX3qsMs-FO8Af8A_-Hmr3tOCtZpxBR4VnDhMSbZSRiZu9Vlirch1Kh2jjZPcqIqhBuqOR3Kt9qURFqAMajWSGgytP7yg5DhKi2HYFT8tdraYK-EAMpe_OyuJ1pW97oBzRSoXPbKIiNawUBIiX1jjvpj-Lp_G7PiLCgMSj9s0s58fSIHJd0r5WpY_L-SVKR8c4k0vuMlBQe6Zx_2X74oMO55sF6K6Ev8JUgO4WPnww1s7NlY3XNi9pTzVjJFiyVDaVi0w4IGn_-um44cRm0a49_ifc-v-rTi0CtnDPJYvALyMifkmrPsl-d29EFR43Xp4PI8-12y36LaOVQWl3mGaZkROGzEZ-jOL2CTGTSmIHALqqTAY85-hwEMzWIJ6RRABmGWInHhO3FBVOtuhJ9gbfm6AvOMHRx20PIrYHEcsnPkZhJLOw7Ec2dCqfzIr2cwATbcmG5Lv9Ws5bYImlG55wPHbpdoZRHWRUZWTVYIiflpAtrIIfILvhTLr2g7uGrRf9Uep9Byy-6wDnohLNbj7VRAVLOAKoEOs72_TRmWZhcNftA0gDLaCGzglk_Clo3dg7AvJ__vggstAa7T8_BZZtZPqx-mKvJJLxeDh3CagtihSZxmLQKYO7eXVkdTh1UtEyBCbKpUjglASzNN7U9QYqHZb4KjmEliX3yMZFUHjDZ48ns7x2TmY-s0REP3df4M39ti-IF1roLWf3ty5alYy474Ab5Wv7S0mGV8F3QP_9JQ1ybiyMka3mO3tZIjx_CcziOluJKhc9XTXd-c7nXQrOfx7omja0lm2brHwy3CQK8IRjLcPK0MGWktLFVFBQckb48b0302qoOBFPq7x5Hub558LHsL4ujouM6MUg0x8ag4II-jHixJH60dELgfiEj9CugpZjTrl0bkJR8zdMoT8KZhTgGXQh3CSZBDAdlLAQ0af4pwX9uHY4l6AUV5pIF6z7MAWt5Q4TkDaSEVChIGRI-aP6N-Qgh4DrraQOJU7KkyGhWsX_o7so8sG8Z50FA2HctV03CElOZ_WWUrexP-dpbcleKkkmHO4K_lhePC812qySMAsva8_sqIB_0kXzSQPZvO96656S3i4hyOMnKlTpaOj4e-ns8Pl64oZVLKAVbWj0K5_DJrCOjvJ1C-WaqoEU3a0RpaRUCMyvo4yXJU6gmVAkOaLAKaXLYyhATxuPF2DHzpIhHRKKd_Kd0V2k7MaU-kxP5bRmwixAgK_w-463aD1304MDKMT8qiMFt--J4yn0hRoLnNlBeFNIyeLlSNBhYd0rvm-6FEDlOX-NB-2KAOYboT0RScPcjdtHJ--GWaggkl32vMi8hh9MaL6XavpdkCzmtnRhhZjNKJIJwd1JjHWs9DX8x3NShtGpyCO_daLiQAwV-NywcmSVGPMqao1Bs0UEMlR2tzgJ4jJzdWom3SIlyX2QyXrdbxtUkxSvuUHlZn9MRevNGqQ-u4sllKNpfHiLg43CXHjqA56LUKH93Kgr01nD9-Ov_OEHfS4TZ0ctPtgNrNKvAXS6-maoydTpAkJ4Be1t11HeNyCkDuuoJnIZVUQe8KG38YDQoMMDk4L2QIvOe38uWLJMr1L7M7ZVVsAaXUNFi38Lb0ysvGaVfuD8Xfdake5QCKk8aJ7qV2kSvcc2DqKlHIo7yFDAZ5QO1Dl3-SMaiFnIVcTMXesHsBDpQ0Q-NsLarNGFnQPHnkjuM2saERrP8yUxFC5mSzLBrs3Wq8Wtw8MGKCLM043bYxuRH-nnOOsUs_ozoFXdvX1DElweSSw-VFiBKrSETH9qKH9xfuQkHLRwJGF7KgMOX0XOXFyBHQ1UihMh59MXpHVxa8vISE4JmW_pmVS5M83boO6Bj3tSOzFp9qdxVE4VPEhXR82VsGCbsXK0VSMlH-BjwdODqmNlYqPYkreuy-gTGTcCIt4e0JIBG_iSodHeQ8FZb1AjDgaZyFFJV--wUd-BCQKq5QjLUCxe5XQHvq92VF4VUi7Q9BxRZz8oN_LTo4k1yMnsDC2_JGxXX-Jsj4QvtIPIZhZBbdrcQ36Tr5p1omEWvqYYhYPQMVwe-i2p9yq6MTvSfI04RC6ZPvvjZiiBEhAuUmysToCm9QSA1U1UDIhP808rgpoCcDpMSMWLkn_ryHD4xHDThZrNZ0AMbITmv__H8LDC_XsdrT4Ih75iT3_tt6pKVMZq6-xY9GPvex5PAgtRiiVnP9Tw9jyOESYn5L2M0hnaPo05RlCJ1tPiZOHLPqWk56SDCfCnsNsb0bureTpQ8fAC6uUMPbvMMoRH44uDn5UFvPZv1vwA8JvbVO9S7sk8SJhcWnnidGxO3oWpF4vwXORlZvmXGcWKSAHmLD2KY0dRxCB7CBbXoiInR5SuEiIVPz-I7fXhTTT_B1lNjx682_JOB-fR8V9kprmtvs8iJXp53ni8EfZiDWFArTfA_zEfw3GYNRA4KzxJf6Kp7cGz3ZGPmcGwEuSwsGP40TKLQeWAyX0x7aMfJHNpdtGh6NiyKyU0kMhgxGCWXmYFepJo9tg7Sa4m9Qzzq-RketHJ2zk-qRAgScwCexmYvcf08fxoXqFiKyCvcivHgMOYcZX3lLmT2fwLAmGTlRXC9uW91NGOhbrk_sfLyd4ZXW1gRjhxJGkp64HE-jkXZgvCDfo7t4vnBDpAooT2Wflv8fw26GnoASTuEsMigrIXv1udd-SN5W9SbEJHyny01HZrH_e7E305VXcltnik_JgU7kdgg-YhNQwe6lBWgXhUpM6cwevJJ6P0-bXTB9kguv60srR_FMG4EZ2C2uphgzDz4gHbqjZjMXMsZA3j3ABdHmVd3Ze84M2mlnkyWh3e4COqwL-QeTrOXFbX5SsToUCu1X4oEnPnUvwHHl18Gli2aPW4EattdCIm-7Q7ZYWBMjSMkNET7TCOqLHE2TAJ7q48A="
+                  }
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": "{\"reasoning\":\"Let the ball cost x dollars. Then the bat costs x + 1.00. Together: x + (x + 1.00) = 1.10 → 2x + 1.00 = 1.10 → 2x = 0.10 → x = 0.05. So the ball costs $0.05.\",\"answer\":\"$0.05\"}"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 92,
+          "output_tokens": 485,
+          "total_tokens": 577,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "reasoning_tokens": 384
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "gpt-5-mini",
+  "notes": [
+    "the model's JSON keys, in the order written: [reasoning answer]; answer \"$0.05\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:06:24Z",
+  "verdict": "ok"
+}

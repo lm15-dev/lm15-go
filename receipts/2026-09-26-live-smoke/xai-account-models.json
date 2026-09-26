@@ -1,0 +1,63 @@
+{
+  "binding": "xai-account",
+  "check": "models",
+  "exchanges": [
+    {
+      "sent": {
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "GET",
+        "url": "https://api.x.ai/v1/models"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-allow-origin": "*",
+        "access-control-expose-headers": "*",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411d105da573282-YUL",
+        "connection": "keep-alive",
+        "content-length": "6211",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:09:27 GMT",
+        "server": "cloudflare",
+        "server-timing": "cfCacheStatus;desc=\"DYNAMIC\", cfEdge;dur=4,cfOrigin;dur=106",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=31536000",
+        "vary": "origin, access-control-request-method, access-control-request-headers"
+      },
+      "body": {
+        "entries_omitted": true
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "ids": [
+        "grok-4.20-0309-non-reasoning",
+        "grok-4.20-0309-reasoning",
+        "grok-4.20-multi-agent-0309",
+        "grok-4.3",
+        "grok-4.5",
+        "grok-4.6",
+        "grok-4.7",
+        "grok-build-0.1",
+        "grok-imagine-image",
+        "grok-imagine-image-2.0",
+        "grok-imagine-image-quality",
+        "grok-imagine-video",
+        "grok-imagine-video-1.5"
+      ]
+    }
+  ],
+  "managed": true,
+  "model": "xai:grok-4.7",
+  "notes": [
+    "13 models"
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:09:27Z",
+  "verdict": "ok"
+}

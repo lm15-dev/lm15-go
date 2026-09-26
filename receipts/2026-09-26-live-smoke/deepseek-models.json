@@ -1,0 +1,53 @@
+{
+  "binding": "deepseek",
+  "check": "models",
+  "exchanges": [
+    {
+      "sent": {
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "GET",
+        "url": "https://api.deepseek.com/models"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-allow-credentials": "true",
+        "connection": "keep-alive",
+        "content-length": "743",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:07:01 GMT",
+        "server": "elb",
+        "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "via": "1.1 c084db96d65700304a568083708ffe5c.cloudfront.net (CloudFront)",
+        "x-amz-cf-id": "EoqrOeGS5dnKfY9PaZOVVThqdpcFW60fuX1FRFTmQnNONzg8zm_Riw==",
+        "x-amz-cf-pop": "YUL62-P4",
+        "x-cache": "Miss from cloudfront",
+        "x-content-type-options": "nosniff",
+        "x-ds-trace-id": "c4ce9a48f69f21229bc995b67900f3b9"
+      },
+      "body": {
+        "entries_omitted": true
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "ids": [
+        "deepseek-flash",
+        "deepseek-v4-pro"
+      ]
+    }
+  ],
+  "managed": false,
+  "model": "deepseek:deepseek-v4-flash",
+  "notes": [
+    "2 models"
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:07:01Z",
+  "verdict": "ok"
+}

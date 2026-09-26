@@ -1,0 +1,49 @@
+{
+  "binding": "typesafe",
+  "check": "models",
+  "exchanges": [
+    {
+      "sent": {
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "GET",
+        "url": "https://api.typesafe.ai/v1/models"
+      },
+      "status": 200,
+      "response_headers": {
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411d0180a46c03e-YUL",
+        "connection": "keep-alive",
+        "content-length": "311",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:08:49 GMT",
+        "server": "cloudflare",
+        "set-cookie": "\u003credacted\u003e",
+        "x-envoy-upstream-service-time": "7",
+        "x-typesafe-request-id": "req_01a0dd674b2477eabfd63b61c8ea1c31"
+      },
+      "body": {
+        "entries_omitted": true
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "ids": [
+        "jev-latest",
+        "jev-preview"
+      ]
+    }
+  ],
+  "managed": false,
+  "model": "typesafe:jev-latest",
+  "notes": [
+    "2 models"
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:08:49Z",
+  "verdict": "ok"
+}

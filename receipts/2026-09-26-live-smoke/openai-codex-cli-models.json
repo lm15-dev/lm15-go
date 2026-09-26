@@ -1,0 +1,64 @@
+{
+  "binding": "openai-codex-cli",
+  "check": "models",
+  "exchanges": [
+    {
+      "sent": {
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "chatgpt-account-id": "\u003credacted\u003e",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental",
+          "originator": "\u003credacted\u003e"
+        },
+        "method": "GET",
+        "url": "https://chatgpt.com/backend-api/codex/models?client_version=0.147.0"
+      },
+      "status": 200,
+      "response_headers": {
+        "cache-control": "private, no-store",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411d0854ed988df-YUL",
+        "connection": "keep-alive",
+        "content-length": "274767",
+        "content-type": "application/json",
+        "cross-origin-opener-policy": "same-origin-allow-popups",
+        "date": "Sat, 26 Sep 2026 11:09:07 GMT",
+        "etag": "W/\"71115bd6d4336ad85c1f2412206b72e5\"",
+        "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.01,\"max_age\":604800}",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=rg1jbRzFTN5un8xvK5Yt06wXrNDFaUZhB9wsvUNXv8br36%2BmOToM4h%2FP1BWNEP75kiXjkTzyXeyRqKTXnjSpUaChet8hSX5lwQLutZ685GIERKb2hhJCInp2mQNE\"}]}",
+        "server": "cloudflare",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+        "x-content-type-options": "nosniff",
+        "x-oai-request-id": "req_bceb9216fb8f46d19a60e4ae387531bc",
+        "x-openai-proxy-wasm": "v0.1"
+      },
+      "body": {
+        "entries_omitted": true
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "ids": [
+        "gpt-reserve",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "gpt-5.6-luna",
+        "gpt-5.5",
+        "codex-auto-review"
+      ]
+    }
+  ],
+  "managed": false,
+  "model": "openai-codex:gpt-5.5",
+  "notes": [
+    "6 models"
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:09:07Z",
+  "verdict": "ok"
+}

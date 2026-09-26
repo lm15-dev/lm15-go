@@ -1,0 +1,158 @@
+{
+  "binding": "claude-code-account",
+  "check": "order-sorted-control",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "claude-haiku-4-5",
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer in JSON."
+                }
+              ]
+            }
+          ],
+          "stream": false,
+          "max_tokens": 1000,
+          "output_config": {
+            "format": {
+              "type": "json_schema",
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "answer": {
+                    "description": "The final answer only.",
+                    "type": "string"
+                  },
+                  "reasoning": {
+                    "description": "Work the problem out step by step before answering.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reasoning",
+                  "answer"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "system": [
+            {
+              "type": "text",
+              "text": "You are Claude Code, Anthropic's official CLI for Claude."
+            }
+          ]
+        },
+        "headers": {
+          "anthropic-beta": "claude-code-20250219,oauth-2025-04-20",
+          "anthropic-dangerous-direct-browser-access": "\u003credacted\u003e",
+          "anthropic-version": "2023-06-01",
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json",
+          "user-agent": "claude-cli/2.1.170",
+          "x-app": "\u003credacted\u003e"
+        },
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages"
+      },
+      "status": 200,
+      "response_headers": {
+        "anthropic-organization-id": "27f602b2-e4d4-4a16-a318-ffb60d7f230f",
+        "anthropic-ratelimit-unified-5h-reset": "1790438400",
+        "anthropic-ratelimit-unified-5h-status": "allowed",
+        "anthropic-ratelimit-unified-5h-utilization": "0.0",
+        "anthropic-ratelimit-unified-7d-reset": "1790964000",
+        "anthropic-ratelimit-unified-7d-status": "allowed",
+        "anthropic-ratelimit-unified-7d-utilization": "0.0",
+        "anthropic-ratelimit-unified-fallback-percentage": "0.5",
+        "anthropic-ratelimit-unified-overage-disabled-reason": "org_level_disabled",
+        "anthropic-ratelimit-unified-overage-status": "rejected",
+        "anthropic-ratelimit-unified-representative-claim": "five_hour",
+        "anthropic-ratelimit-unified-reset": "1790438400",
+        "anthropic-ratelimit-unified-status": "allowed",
+        "anthropic-workspace-id": "wrkspc_01C3tQ4wethvT39YHrZtXdoZ",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411d1308afcf3e9-YUL",
+        "connection": "keep-alive",
+        "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:09:37 GMT",
+        "request-id": "req_011CfRwtxkkzaB66c81gk5qX",
+        "server": "cloudflare",
+        "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+        "traceresponse": "00-5d110ff656dc01ab6eed3dbd16a379d5-cf0b00af89c7be29-01",
+        "vary": "Accept-Encoding",
+        "x-robots-tag": "none"
+      },
+      "body": {
+        "model": "claude-haiku-4-5-20251001",
+        "id": "msg_011CfRwtyA5KT7RJiJBSWZ8X",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"answer\":\"$0.05\",\"reasoning\":\"Let's set up an equation where b = cost of the ball. The bat costs $1.00 more than the ball, so the bat costs b + $1.00. Together they cost $1.10, so: b + (b + $1.00) = $1.10. Simplifying: 2b + $1.00 = $1.10. Therefore: 2b = $0.10. Solving: b = $0.05. The ball costs $0.05 and the bat costs $1.05, which totals $1.10. ✓\"}"
+          }
+        ],
+        "container": null,
+        "stop_reason": "end_turn",
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 251,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 146,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "diagnostics": null
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "msg_011CfRwtyA5KT7RJiJBSWZ8X",
+        "model": "claude-haiku-4-5-20251001",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "{\"answer\":\"$0.05\",\"reasoning\":\"Let's set up an equation where b = cost of the ball. The bat costs $1.00 more than the ball, so the bat costs b + $1.00. Together they cost $1.10, so: b + (b + $1.00) = $1.10. Simplifying: 2b + $1.00 = $1.10. Therefore: 2b = $0.10. Solving: b = $0.05. The ball costs $0.05 and the bat costs $1.05, which totals $1.10. ✓\"}"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 251,
+          "output_tokens": 146,
+          "total_tokens": 397,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      }
+    }
+  ],
+  "managed": true,
+  "model": "claude-code:claude-haiku-4-5",
+  "notes": [
+    "the model's JSON keys, in the order written: [answer reasoning]; answer \"$0.05\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:09:37Z",
+  "verdict": "ok"
+}

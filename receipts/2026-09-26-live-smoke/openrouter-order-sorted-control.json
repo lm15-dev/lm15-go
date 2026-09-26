@@ -1,0 +1,150 @@
+{
+  "binding": "openrouter",
+  "check": "order-sorted-control",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "openai/gpt-4.1-nano",
+          "messages": [
+            {
+              "role": "user",
+              "content": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer in JSON."
+            }
+          ],
+          "max_tokens": 1000,
+          "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+              "name": "worked_answer",
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "answer": {
+                    "description": "The final answer only.",
+                    "type": "string"
+                  },
+                  "reasoning": {
+                    "description": "Work the problem out step by step before answering.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reasoning",
+                  "answer"
+                ],
+                "type": "object"
+              },
+              "strict": true
+            }
+          }
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-allow-origin": "*",
+        "access-control-expose-headers": "X-Generation-Id,X-Provider-Name,request-id,cf-ray",
+        "cf-ray": "a411cd538ab0fbd3-YUL",
+        "connection": "keep-alive",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:06:56 GMT",
+        "permissions-policy": "payment=(self \"https://checkout.stripe.com\" \"https://connect-js.stripe.com\" \"https://js.stripe.com\" \"https://*.js.stripe.com\" \"https://hooks.stripe.com\")",
+        "referrer-policy": "no-referrer, strict-origin-when-cross-origin",
+        "server": "cloudflare",
+        "server-timing": "cfEdge;dur=2,cfOrigin;dur=0,cfWorker;dur=348",
+        "set-cookie": "\u003credacted\u003e",
+        "x-content-type-options": "nosniff",
+        "x-generation-id": "gen-1790420815-NODZh3idMxFtleMgvNpA"
+      },
+      "body": {
+        "id": "gen-1790420815-NODZh3idMxFtleMgvNpA",
+        "object": "chat.completion",
+        "created": 1790420815,
+        "model": "openai/gpt-4.1-nano",
+        "provider": "OpenAI",
+        "system_fingerprint": null,
+        "service_tier": "default",
+        "choices": [
+          {
+            "index": 0,
+            "logprobs": null,
+            "finish_reason": "stop",
+            "native_finish_reason": "completed",
+            "message": {
+              "role": "assistant",
+              "content": "{\"answer\":\"The ball costs $0.05.\",\"reasoning\":\"Let the cost of the ball be x dollars. Then the cost of the bat is x + 1.00 dollars. According to the problem, their total cost is 1.10 dollars. So, x + (x + 1.00) = 1.10. Simplifying, 2x + 1.00 = 1.10. Subtract 1.00 from both sides: 2x = 0.10. Divide both sides by 2: x = 0.05. Therefore, the ball costs $0.05.\"}",
+              "refusal": null,
+              "reasoning": null
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 93,
+          "completion_tokens": 134,
+          "total_tokens": 227,
+          "cost": 0.000062271,
+          "is_byok": false,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "audio_tokens": 0,
+            "video_tokens": 0
+          },
+          "cost_details": {
+            "upstream_inference_cost": 0.0000629,
+            "upstream_inference_prompt_cost": 0.0000093,
+            "upstream_inference_completions_cost": 0.0000536
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 0,
+            "image_tokens": 0,
+            "audio_tokens": 0
+          }
+        }
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "gen-1790420815-NODZh3idMxFtleMgvNpA",
+        "model": "openai/gpt-4.1-nano",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "{\"answer\":\"The ball costs $0.05.\",\"reasoning\":\"Let the cost of the ball be x dollars. Then the cost of the bat is x + 1.00 dollars. According to the problem, their total cost is 1.10 dollars. So, x + (x + 1.00) = 1.10. Simplifying, 2x + 1.00 = 1.10. Subtract 1.00 from both sides: 2x = 0.10. Divide both sides by 2: x = 0.05. Therefore, the ball costs $0.05.\"}"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 93,
+          "output_tokens": 134,
+          "total_tokens": 227,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "reasoning_tokens": 0,
+          "input_audio_tokens": 0,
+          "output_audio_tokens": 0
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "openrouter:openai/gpt-4.1-nano",
+  "notes": [
+    "the model's JSON keys, in the order written: [answer reasoning]; answer \"The ball costs $0.05.\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:06:56Z",
+  "verdict": "ok"
+}

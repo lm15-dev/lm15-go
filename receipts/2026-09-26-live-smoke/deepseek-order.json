@@ -1,0 +1,94 @@
+{
+  "binding": "deepseek",
+  "check": "order",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "deepseek-v4-flash",
+          "messages": [
+            {
+              "role": "user",
+              "content": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer in JSON."
+            }
+          ],
+          "max_tokens": 2000,
+          "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+              "name": "worked_answer",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reasoning": {
+                    "type": "string",
+                    "description": "Work the problem out step by step before answering."
+                  },
+                  "answer": {
+                    "type": "string",
+                    "description": "The final answer only."
+                  }
+                },
+                "required": [
+                  "reasoning",
+                  "answer"
+                ],
+                "additionalProperties": false
+              },
+              "strict": true
+            }
+          }
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.deepseek.com/chat/completions"
+      },
+      "status": 400,
+      "response_headers": {
+        "access-control-allow-credentials": "true",
+        "connection": "keep-alive",
+        "content-length": "194",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:06:59 GMT",
+        "server": "elb",
+        "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "via": "1.1 c084db96d65700304a568083708ffe5c.cloudfront.net (CloudFront)",
+        "x-amz-cf-id": "s1YjHz8Z3VklWynmLS3tnWo3YvOOArCKeWcQh7V4tTH9-dVuA8080g==",
+        "x-amz-cf-pop": "YUL62-P4",
+        "x-cache": "Error from cloudfront",
+        "x-content-type-options": "nosniff",
+        "x-ds-trace-id": "f4b3a6fecb039f78e1ac5fe15c247e45"
+      },
+      "body": {
+        "error": {
+          "message": "This response_format type is unavailable now (request_id: 96cc57c2-1ae6-4a94-8f7e-e157da43d8b9)",
+          "type": "invalid_request_error",
+          "param": null,
+          "code": "invalid_request_error"
+        }
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "error": {
+        "class": "InvalidRequestError",
+        "code": "invalid_request",
+        "message": "This response_format type is unavailable now (request_id: 96cc57c2-1ae6-4a94-8f7e-e157da43d8b9) (invalid_request_error)"
+      }
+    }
+  ],
+  "managed": false,
+  "model": "deepseek:deepseek-v4-flash",
+  "notes": [
+    "DeepSeek has no json_schema mode and answers 400 (lm15-python compat.py, OpenAIChatJsonSchema): InvalidRequestError (invalid_request): This response_format type is unavailable now (request_id: 96cc57c2-1ae6-4a94-8f7e-e157da43d8b9) (invalid_request_error)"
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:06:59Z",
+  "verdict": "provider-refused"
+}

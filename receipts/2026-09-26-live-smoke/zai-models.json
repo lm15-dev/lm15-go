@@ -1,0 +1,57 @@
+{
+  "binding": "zai",
+  "check": "models",
+  "exchanges": [
+    {
+      "sent": {
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "GET",
+        "url": "https://api.z.ai/api/paas/v4/models"
+      },
+      "status": 200,
+      "response_headers": {
+        "alt-svc": "h3=\":443\"; ma=3600",
+        "connection": "keep-alive",
+        "content-type": "application/json;charset=UTF-8",
+        "date": "Sat, 26 Sep 2026 11:07:41 GMT",
+        "ga-traceid": "2a004e1e780c68db7610767764ca647f",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "vary": "Accept-Encoding, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
+        "x-log-id": "20260926190741e1bb011a4a094eeb"
+      },
+      "body": {
+        "entries_omitted": true
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "ids": [
+        "glm-4.5",
+        "glm-4.5-air",
+        "glm-4.6",
+        "glm-4.7",
+        "glm-5",
+        "glm-5-turbo",
+        "glm-5.1",
+        "glm-5.2",
+        "glm-5.3",
+        "glm-5.3-flash",
+        "glm-5.3-flashx"
+      ]
+    }
+  ],
+  "managed": false,
+  "model": "zai:glm-5.3-flash",
+  "notes": [
+    "11 models"
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:07:41Z",
+  "verdict": "ok"
+}

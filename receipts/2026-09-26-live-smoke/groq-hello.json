@@ -1,0 +1,195 @@
+{
+  "binding": "groq",
+  "check": "hello",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "openai/gpt-oss-20b",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Reply with exactly the two words: hello world"
+            }
+          ],
+          "max_tokens": 2000
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411cd2e8916a314-YUL",
+        "connection": "keep-alive",
+        "content-length": "827",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:06:50 GMT",
+        "server": "cloudflare",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=15552000",
+        "vary": "Origin",
+        "x-groq-region": "yul",
+        "x-ratelimit-limit-requests": "500000",
+        "x-ratelimit-limit-tokens": "250000",
+        "x-ratelimit-remaining-requests": "499999",
+        "x-ratelimit-remaining-tokens": "249348",
+        "x-ratelimit-reset-requests": "172ms",
+        "x-ratelimit-reset-tokens": "156ms",
+        "x-request-id": "req_01m3epay9jedsrbkgan0qw98n0"
+      },
+      "body": {
+        "id": "chatcmpl-c3e4be10-c7ba-4077-9ad2-7a7647f52233",
+        "object": "chat.completion",
+        "created": 1790420810,
+        "model": "openai/gpt-oss-20b",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "hello world",
+              "reasoning": "The user says: \"Reply with exactly the two words: hello world\". They want exactly \"hello world\". Probably lowercase. Should not add punctuation or quotes. Just \"hello world\"."
+            },
+            "logprobs": null,
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "queue_time": 0.062254158,
+          "prompt_tokens": 80,
+          "prompt_time": 0.004625612,
+          "completion_tokens": 49,
+          "completion_time": 0.052154906,
+          "total_tokens": 129,
+          "total_time": 0.056780518,
+          "completion_tokens_details": {
+            "reasoning_tokens": 38
+          }
+        },
+        "usage_breakdown": null,
+        "system_fingerprint": "fp_996f667773",
+        "x_groq": {
+          "id": "req_01m3epay9jedsrbkgan0qw98n0",
+          "seed": 914120639
+        },
+        "service_tier": "on_demand"
+      }
+    },
+    {
+      "sent": {
+        "body": {
+          "model": "openai/gpt-oss-20b",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Reply with exactly the two words: hello world"
+            }
+          ],
+          "stream": true,
+          "stream_options": {
+            "include_usage": true
+          },
+          "max_tokens": 2000
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "no-cache",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411cd2f9a0aa314-YUL",
+        "connection": "keep-alive",
+        "content-type": "text/event-stream",
+        "date": "Sat, 26 Sep 2026 11:06:50 GMT",
+        "server": "cloudflare",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=15552000",
+        "vary": "Origin",
+        "x-groq-region": "yul",
+        "x-ratelimit-limit-requests": "500000",
+        "x-ratelimit-limit-tokens": "250000",
+        "x-ratelimit-remaining-requests": "499999",
+        "x-ratelimit-remaining-tokens": "249426",
+        "x-ratelimit-reset-requests": "172ms",
+        "x-ratelimit-reset-tokens": "137ms",
+        "x-request-id": "req_01m3epayf2e1z8frk8ca792b1h"
+      },
+      "body": "data: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"logprobs\":null,\"finish_reason\":null}],\"x_groq\":{\"id\":\"req_01m3epayf2e1z8frk8ca792b1h\",\"seed\":147583091}}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\"The\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" user\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" wants\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" a\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" reply\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" with\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" exactly\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" two\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" words\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\":\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" \\\"\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\"hello\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" world\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\"\\\".\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" So\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" output\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" exactly\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" \\\"\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\"hello\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" world\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\"\\\".\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" Ensure\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" no\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" other\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" words\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" or\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" punctuation\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\",\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" just\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" those\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" two\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\" words\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\".\",\"channel\":\"analysis\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hello\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world\"},\"logprobs\":null,\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[{\"index\":0,\"delta\":{},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"x_groq\":{\"id\":\"req_01m3epayf2e1z8frk8ca792b1h\",\"usage\":{\"queue_time\":0.003094368,\"prompt_tokens\":80,\"prompt_time\":0.004398487,\"completion_tokens\":45,\"completion_time\":0.045956424,\"total_tokens\":125,\"total_time\":0.050354911,\"completion_tokens_details\":{\"reasoning_tokens\":34}}},\"usage\":{\"queue_time\":0.003094368,\"prompt_tokens\":80,\"prompt_time\":0.004398487,\"completion_tokens\":45,\"completion_time\":0.045956424,\"total_tokens\":125,\"total_time\":0.050354911,\"completion_tokens_details\":{\"reasoning_tokens\":34}}}\n\ndata: {\"id\":\"chatcmpl-1a1ce544-0850-4cb4-bc76-1e7964e4722e\",\"object\":\"chat.completion.chunk\",\"created\":1790420810,\"model\":\"openai/gpt-oss-20b\",\"system_fingerprint\":\"fp_7d448090ba\",\"choices\":[],\"usage\":{\"queue_time\":0.003094368,\"prompt_tokens\":80,\"prompt_time\":0.004398487,\"completion_tokens\":45,\"completion_time\":0.045956424,\"total_tokens\":125,\"total_time\":0.050354911,\"completion_tokens_details\":{\"reasoning_tokens\":34}},\"service_tier\":\"on_demand\"}\n\ndata: [DONE]\n\n"
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "chatcmpl-c3e4be10-c7ba-4077-9ad2-7a7647f52233",
+        "model": "openai/gpt-oss-20b",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "The user says: \"Reply with exactly the two words: hello world\". They want exactly \"hello world\". Probably lowercase. Should not add punctuation or quotes. Just \"hello world\"."
+            },
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 80,
+          "output_tokens": 49,
+          "total_tokens": 129,
+          "reasoning_tokens": 38
+        }
+      }
+    },
+    {
+      "response": {
+        "model": "openai/gpt-oss-20b",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "The user wants a reply with exactly two words: \"hello world\". So output exactly \"hello world\". Ensure no other words or punctuation, just those two words."
+            },
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 80,
+          "output_tokens": 45,
+          "total_tokens": 125,
+          "reasoning_tokens": 34
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "groq:openai/gpt-oss-20b",
+  "notes": [
+    "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:06:50Z",
+  "verdict": "ok"
+}

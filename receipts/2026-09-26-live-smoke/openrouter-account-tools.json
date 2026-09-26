@@ -1,0 +1,321 @@
+{
+  "binding": "openrouter-account",
+  "check": "tools",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "openai/gpt-4.1-nano",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Use the tool: what is the forecast for Montreal on 2026-10-01? Then answer in one sentence."
+            }
+          ],
+          "max_tokens": 1000,
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "get_forecast",
+                "description": "Weather forecast for a city on a date.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "string",
+                      "description": "City name"
+                    },
+                    "date": {
+                      "type": "string",
+                      "description": "YYYY-MM-DD"
+                    }
+                  },
+                  "required": [
+                    "location",
+                    "date"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-allow-origin": "*",
+        "access-control-expose-headers": "X-Generation-Id,X-Provider-Name,request-id,cf-ray",
+        "cf-ray": "a411d1555a893282-YUL",
+        "connection": "keep-alive",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:09:40 GMT",
+        "permissions-policy": "payment=(self \"https://checkout.stripe.com\" \"https://connect-js.stripe.com\" \"https://js.stripe.com\" \"https://*.js.stripe.com\" \"https://hooks.stripe.com\")",
+        "referrer-policy": "no-referrer, strict-origin-when-cross-origin",
+        "server": "cloudflare",
+        "server-timing": "cfEdge;dur=3,cfOrigin;dur=0,cfWorker;dur=700",
+        "set-cookie": "\u003credacted\u003e",
+        "x-content-type-options": "nosniff",
+        "x-generation-id": "gen-1790420980-kpsKE5UJRJfUBnTAWqjs"
+      },
+      "body": {
+        "id": "gen-1790420980-kpsKE5UJRJfUBnTAWqjs",
+        "object": "chat.completion",
+        "created": 1790420980,
+        "model": "openai/gpt-4.1-nano",
+        "provider": "OpenAI",
+        "system_fingerprint": null,
+        "service_tier": "default",
+        "choices": [
+          {
+            "index": 0,
+            "logprobs": null,
+            "finish_reason": "tool_calls",
+            "native_finish_reason": "completed",
+            "message": {
+              "role": "assistant",
+              "content": null,
+              "refusal": null,
+              "reasoning": null,
+              "tool_calls": [
+                {
+                  "type": "function",
+                  "index": 0,
+                  "id": "call_stGTx7t4EfxztASQ94AgpQxe",
+                  "function": {
+                    "name": "get_forecast",
+                    "arguments": "{\"location\":\"Montreal\",\"date\":\"2026-10-01\"}"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 78,
+          "completion_tokens": 42,
+          "total_tokens": 120,
+          "cost": 0.000024354,
+          "is_byok": false,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "audio_tokens": 0,
+            "video_tokens": 0
+          },
+          "cost_details": {
+            "upstream_inference_cost": 0.0000246,
+            "upstream_inference_prompt_cost": 0.0000078,
+            "upstream_inference_completions_cost": 0.0000168
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 0,
+            "image_tokens": 0,
+            "audio_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "sent": {
+        "body": {
+          "model": "openai/gpt-4.1-nano",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Use the tool: what is the forecast for Montreal on 2026-10-01? Then answer in one sentence."
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call_stGTx7t4EfxztASQ94AgpQxe",
+                  "type": "function",
+                  "function": {
+                    "name": "get_forecast",
+                    "arguments": "{\"location\":\"Montreal\",\"date\":\"2026-10-01\"}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "tool_call_id": "call_stGTx7t4EfxztASQ94AgpQxe",
+              "content": "{\"forecast\": \"sunny\", \"high_c\": 14}"
+            }
+          ],
+          "max_tokens": 1000,
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "get_forecast",
+                "description": "Weather forecast for a city on a date.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "string",
+                      "description": "City name"
+                    },
+                    "date": {
+                      "type": "string",
+                      "description": "YYYY-MM-DD"
+                    }
+                  },
+                  "required": [
+                    "location",
+                    "date"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-allow-origin": "*",
+        "access-control-expose-headers": "X-Generation-Id,X-Provider-Name,request-id,cf-ray",
+        "cf-ray": "a411d15c4dfe3282-YUL",
+        "connection": "keep-alive",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:09:42 GMT",
+        "permissions-policy": "payment=(self \"https://checkout.stripe.com\" \"https://connect-js.stripe.com\" \"https://js.stripe.com\" \"https://*.js.stripe.com\" \"https://hooks.stripe.com\")",
+        "referrer-policy": "no-referrer, strict-origin-when-cross-origin",
+        "server": "cloudflare",
+        "server-timing": "cfEdge;dur=3,cfOrigin;dur=0,cfWorker;dur=1166",
+        "set-cookie": "\u003credacted\u003e",
+        "x-content-type-options": "nosniff",
+        "x-generation-id": "gen-1790420981-iKLlV13WaoTtpS68yAsZ"
+      },
+      "body": {
+        "id": "gen-1790420981-iKLlV13WaoTtpS68yAsZ",
+        "object": "chat.completion",
+        "created": 1790420981,
+        "model": "openai/gpt-4.1-nano",
+        "provider": "OpenAI",
+        "system_fingerprint": null,
+        "service_tier": "default",
+        "choices": [
+          {
+            "index": 0,
+            "logprobs": null,
+            "finish_reason": "stop",
+            "native_finish_reason": "completed",
+            "message": {
+              "role": "assistant",
+              "content": "The forecast for Montreal on October 1, 2026, is sunny with a high of 14°C.",
+              "refusal": null,
+              "reasoning": null
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 124,
+          "completion_tokens": 25,
+          "total_tokens": 149,
+          "cost": 0.000022176,
+          "is_byok": false,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0,
+            "audio_tokens": 0,
+            "video_tokens": 0
+          },
+          "cost_details": {
+            "upstream_inference_cost": 0.0000224,
+            "upstream_inference_prompt_cost": 0.0000124,
+            "upstream_inference_completions_cost": 0.00001
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 0,
+            "image_tokens": 0,
+            "audio_tokens": 0
+          }
+        }
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "gen-1790420980-kpsKE5UJRJfUBnTAWqjs",
+        "model": "openai/gpt-4.1-nano",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "tool_call",
+              "id": "call_stGTx7t4EfxztASQ94AgpQxe",
+              "name": "get_forecast",
+              "input": {
+                "location": "Montreal",
+                "date": "2026-10-01"
+              }
+            }
+          ]
+        },
+        "finish_reason": "tool_call",
+        "usage": {
+          "input_tokens": 78,
+          "output_tokens": 42,
+          "total_tokens": 120,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "reasoning_tokens": 0,
+          "input_audio_tokens": 0,
+          "output_audio_tokens": 0
+        }
+      }
+    },
+    {
+      "response": {
+        "id": "gen-1790420981-iKLlV13WaoTtpS68yAsZ",
+        "model": "openai/gpt-4.1-nano",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "The forecast for Montreal on October 1, 2026, is sunny with a high of 14°C."
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 124,
+          "output_tokens": 25,
+          "total_tokens": 149,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "reasoning_tokens": 0,
+          "input_audio_tokens": 0,
+          "output_audio_tokens": 0
+        }
+      }
+    }
+  ],
+  "managed": true,
+  "model": "openrouter:openai/gpt-4.1-nano",
+  "notes": [
+    "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+    "final \"The forecast for Montreal on October 1, 2026, is sunny with a high of 14°C.\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:09:42Z",
+  "verdict": "ok"
+}

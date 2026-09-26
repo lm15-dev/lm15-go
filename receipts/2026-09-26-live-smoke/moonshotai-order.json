@@ -1,0 +1,141 @@
+{
+  "binding": "moonshotai",
+  "check": "order",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "kimi-k3",
+          "messages": [
+            {
+              "role": "user",
+              "content": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer in JSON."
+            }
+          ],
+          "max_completion_tokens": 2000,
+          "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+              "name": "worked_answer",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reasoning": {
+                    "type": "string",
+                    "description": "Work the problem out step by step before answering."
+                  },
+                  "answer": {
+                    "type": "string",
+                    "description": "The final answer only."
+                  }
+                },
+                "required": [
+                  "reasoning",
+                  "answer"
+                ],
+                "additionalProperties": false
+              },
+              "strict": true
+            }
+          }
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.moonshot.ai/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411cf55b98aa294-YUL",
+        "connection": "keep-alive",
+        "content-type": "application/json; charset=utf-8",
+        "date": "Sat, 26 Sep 2026 11:08:29 GMT",
+        "msh-context-cache-token-boosted-nvme": "0",
+        "msh-gid": "enterprise-tier-2",
+        "msh-org-id": "org-2d81b908daee4ecd89737068dbe45f75",
+        "msh-project-id": "proj-c00c4b5712a8482a86fe23010c93783e",
+        "msh-request-id": "94115051-b99a-11f1-b69c-da5f673145fb",
+        "msh-trace-mode": "on",
+        "msh-uid": "d9cjddbmrb776abja5p0",
+        "msh-usage-cache-write-tokens-1h": "0",
+        "msh-usage-cache-write-tokens-5m": "0",
+        "server": "cloudflare",
+        "server-timing": "cfCacheStatus;desc=\"DYNAMIC\", cfEdge;dur=234,cfOrigin;dur=10915",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "vary": "Accept-Encoding, Origin",
+        "x-internal-adhoc-canary": "274176817",
+        "x-msh-trace-id": "2a6835924babee66d260787ffcb15484"
+      },
+      "body": {
+        "id": "chatcmpl-6ab7a7a4d4b3fe8620fd75c7",
+        "object": "chat.completion",
+        "created": 1790420900,
+        "model": "kimi-k3",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "{\"reasoning\":\"Let the ball cost x dollars. The bat costs $1.00 more than the ball, so the bat costs x + 1.00. Together they cost $1.10: x + (x + 1.00) = 1.10. Simplifying: 2x + 1.00 = 1.10, so 2x = 0.10, which gives x = 0.05. Check: ball = $0.05, bat = $1.05; total = $1.10 and the bat is exactly $1.00 more than the ball. The intuitive answer of $0.10 is wrong because then the bat would cost $1.10, totaling $1.20.\",\"answer\":\"$0.05\"}",
+              "reasoning_content": "This is the classic bat and ball problem from the Cognitive Reflection Test. The intuitive answer is $0.10, but that's wrong. Let me solve it properly.\n\nLet ball = x, bat = x + 1.00\nx + (x + 1.00) = 1.10\n2x + 1.00 = 1.10\n2x = 0.10\nx = 0.05\n\nSo the ball costs $0.05, and the bat costs $1.05. Check: 1.05 + 0.05 = 1.10 ✓, and 1.05 - 0.05 = 1.00 ✓."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 235,
+          "completion_tokens": 328,
+          "total_tokens": 563,
+          "completion_tokens_details": {
+            "reasoning_tokens": 147
+          },
+          "prompt_tokens_details": {
+            "cache_write_tokens": 0
+          }
+        }
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "chatcmpl-6ab7a7a4d4b3fe8620fd75c7",
+        "model": "kimi-k3",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "This is the classic bat and ball problem from the Cognitive Reflection Test. The intuitive answer is $0.10, but that's wrong. Let me solve it properly.\n\nLet ball = x, bat = x + 1.00\nx + (x + 1.00) = 1.10\n2x + 1.00 = 1.10\n2x = 0.10\nx = 0.05\n\nSo the ball costs $0.05, and the bat costs $1.05. Check: 1.05 + 0.05 = 1.10 ✓, and 1.05 - 0.05 = 1.00 ✓."
+            },
+            {
+              "type": "text",
+              "text": "{\"reasoning\":\"Let the ball cost x dollars. The bat costs $1.00 more than the ball, so the bat costs x + 1.00. Together they cost $1.10: x + (x + 1.00) = 1.10. Simplifying: 2x + 1.00 = 1.10, so 2x = 0.10, which gives x = 0.05. Check: ball = $0.05, bat = $1.05; total = $1.10 and the bat is exactly $1.00 more than the ball. The intuitive answer of $0.10 is wrong because then the bat would cost $1.10, totaling $1.20.\",\"answer\":\"$0.05\"}"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 235,
+          "output_tokens": 328,
+          "total_tokens": 563,
+          "cache_write_tokens": 0,
+          "reasoning_tokens": 147
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "moonshotai:kimi-k3",
+  "notes": [
+    "the model's JSON keys, in the order written: [reasoning answer]; answer \"$0.05\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:08:29Z",
+  "verdict": "ok"
+}

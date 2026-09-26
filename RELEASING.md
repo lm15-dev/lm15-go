@@ -31,11 +31,18 @@ section used to name (JSON objects written with sorted keys, which broke 23
 byte-pinned cases and a schema's property order) was fixed by making
 `JSONObject` an ordered type through the decoder and the builders.
 
+Live traffic (2026-09-26, `receipts/2026-09-26-live-smoke`, run with
+`go run ./examples/live_smoke -managed -control`): every API-key provider
+family, the Codex CLI's login file and five saved sign-ins, 77 checks, no
+Go defect; Go renewed three saved connections and lm15-python used them
+afterwards.
+
 What remains before tagging:
 
-1. Push lm15-contract first, so CI can check out the pinned commit.
-2. The live checks the contract cannot do offline: one real call per
-   provider family through the Go SDK, and a real sign-in per account flow.
+1. A new sign-in per account flow through Go (xAI and Copilot device
+   code, Claude and ChatGPT browser, OpenRouter loopback, Kimi Code,
+   Meta). Each needs a person to approve it; the saved connections Go
+   renewed and used were created by lm15-python.
 
 ## Cutting a release
 

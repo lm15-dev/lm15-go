@@ -1,0 +1,147 @@
+{
+  "binding": "groq",
+  "check": "order-sorted-control",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "openai/gpt-oss-20b",
+          "messages": [
+            {
+              "role": "user",
+              "content": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer in JSON."
+            }
+          ],
+          "max_tokens": 2000,
+          "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+              "name": "worked_answer",
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "answer": {
+                    "description": "The final answer only.",
+                    "type": "string"
+                  },
+                  "reasoning": {
+                    "description": "Work the problem out step by step before answering.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reasoning",
+                  "answer"
+                ],
+                "type": "object"
+              },
+              "strict": true
+            }
+          }
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411cd350ee6a314-YUL",
+        "connection": "keep-alive",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:06:51 GMT",
+        "server": "cloudflare",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=15552000",
+        "vary": "Origin",
+        "x-groq-region": "yul",
+        "x-ratelimit-limit-requests": "500000",
+        "x-ratelimit-limit-tokens": "250000",
+        "x-ratelimit-remaining-requests": "499998",
+        "x-ratelimit-remaining-tokens": "249208",
+        "x-ratelimit-reset-requests": "345ms",
+        "x-ratelimit-reset-tokens": "190ms",
+        "x-request-id": "req_01m3epaza0ezh8jftpb0kwqa0d"
+      },
+      "body": {
+        "id": "chatcmpl-bb043e1f-6e53-42c3-99e6-aed13b0ff26e",
+        "object": "chat.completion",
+        "created": 1790420811,
+        "model": "openai/gpt-oss-20b",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "{\"answer\":\"$0.05\",\"reasoning\":\"Let the ball cost x dollars. Then the bat costs x+1.00 dollars. The total cost is (x)+(x+1.00)=1.10, so 2x+1.00=1.10. Subtracting 1.00 gives 2x=0.10, so x=0.05. Therefore the ball costs $0.05.\"}",
+              "reasoning": "We need to produce JSON output following the schema. The schema requires \"reasoning\" and \"answer\" fields. The \"answer\" field is a string. They want the answer in JSON. We must include reasoning. Use compact JSON formatting: no pretty printing. So output single line JSON object with both fields.\n\nCompute: Let ball be x, bat x+1.00. Total 1.10. So 2x+1=1.10 =\u003e 2x=0.10 =\u003e x=0.05. Ball costs $0.05.\n\nSo answer: \"$0.05\" or just 0.05? The answer field type string. Could be \"$0.05\". They didn't specify formatting. We'll output \"$0.05\".\n\nMake JSON: {\"answer\":\"$0.05\",\"reasoning\":\"Let the ball cost x dollars. Then the bat costs x+1.00 dollars. The total cost is (x)+(x+1.00)=1.10, so 2x+1.00=1.10. Subtracting 1.00 gives 2x=0.10, so x=0.05. Therefore the ball costs $0.05.\"}. Ensure compact formatting: no spaces except after commas? They said compact JSON formatting. So we should remove spaces after commas and colons? Standard compact is no unnecessary whitespace. But key names need quotes, string values need quotes. We can produce: {\"answer\":\"$0.05\",\"reasoning\":\"Let the ball cost x dollars. Then the bat costs x+1.00 dollars. The total cost is (x)+(x+1.00)=1.10, so 2x+1.00=1.10. Subtracting 1.00 gives 2x=0.10, so x=0.05. Therefore the ball costs $0.05.\"} That's compact. Let's output that."
+            },
+            "logprobs": null,
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "queue_time": 0.004316922,
+          "prompt_tokens": 220,
+          "prompt_time": 0.017898174,
+          "completion_tokens": 504,
+          "completion_time": 0.597002514,
+          "total_tokens": 724,
+          "total_time": 0.614900688,
+          "completion_tokens_details": {
+            "reasoning_tokens": 399
+          }
+        },
+        "usage_breakdown": null,
+        "system_fingerprint": "fp_63473661d7",
+        "x_groq": {
+          "id": "req_01m3epaza0ezh8jftpb0kwqa0d",
+          "seed": 1848274044
+        },
+        "service_tier": "on_demand"
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "chatcmpl-bb043e1f-6e53-42c3-99e6-aed13b0ff26e",
+        "model": "openai/gpt-oss-20b",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "We need to produce JSON output following the schema. The schema requires \"reasoning\" and \"answer\" fields. The \"answer\" field is a string. They want the answer in JSON. We must include reasoning. Use compact JSON formatting: no pretty printing. So output single line JSON object with both fields.\n\nCompute: Let ball be x, bat x+1.00. Total 1.10. So 2x+1=1.10 =\u003e 2x=0.10 =\u003e x=0.05. Ball costs $0.05.\n\nSo answer: \"$0.05\" or just 0.05? The answer field type string. Could be \"$0.05\". They didn't specify formatting. We'll output \"$0.05\".\n\nMake JSON: {\"answer\":\"$0.05\",\"reasoning\":\"Let the ball cost x dollars. Then the bat costs x+1.00 dollars. The total cost is (x)+(x+1.00)=1.10, so 2x+1.00=1.10. Subtracting 1.00 gives 2x=0.10, so x=0.05. Therefore the ball costs $0.05.\"}. Ensure compact formatting: no spaces except after commas? They said compact JSON formatting. So we should remove spaces after commas and colons? Standard compact is no unnecessary whitespace. But key names need quotes, string values need quotes. We can produce: {\"answer\":\"$0.05\",\"reasoning\":\"Let the ball cost x dollars. Then the bat costs x+1.00 dollars. The total cost is (x)+(x+1.00)=1.10, so 2x+1.00=1.10. Subtracting 1.00 gives 2x=0.10, so x=0.05. Therefore the ball costs $0.05.\"} That's compact. Let's output that."
+            },
+            {
+              "type": "text",
+              "text": "{\"answer\":\"$0.05\",\"reasoning\":\"Let the ball cost x dollars. Then the bat costs x+1.00 dollars. The total cost is (x)+(x+1.00)=1.10, so 2x+1.00=1.10. Subtracting 1.00 gives 2x=0.10, so x=0.05. Therefore the ball costs $0.05.\"}"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 220,
+          "output_tokens": 504,
+          "total_tokens": 724,
+          "reasoning_tokens": 399
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "groq:openai/gpt-oss-20b",
+  "notes": [
+    "the model's JSON keys, in the order written: [answer reasoning]; answer \"$0.05\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:06:51Z",
+  "verdict": "ok"
+}

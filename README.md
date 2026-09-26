@@ -79,6 +79,11 @@ error 90/90, serde 129/129, auth 43/43, token 43/43, models 36/36, live
 24/24, files 48/48, batch 41/41, generation 20/20, video 27/27, cache
 11/11, router 22/22, ingest 169/169, managed (sign-in) 43/43. The request
 and serde directions include the opaque key-order check (INV-002).
+Live traffic: `go run ./examples/live_smoke` (keys from the environment;
+`-managed` adds the saved sign-ins, `-control` the sorted-schema control)
+sends real requests and writes receipts; the last run is
+[receipts/2026-09-26-live-smoke](receipts/2026-09-26-live-smoke/SUMMARY.md).
+
 The shared consumer vectors `consumer/live-collection-limits.json`,
 `errors/diagnostic-headers.json` and `auth/named-credentials.json` pass
 natively (`go test ./...` for the first two; the third through the vet

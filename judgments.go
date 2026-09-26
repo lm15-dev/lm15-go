@@ -564,7 +564,8 @@ type JudgmentProperty struct {
 }
 
 // Judgments emits a response_format declaring the given judgment
-// properties, in order (the order is kept through required).
+// properties in the order given: the schema lists them, and required
+// names them, in that order.
 func Judgments(name string, strict bool, properties ...JudgmentProperty) (JSONObject, error) {
 	if len(properties) == 0 {
 		return nil, valueErrorf("judgments needs at least one property")

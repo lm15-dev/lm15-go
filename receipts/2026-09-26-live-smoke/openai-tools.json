@@ -1,0 +1,516 @@
+{
+  "binding": "openai",
+  "check": "tools",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "gpt-5-mini",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "Use the tool: what is the forecast for Montreal on 2026-10-01? Then answer in one sentence."
+                }
+              ]
+            }
+          ],
+          "stream": false,
+          "max_output_tokens": 4000,
+          "tools": [
+            {
+              "type": "function",
+              "name": "get_forecast",
+              "description": "Weather forecast for a city on a date.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "location": {
+                    "type": "string",
+                    "description": "City name"
+                  },
+                  "date": {
+                    "type": "string",
+                    "description": "YYYY-MM-DD"
+                  }
+                },
+                "required": [
+                  "location",
+                  "date"
+                ]
+              }
+            }
+          ]
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-expose-headers": "X-Request-ID, CF-Ray, CF-Ray",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411cc8dac9b5b53-YUL",
+        "connection": "keep-alive",
+        "content-length": "4487",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:06:26 GMT",
+        "openai-organization": "user-5ie5j0kecta5ywlt7gnzvvvu",
+        "openai-processing-ms": "2494",
+        "openai-project": "proj_lUCuxJwZ8FrA21hP8ZMzGWMo",
+        "openai-version": "2020-10-01",
+        "server": "cloudflare",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+        "x-content-type-options": "nosniff",
+        "x-ratelimit-limit-requests": "10000",
+        "x-ratelimit-limit-tokens": "10000000",
+        "x-ratelimit-remaining-requests": "9999",
+        "x-ratelimit-remaining-tokens": "10000000",
+        "x-ratelimit-reset-requests": "6ms",
+        "x-ratelimit-reset-tokens": "0s",
+        "x-request-id": "req_5074fef8739e49d9ae75235b09d0b29e"
+      },
+      "body": {
+        "id": "resp_00693de90ba5b948006ab7a73138bc87d29bb598a58489ae18",
+        "object": "response",
+        "created_at": 1790420785,
+        "status": "completed",
+        "access_programs": null,
+        "background": false,
+        "billing": {
+          "payer": "developer"
+        },
+        "completed_at": 1790420786,
+        "error": null,
+        "frequency_penalty": 0.0,
+        "incomplete_details": null,
+        "instructions": null,
+        "max_output_tokens": 4000,
+        "max_tool_calls": null,
+        "model": "gpt-5-mini-2025-08-07",
+        "moderation": null,
+        "output": [
+          {
+            "id": "rs_00693de90ba5b948006ab7a731e2dc87d2a716a44332c3f2c4",
+            "type": "reasoning",
+            "content": [],
+            "encrypted_content": "gAAAAABqt6cyEpEfEl0YMmji-YgU4pn-rUisiL5ZzltuJFyXMRGA48xjP0FubDRE3Y0EgMmLjFLaY-7Y03c7Ob0vTplEK8OBqzjqJQ-40yx1SSFWlPGTCogx6RG0rLGRTeUyH3kr-pk1x9focR04Aw0rrrnnS1yrMnF15HfvguEnXg8pFIhpWpYEfOUbSlivMZWksWkajOinh-NuJroZQ8LOFJ7oNuF9RXEFlnTQkJaQ3tpSSBwx1QmcRoxit2DTY3xl8pTO-lnfE5EJn1jE2Fl2oy9z__QOF-DggzHeXHBRU9nB_Ee2ZhfzIAClrKmKhp8mT9HYVA_K70kUpWxdO_FaTiihNFhx6GvuwRfjRBFAAeBGQl38kqsgSzCtPbpLIFoh9mhaXRce6xfs63fhZD73xRyUat-XErtoIa02WOi5sgeHSl48aN1ZcxGB3NN1JcXtlgcz822EF-EnquyGNVSGrG_tetG6ljnZdE5kQxxV-iRaLgi20Q6Mbyl9eOrxMjTqSiCGioNMSuxnKe2Aqm-lHVjhfpb8Ls41kl7m3HA7rWgUhV9iptXU_Nul0AYZob0cIwNGvT9kpPKKOBMVMT_sENkVFA8bObv7rGVIiXAjjQb2MdePosNgxHAxOE16cd3ZQhonC86OYk7_m8fkW7iY7Bpfsr69I70dBzXJNVKVCbch4BzAqya5kNrOnSUQsXOz5Ti5AlXbjDFYQD9S3GWSYx99hEBOELgPhGQUh0XJ3LyLyneTpWoE4O14pVufQGF_G2JvEdV-0nPFjsxlJkP4qJOHOMOZP7PMZ0RZAPj9Q1RL-r8Qe7B-ZKr548Ea_4sjI4lm5DKEb5SIUigfRamPKk8cTPUsYD1zkHUPGxohXe6J8IzBaCKLz1y7OtwjrQQDNB90v_9OEwq8dYFMXJS3aVp8mMJArxGJW3AnFf546ITyo5amB21vTbWk9HZkJphNaXNBFBM1QnCcnhiRASKVJxeONvom9Pe5VuayJ5pjm44F5euaWmm7WkamFocImxyArPrRBbbQ-P7i2iSCpjgaA2J7C4qZEoVn_b7DvVzO5E7lNTVjDK25xOztoMqTTmB1mei9CdqRaFYa-GuddXnCK4oCaluHoJemfKl2MxuRzohZuWl6tvB3sDgb18zWytwYwxMQWOKrtDZX-7GvxQtQ-ycJpBpui0VN-j4VSOB0O7H97YxYZasXuhwDuB3M4XGeVJJ6iBkNpvdHuZ9OdNbb7fPUL2IZ_iBVlNxXG3VidCchAAMUy-jOc6xL02csxdEYiJfgz8I_dOvfhKh5hy71-QWLqy36qGK9R8nPrw0p_tsiRwDfKoOZ0HjWOtNdryOom-Sr30azgvur0b13_YVbt9I-9mJS32n7wcIoAT86_lenBQczqOb7RrJbFVWUZS34lpkRNjOtDvufy4w5DXyM2zOpxGvdRB8-85TBSk7EZBHLukuyP8_lDH0jbFC6UrWmKNGfVoAO6ICu-CjM9Cj0Kohh_h3WVznDqomFRtw6Q9GqnGJ4Tofyj3Fm6uy0NYlCy0iSJX8g9yQuDVFaPfVSCJ9pp7adLalV8_VKuYBddLj-optXkuVMvsmCFBUi7usFYbSpSFbheJumfYFPqwTYa0dJdlp9SSmSyip0ngC4XYOM8DzvIIQOuZzoZEeBf8pzCgx3G6AgHwBRgRhCFmDlNZ8NsGHqDA==",
+            "summary": []
+          },
+          {
+            "id": "fc_00693de90ba5b948006ab7a73286f887d2ab45ff03b7f2ac64",
+            "type": "function_call",
+            "status": "completed",
+            "arguments": "{\"location\":\"Montreal\",\"date\":\"2026-10-01\"}",
+            "call_id": "call_iA089kkqJ1aZvZHAWFFDJQbp",
+            "name": "get_forecast"
+          }
+        ],
+        "parallel_tool_calls": true,
+        "presence_penalty": 0.0,
+        "previous_response_id": null,
+        "prompt_cache_key": null,
+        "prompt_cache_retention": "in_memory",
+        "reasoning": {
+          "context": "current_turn",
+          "effort": "medium",
+          "mode": "standard",
+          "summary": null
+        },
+        "safety_identifier": null,
+        "service_tier": "default",
+        "store": true,
+        "temperature": 1.0,
+        "text": {
+          "format": {
+            "type": "text"
+          },
+          "verbosity": "medium"
+        },
+        "tool_choice": "auto",
+        "tool_usage": {
+          "image_gen": {
+            "input_tokens": 0,
+            "input_tokens_details": {
+              "image_tokens": 0,
+              "text_tokens": 0
+            },
+            "output_tokens": 0,
+            "output_tokens_details": {
+              "image_tokens": 0,
+              "text_tokens": 0
+            },
+            "total_tokens": 0
+          },
+          "web_search": {
+            "num_requests": 0
+          }
+        },
+        "tools": [
+          {
+            "type": "function",
+            "description": "Weather forecast for a city on a date.",
+            "name": "get_forecast",
+            "output_schema": null,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "type": "string",
+                  "description": "City name"
+                },
+                "date": {
+                  "type": "string",
+                  "description": "YYYY-MM-DD"
+                }
+              },
+              "required": [
+                "location",
+                "date"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ],
+        "top_logprobs": 0,
+        "top_p": 1.0,
+        "truncation": "disabled",
+        "usage": {
+          "input_tokens": 83,
+          "input_tokens_details": {
+            "cache_write_tokens": 0,
+            "cached_tokens": 0
+          },
+          "output_tokens": 113,
+          "output_tokens_details": {
+            "reasoning_tokens": 64
+          },
+          "total_tokens": 196
+        },
+        "user": null,
+        "metadata": {}
+      }
+    },
+    {
+      "sent": {
+        "body": {
+          "model": "gpt-5-mini",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "Use the tool: what is the forecast for Montreal on 2026-10-01? Then answer in one sentence."
+                }
+              ]
+            },
+            {
+              "type": "reasoning",
+              "id": "rs_00693de90ba5b948006ab7a731e2dc87d2a716a44332c3f2c4",
+              "encrypted_content": "gAAAAABqt6cyEpEfEl0YMmji-YgU4pn-rUisiL5ZzltuJFyXMRGA48xjP0FubDRE3Y0EgMmLjFLaY-7Y03c7Ob0vTplEK8OBqzjqJQ-40yx1SSFWlPGTCogx6RG0rLGRTeUyH3kr-pk1x9focR04Aw0rrrnnS1yrMnF15HfvguEnXg8pFIhpWpYEfOUbSlivMZWksWkajOinh-NuJroZQ8LOFJ7oNuF9RXEFlnTQkJaQ3tpSSBwx1QmcRoxit2DTY3xl8pTO-lnfE5EJn1jE2Fl2oy9z__QOF-DggzHeXHBRU9nB_Ee2ZhfzIAClrKmKhp8mT9HYVA_K70kUpWxdO_FaTiihNFhx6GvuwRfjRBFAAeBGQl38kqsgSzCtPbpLIFoh9mhaXRce6xfs63fhZD73xRyUat-XErtoIa02WOi5sgeHSl48aN1ZcxGB3NN1JcXtlgcz822EF-EnquyGNVSGrG_tetG6ljnZdE5kQxxV-iRaLgi20Q6Mbyl9eOrxMjTqSiCGioNMSuxnKe2Aqm-lHVjhfpb8Ls41kl7m3HA7rWgUhV9iptXU_Nul0AYZob0cIwNGvT9kpPKKOBMVMT_sENkVFA8bObv7rGVIiXAjjQb2MdePosNgxHAxOE16cd3ZQhonC86OYk7_m8fkW7iY7Bpfsr69I70dBzXJNVKVCbch4BzAqya5kNrOnSUQsXOz5Ti5AlXbjDFYQD9S3GWSYx99hEBOELgPhGQUh0XJ3LyLyneTpWoE4O14pVufQGF_G2JvEdV-0nPFjsxlJkP4qJOHOMOZP7PMZ0RZAPj9Q1RL-r8Qe7B-ZKr548Ea_4sjI4lm5DKEb5SIUigfRamPKk8cTPUsYD1zkHUPGxohXe6J8IzBaCKLz1y7OtwjrQQDNB90v_9OEwq8dYFMXJS3aVp8mMJArxGJW3AnFf546ITyo5amB21vTbWk9HZkJphNaXNBFBM1QnCcnhiRASKVJxeONvom9Pe5VuayJ5pjm44F5euaWmm7WkamFocImxyArPrRBbbQ-P7i2iSCpjgaA2J7C4qZEoVn_b7DvVzO5E7lNTVjDK25xOztoMqTTmB1mei9CdqRaFYa-GuddXnCK4oCaluHoJemfKl2MxuRzohZuWl6tvB3sDgb18zWytwYwxMQWOKrtDZX-7GvxQtQ-ycJpBpui0VN-j4VSOB0O7H97YxYZasXuhwDuB3M4XGeVJJ6iBkNpvdHuZ9OdNbb7fPUL2IZ_iBVlNxXG3VidCchAAMUy-jOc6xL02csxdEYiJfgz8I_dOvfhKh5hy71-QWLqy36qGK9R8nPrw0p_tsiRwDfKoOZ0HjWOtNdryOom-Sr30azgvur0b13_YVbt9I-9mJS32n7wcIoAT86_lenBQczqOb7RrJbFVWUZS34lpkRNjOtDvufy4w5DXyM2zOpxGvdRB8-85TBSk7EZBHLukuyP8_lDH0jbFC6UrWmKNGfVoAO6ICu-CjM9Cj0Kohh_h3WVznDqomFRtw6Q9GqnGJ4Tofyj3Fm6uy0NYlCy0iSJX8g9yQuDVFaPfVSCJ9pp7adLalV8_VKuYBddLj-optXkuVMvsmCFBUi7usFYbSpSFbheJumfYFPqwTYa0dJdlp9SSmSyip0ngC4XYOM8DzvIIQOuZzoZEeBf8pzCgx3G6AgHwBRgRhCFmDlNZ8NsGHqDA==",
+              "summary": []
+            },
+            {
+              "type": "function_call",
+              "call_id": "call_iA089kkqJ1aZvZHAWFFDJQbp",
+              "name": "get_forecast",
+              "arguments": "{\"location\":\"Montreal\",\"date\":\"2026-10-01\"}"
+            },
+            {
+              "type": "function_call_output",
+              "call_id": "call_iA089kkqJ1aZvZHAWFFDJQbp",
+              "output": "{\"forecast\": \"sunny\", \"high_c\": 14}"
+            }
+          ],
+          "stream": false,
+          "max_output_tokens": 4000,
+          "tools": [
+            {
+              "type": "function",
+              "name": "get_forecast",
+              "description": "Weather forecast for a city on a date.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "location": {
+                    "type": "string",
+                    "description": "City name"
+                  },
+                  "date": {
+                    "type": "string",
+                    "description": "YYYY-MM-DD"
+                  }
+                },
+                "required": [
+                  "location",
+                  "date"
+                ]
+              }
+            }
+          ]
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.openai.com/v1/responses"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-expose-headers": "X-Request-ID, CF-Ray, CF-Ray",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411cc9e0ce55b53-YUL",
+        "connection": "keep-alive",
+        "content-length": "4735",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:06:28 GMT",
+        "openai-organization": "user-5ie5j0kecta5ywlt7gnzvvvu",
+        "openai-processing-ms": "1457",
+        "openai-project": "proj_lUCuxJwZ8FrA21hP8ZMzGWMo",
+        "openai-version": "2020-10-01",
+        "server": "cloudflare",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+        "x-content-type-options": "nosniff",
+        "x-ratelimit-limit-requests": "10000",
+        "x-ratelimit-limit-tokens": "10000000",
+        "x-ratelimit-remaining-requests": "9999",
+        "x-ratelimit-remaining-tokens": "10000000",
+        "x-ratelimit-reset-requests": "6ms",
+        "x-ratelimit-reset-tokens": "0s",
+        "x-request-id": "req_6171a42479f542b6916bff0b99e4c857"
+      },
+      "body": {
+        "id": "resp_00693de90ba5b948006ab7a732f21487d2a5929f333a7a10a3",
+        "object": "response",
+        "created_at": 1790420786,
+        "status": "completed",
+        "access_programs": null,
+        "background": false,
+        "billing": {
+          "payer": "developer"
+        },
+        "completed_at": 1790420788,
+        "error": null,
+        "frequency_penalty": 0.0,
+        "incomplete_details": null,
+        "instructions": null,
+        "max_output_tokens": 4000,
+        "max_tool_calls": null,
+        "model": "gpt-5-mini-2025-08-07",
+        "moderation": null,
+        "output": [
+          {
+            "id": "rs_00693de90ba5b948006ab7a73350c087d2984f3c2ebd5c3a2b",
+            "type": "reasoning",
+            "content": [],
+            "encrypted_content": "gAAAAABqt6c0n-LM_hityihq4cmlyyZZDLeeSDgoXKW82v6BdnIV9pCzee_xaec1aNzwmE1EkPuRToFVblV5ytEL3mcxewMSgCTPBNHFVT_FHiB-AaLa9dpQSUnVZY0-__6JPoN1ECHad8uyVxVrVnQ2A7DbAsltuAlv6iKapo2p29bBSZWY0x7v4ZWgtNMe8vP-VyGSXHrMz-AeOUZBLC8FV6VVbgkzxGPN7w0_PqgSVrcx1NxCcrKrnwN4OAyt-XXWut828DT5O01W3XTcHe7EtD_yBN7cq1w6f3bbzOnmm38QsbanEnCHgru8eEfZ78LHNhdlV4qRMxDR-XiiVKr1Jl2sFu8sFu3ECiy4TaONUx9o2qWkEfOOPOpODWpp1UuhJ03xB4MbrUBe4oY8VWlaFR1ikscEdQcBuYaJOGMvh0OtDKw6rYreKoiiehK2bpTUlLnKXZJ8V10MXZL3cOCryENeoBc3knwEsnXRJ_XENQnPkNWZqDAVcnRA2Wpj6euktDE3lxAy15mK2rr9fEmxSY-2HIK1cnkIU8I8JHoxY6ezSZ8mMbkueVjhoBZ9o_ysdUmf0ezZfllF3UEbuT9dKBPQUc4DAIqG_w8q-Jz48ffpW89WdDOmHPZ-pSKFFHXFdFWEyU87YgcXqSn9MGHMNeBoRzsFgdV5hd8ZbIPH2VOeMsD7CbgxbV3ClZJ_vaW0lI0MYL09yQRi82vS-SpSq0M7noaNWEOmlpGDZC9jRT47UAE_FpTQWGSzwn25xq8K9qL0H8IxrwNJbpdF1AiX_N_g3qaeGSmBn5IhUAb9GjSV2yoBZtzstmeAtNVfUtFQwUbYhbB9U5t9gIMrUjPHU8bj8WCCcqymPPhrrWFi4fgCwM23HBsWUjdN0nbhcAcVaQcC7rZiTPMr4v5NKa3mkkbfzJzvlmD8EZKJSatlEMXnAYaI5Osw1raTfz1NtGQNfLQDSIaC33TIf3cfeYeqxwurR8vkK0OO9_lEexZtMhFx8FZoZLtRPglySYxnnqx-LGFTUdvK_SRwv_mozYJc9T3sOmIaOXVPqkqpR1FLAhaUC2l-uYIr_H7ktGxehrkefm5n4W425Q_5KWoTp-BUt34xi0N8X2MEnLXbzrBwK3Oboyd8Usc87ERugDYFGmLr1HskB8Xl54pOjD5MnsNxjXObJ3-gpamw0JrGjZUnOs1iOH27uXbK6QZ4sBPEe6m8cE1oM1ackXi_EerG-rjL0nLSKPChleNN2vW2Odla69BjAlag0miriiI22Wzy8Iva2tfl06A1O61Txl4WLUtnw5mPLy4Rbk9lKex9sUYHvNOi34pYCfcy9goD0Vxv7IalRB4p44IAXO1Y7RiLl1d_DAAzVNt8beOMAAW8AkcXt_HOUpCHaRmT2rP1xHm6xbetOtAL1T6BEp-zQO0VnoTLQWHcptwW3D7EnVRhkyae6hAix559uYqqNilnSIzr_Ya_QS1o_wBLv2wJh2OvCTE-T8on9dhDycXeb8QuRWHBZx54DfEXNuaVxzJCgIhsxIvQU3myUN5XGma7DrIzaL6cDldx69UmGx43rtuMnKTWDuNeKjS4_V4FJ984-pY1l3MMr4PpADbB6wolWSk-UDX3s1DV-qG-cYtU6lnDCt6nsKgyLvd551lKj5CfhPIUYXSNZu9T72saPvCrIF19lm9NMQINdO1mU9CACe-gVda4CnI1_qMgApJ08rnxxQTdKv5ldVqMTQjMWTaLrc9_2_Az6IA4jvANVktFCyUjRxQrBzBPWngrd52_h2vzOuADHZifl59-h--PqZfaknZjk8dClhRYcCxHeAx2GMsaUhChad9F6qqaY0E=",
+            "summary": []
+          },
+          {
+            "id": "msg_00693de90ba5b948006ab7a7341cf087d2b7fa4c4ea273825e",
+            "type": "message",
+            "status": "completed",
+            "content": [
+              {
+                "type": "output_text",
+                "annotations": [],
+                "logprobs": [],
+                "text": "The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C."
+              }
+            ],
+            "role": "assistant"
+          }
+        ],
+        "parallel_tool_calls": true,
+        "presence_penalty": 0.0,
+        "previous_response_id": null,
+        "prompt_cache_key": null,
+        "prompt_cache_retention": "in_memory",
+        "reasoning": {
+          "context": "current_turn",
+          "effort": "medium",
+          "mode": "standard",
+          "summary": null
+        },
+        "safety_identifier": null,
+        "service_tier": "default",
+        "store": true,
+        "temperature": 1.0,
+        "text": {
+          "format": {
+            "type": "text"
+          },
+          "verbosity": "medium"
+        },
+        "tool_choice": "auto",
+        "tool_usage": {
+          "image_gen": {
+            "input_tokens": 0,
+            "input_tokens_details": {
+              "image_tokens": 0,
+              "text_tokens": 0
+            },
+            "output_tokens": 0,
+            "output_tokens_details": {
+              "image_tokens": 0,
+              "text_tokens": 0
+            },
+            "total_tokens": 0
+          },
+          "web_search": {
+            "num_requests": 0
+          }
+        },
+        "tools": [
+          {
+            "type": "function",
+            "description": "Weather forecast for a city on a date.",
+            "name": "get_forecast",
+            "output_schema": null,
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "type": "string",
+                  "description": "City name"
+                },
+                "date": {
+                  "type": "string",
+                  "description": "YYYY-MM-DD"
+                }
+              },
+              "required": [
+                "location",
+                "date"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
+          }
+        ],
+        "top_logprobs": 0,
+        "top_p": 1.0,
+        "truncation": "disabled",
+        "usage": {
+          "input_tokens": 219,
+          "input_tokens_details": {
+            "cache_write_tokens": 0,
+            "cached_tokens": 0
+          },
+          "output_tokens": 148,
+          "output_tokens_details": {
+            "reasoning_tokens": 64
+          },
+          "total_tokens": 367
+        },
+        "user": null,
+        "metadata": {}
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "resp_00693de90ba5b948006ab7a73138bc87d29bb598a58489ae18",
+        "model": "gpt-5-mini-2025-08-07",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "",
+              "continuation": [
+                {
+                  "provider": "openai",
+                  "kind": "reasoning_item",
+                  "data": {
+                    "id": "rs_00693de90ba5b948006ab7a731e2dc87d2a716a44332c3f2c4",
+                    "encrypted_content": "gAAAAABqt6cyEpEfEl0YMmji-YgU4pn-rUisiL5ZzltuJFyXMRGA48xjP0FubDRE3Y0EgMmLjFLaY-7Y03c7Ob0vTplEK8OBqzjqJQ-40yx1SSFWlPGTCogx6RG0rLGRTeUyH3kr-pk1x9focR04Aw0rrrnnS1yrMnF15HfvguEnXg8pFIhpWpYEfOUbSlivMZWksWkajOinh-NuJroZQ8LOFJ7oNuF9RXEFlnTQkJaQ3tpSSBwx1QmcRoxit2DTY3xl8pTO-lnfE5EJn1jE2Fl2oy9z__QOF-DggzHeXHBRU9nB_Ee2ZhfzIAClrKmKhp8mT9HYVA_K70kUpWxdO_FaTiihNFhx6GvuwRfjRBFAAeBGQl38kqsgSzCtPbpLIFoh9mhaXRce6xfs63fhZD73xRyUat-XErtoIa02WOi5sgeHSl48aN1ZcxGB3NN1JcXtlgcz822EF-EnquyGNVSGrG_tetG6ljnZdE5kQxxV-iRaLgi20Q6Mbyl9eOrxMjTqSiCGioNMSuxnKe2Aqm-lHVjhfpb8Ls41kl7m3HA7rWgUhV9iptXU_Nul0AYZob0cIwNGvT9kpPKKOBMVMT_sENkVFA8bObv7rGVIiXAjjQb2MdePosNgxHAxOE16cd3ZQhonC86OYk7_m8fkW7iY7Bpfsr69I70dBzXJNVKVCbch4BzAqya5kNrOnSUQsXOz5Ti5AlXbjDFYQD9S3GWSYx99hEBOELgPhGQUh0XJ3LyLyneTpWoE4O14pVufQGF_G2JvEdV-0nPFjsxlJkP4qJOHOMOZP7PMZ0RZAPj9Q1RL-r8Qe7B-ZKr548Ea_4sjI4lm5DKEb5SIUigfRamPKk8cTPUsYD1zkHUPGxohXe6J8IzBaCKLz1y7OtwjrQQDNB90v_9OEwq8dYFMXJS3aVp8mMJArxGJW3AnFf546ITyo5amB21vTbWk9HZkJphNaXNBFBM1QnCcnhiRASKVJxeONvom9Pe5VuayJ5pjm44F5euaWmm7WkamFocImxyArPrRBbbQ-P7i2iSCpjgaA2J7C4qZEoVn_b7DvVzO5E7lNTVjDK25xOztoMqTTmB1mei9CdqRaFYa-GuddXnCK4oCaluHoJemfKl2MxuRzohZuWl6tvB3sDgb18zWytwYwxMQWOKrtDZX-7GvxQtQ-ycJpBpui0VN-j4VSOB0O7H97YxYZasXuhwDuB3M4XGeVJJ6iBkNpvdHuZ9OdNbb7fPUL2IZ_iBVlNxXG3VidCchAAMUy-jOc6xL02csxdEYiJfgz8I_dOvfhKh5hy71-QWLqy36qGK9R8nPrw0p_tsiRwDfKoOZ0HjWOtNdryOom-Sr30azgvur0b13_YVbt9I-9mJS32n7wcIoAT86_lenBQczqOb7RrJbFVWUZS34lpkRNjOtDvufy4w5DXyM2zOpxGvdRB8-85TBSk7EZBHLukuyP8_lDH0jbFC6UrWmKNGfVoAO6ICu-CjM9Cj0Kohh_h3WVznDqomFRtw6Q9GqnGJ4Tofyj3Fm6uy0NYlCy0iSJX8g9yQuDVFaPfVSCJ9pp7adLalV8_VKuYBddLj-optXkuVMvsmCFBUi7usFYbSpSFbheJumfYFPqwTYa0dJdlp9SSmSyip0ngC4XYOM8DzvIIQOuZzoZEeBf8pzCgx3G6AgHwBRgRhCFmDlNZ8NsGHqDA=="
+                  }
+                }
+              ]
+            },
+            {
+              "type": "tool_call",
+              "id": "call_iA089kkqJ1aZvZHAWFFDJQbp",
+              "name": "get_forecast",
+              "input": {
+                "location": "Montreal",
+                "date": "2026-10-01"
+              }
+            }
+          ]
+        },
+        "finish_reason": "tool_call",
+        "usage": {
+          "input_tokens": 83,
+          "output_tokens": 113,
+          "total_tokens": 196,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "reasoning_tokens": 64
+        }
+      }
+    },
+    {
+      "response": {
+        "id": "resp_00693de90ba5b948006ab7a732f21487d2a5929f333a7a10a3",
+        "model": "gpt-5-mini-2025-08-07",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "",
+              "continuation": [
+                {
+                  "provider": "openai",
+                  "kind": "reasoning_item",
+                  "data": {
+                    "id": "rs_00693de90ba5b948006ab7a73350c087d2984f3c2ebd5c3a2b",
+                    "encrypted_content": "gAAAAABqt6c0n-LM_hityihq4cmlyyZZDLeeSDgoXKW82v6BdnIV9pCzee_xaec1aNzwmE1EkPuRToFVblV5ytEL3mcxewMSgCTPBNHFVT_FHiB-AaLa9dpQSUnVZY0-__6JPoN1ECHad8uyVxVrVnQ2A7DbAsltuAlv6iKapo2p29bBSZWY0x7v4ZWgtNMe8vP-VyGSXHrMz-AeOUZBLC8FV6VVbgkzxGPN7w0_PqgSVrcx1NxCcrKrnwN4OAyt-XXWut828DT5O01W3XTcHe7EtD_yBN7cq1w6f3bbzOnmm38QsbanEnCHgru8eEfZ78LHNhdlV4qRMxDR-XiiVKr1Jl2sFu8sFu3ECiy4TaONUx9o2qWkEfOOPOpODWpp1UuhJ03xB4MbrUBe4oY8VWlaFR1ikscEdQcBuYaJOGMvh0OtDKw6rYreKoiiehK2bpTUlLnKXZJ8V10MXZL3cOCryENeoBc3knwEsnXRJ_XENQnPkNWZqDAVcnRA2Wpj6euktDE3lxAy15mK2rr9fEmxSY-2HIK1cnkIU8I8JHoxY6ezSZ8mMbkueVjhoBZ9o_ysdUmf0ezZfllF3UEbuT9dKBPQUc4DAIqG_w8q-Jz48ffpW89WdDOmHPZ-pSKFFHXFdFWEyU87YgcXqSn9MGHMNeBoRzsFgdV5hd8ZbIPH2VOeMsD7CbgxbV3ClZJ_vaW0lI0MYL09yQRi82vS-SpSq0M7noaNWEOmlpGDZC9jRT47UAE_FpTQWGSzwn25xq8K9qL0H8IxrwNJbpdF1AiX_N_g3qaeGSmBn5IhUAb9GjSV2yoBZtzstmeAtNVfUtFQwUbYhbB9U5t9gIMrUjPHU8bj8WCCcqymPPhrrWFi4fgCwM23HBsWUjdN0nbhcAcVaQcC7rZiTPMr4v5NKa3mkkbfzJzvlmD8EZKJSatlEMXnAYaI5Osw1raTfz1NtGQNfLQDSIaC33TIf3cfeYeqxwurR8vkK0OO9_lEexZtMhFx8FZoZLtRPglySYxnnqx-LGFTUdvK_SRwv_mozYJc9T3sOmIaOXVPqkqpR1FLAhaUC2l-uYIr_H7ktGxehrkefm5n4W425Q_5KWoTp-BUt34xi0N8X2MEnLXbzrBwK3Oboyd8Usc87ERugDYFGmLr1HskB8Xl54pOjD5MnsNxjXObJ3-gpamw0JrGjZUnOs1iOH27uXbK6QZ4sBPEe6m8cE1oM1ackXi_EerG-rjL0nLSKPChleNN2vW2Odla69BjAlag0miriiI22Wzy8Iva2tfl06A1O61Txl4WLUtnw5mPLy4Rbk9lKex9sUYHvNOi34pYCfcy9goD0Vxv7IalRB4p44IAXO1Y7RiLl1d_DAAzVNt8beOMAAW8AkcXt_HOUpCHaRmT2rP1xHm6xbetOtAL1T6BEp-zQO0VnoTLQWHcptwW3D7EnVRhkyae6hAix559uYqqNilnSIzr_Ya_QS1o_wBLv2wJh2OvCTE-T8on9dhDycXeb8QuRWHBZx54DfEXNuaVxzJCgIhsxIvQU3myUN5XGma7DrIzaL6cDldx69UmGx43rtuMnKTWDuNeKjS4_V4FJ984-pY1l3MMr4PpADbB6wolWSk-UDX3s1DV-qG-cYtU6lnDCt6nsKgyLvd551lKj5CfhPIUYXSNZu9T72saPvCrIF19lm9NMQINdO1mU9CACe-gVda4CnI1_qMgApJ08rnxxQTdKv5ldVqMTQjMWTaLrc9_2_Az6IA4jvANVktFCyUjRxQrBzBPWngrd52_h2vzOuADHZifl59-h--PqZfaknZjk8dClhRYcCxHeAx2GMsaUhChad9F6qqaY0E="
+                  }
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": "The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C."
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 219,
+          "output_tokens": 148,
+          "total_tokens": 367,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "reasoning_tokens": 64
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "gpt-5-mini",
+  "notes": [
+    "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+    "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:06:28Z",
+  "verdict": "ok"
+}

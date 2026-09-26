@@ -1,0 +1,279 @@
+{
+  "binding": "zai",
+  "check": "tools",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "glm-5.3-flash",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Use the tool: what is the forecast for Montreal on 2026-10-01? Then answer in one sentence."
+            }
+          ],
+          "max_tokens": 2000,
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "get_forecast",
+                "description": "Weather forecast for a city on a date.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "string",
+                      "description": "City name"
+                    },
+                    "date": {
+                      "type": "string",
+                      "description": "YYYY-MM-DD"
+                    }
+                  },
+                  "required": [
+                    "location",
+                    "date"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.z.ai/api/paas/v4/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "alt-svc": "h3=\":443\"; ma=3600",
+        "connection": "keep-alive",
+        "content-length": "771",
+        "content-type": "application/json; charset=UTF-8",
+        "date": "Sat, 26 Sep 2026 11:07:24 GMT",
+        "ga-traceid": "a27f2d544211dfbcb4aad3429a032d52",
+        "set-cookie": "\u003credacted\u003e",
+        "vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, Origin",
+        "x-log-id": "202609261907194d53e7ff5735415d",
+        "x-request-id": "f920dc08-7884-45f1-9dc1-25f3afcafe54"
+      },
+      "body": {
+        "choices": [
+          {
+            "finish_reason": "tool_calls",
+            "index": 0,
+            "message": {
+              "content": "",
+              "reasoning_content": "The user wants the weather forecast for Montreal on 2026-10-01. I'll call the get_forecast tool with location \"Montreal\" and date \"2026-10-01\".",
+              "role": "assistant",
+              "tool_calls": [
+                {
+                  "function": {
+                    "arguments": "{\"date\":\"2026-10-01\",\"location\":\"Montreal\"}",
+                    "name": "get_forecast"
+                  },
+                  "id": "call_-7231547486949601460",
+                  "index": 0,
+                  "type": "function"
+                }
+              ]
+            }
+          }
+        ],
+        "created": 1790420844,
+        "id": "202609261907194d53e7ff5735415d",
+        "model": "glm-5.3-flash",
+        "object": "chat.completion",
+        "request_id": "202609261907194d53e7ff5735415d",
+        "usage": {
+          "completion_tokens": 66,
+          "completion_tokens_details": {
+            "reasoning_tokens": 41
+          },
+          "prompt_tokens": 210,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 276
+        }
+      }
+    },
+    {
+      "sent": {
+        "body": {
+          "model": "glm-5.3-flash",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Use the tool: what is the forecast for Montreal on 2026-10-01? Then answer in one sentence."
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "reasoning_content": "The user wants the weather forecast for Montreal on 2026-10-01. I'll call the get_forecast tool with location \"Montreal\" and date \"2026-10-01\".",
+              "tool_calls": [
+                {
+                  "id": "call_-7231547486949601460",
+                  "type": "function",
+                  "function": {
+                    "name": "get_forecast",
+                    "arguments": "{\"date\":\"2026-10-01\",\"location\":\"Montreal\"}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "tool_call_id": "call_-7231547486949601460",
+              "content": "{\"forecast\": \"sunny\", \"high_c\": 14}"
+            }
+          ],
+          "max_tokens": 2000,
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "get_forecast",
+                "description": "Weather forecast for a city on a date.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "string",
+                      "description": "City name"
+                    },
+                    "date": {
+                      "type": "string",
+                      "description": "YYYY-MM-DD"
+                    }
+                  },
+                  "required": [
+                    "location",
+                    "date"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.z.ai/api/paas/v4/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "alt-svc": "h3=\":443\"; ma=3600",
+        "connection": "keep-alive",
+        "content-length": "485",
+        "content-type": "application/json; charset=UTF-8",
+        "date": "Sat, 26 Sep 2026 11:07:30 GMT",
+        "ga-traceid": "328d103d2af8427b80e7f69da3168b2c",
+        "set-cookie": "\u003credacted\u003e",
+        "vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, Origin",
+        "x-log-id": "20260926190724be64bf3fad10441b",
+        "x-request-id": "19d1de7c-99c4-4d87-b589-994af0d57e16"
+      },
+      "body": {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "content": "The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.",
+              "role": "assistant"
+            }
+          }
+        ],
+        "created": 1790420849,
+        "id": "20260926190724be64bf3fad10441b",
+        "model": "glm-5.3-flash",
+        "object": "chat.completion",
+        "request_id": "20260926190724be64bf3fad10441b",
+        "usage": {
+          "completion_tokens": 24,
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          },
+          "prompt_tokens": 294,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 318
+        }
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "202609261907194d53e7ff5735415d",
+        "model": "glm-5.3-flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "The user wants the weather forecast for Montreal on 2026-10-01. I'll call the get_forecast tool with location \"Montreal\" and date \"2026-10-01\"."
+            },
+            {
+              "type": "tool_call",
+              "id": "call_-7231547486949601460",
+              "name": "get_forecast",
+              "input": {
+                "date": "2026-10-01",
+                "location": "Montreal"
+              }
+            }
+          ]
+        },
+        "finish_reason": "tool_call",
+        "usage": {
+          "input_tokens": 210,
+          "output_tokens": 66,
+          "total_tokens": 276,
+          "cache_read_tokens": 0,
+          "reasoning_tokens": 41
+        }
+      }
+    },
+    {
+      "response": {
+        "id": "20260926190724be64bf3fad10441b",
+        "model": "glm-5.3-flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C."
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 294,
+          "output_tokens": 24,
+          "total_tokens": 318,
+          "cache_read_tokens": 0,
+          "reasoning_tokens": 0
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "zai:glm-5.3-flash",
+  "notes": [
+    "call get_forecast({\"date\":\"2026-10-01\",\"location\":\"Montreal\"})",
+    "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:07:30Z",
+  "verdict": "ok"
+}

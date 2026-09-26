@@ -1,0 +1,258 @@
+{
+  "binding": "openai-codex-cli",
+  "check": "tools",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "gpt-5.5",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "Use the tool: what is the forecast for Montreal on 2026-10-01? Then answer in one sentence."
+                }
+              ]
+            }
+          ],
+          "stream": true,
+          "tools": [
+            {
+              "type": "function",
+              "name": "get_forecast",
+              "description": "Weather forecast for a city on a date.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "location": {
+                    "type": "string",
+                    "description": "City name"
+                  },
+                  "date": {
+                    "type": "string",
+                    "description": "YYYY-MM-DD"
+                  }
+                },
+                "required": [
+                  "location",
+                  "date"
+                ]
+              }
+            }
+          ],
+          "instructions": "You are a helpful assistant.",
+          "store": false
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "chatgpt-account-id": "\u003credacted\u003e",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental",
+          "originator": "\u003credacted\u003e"
+        },
+        "method": "POST",
+        "url": "https://chatgpt.com/backend-api/codex/responses"
+      },
+      "status": 200,
+      "response_headers": {
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411d03fdef288df-YUL",
+        "connection": "keep-alive",
+        "cross-origin-opener-policy": "same-origin-allow-popups",
+        "date": "Sat, 26 Sep 2026 11:08:57 GMT",
+        "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.01,\"max_age\":604800}",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=fNxd4srqJD8NdRrayS0yLg2TP2AWe9ryDrSoda1ZiYyWks%2FtjeiEmQiFc9Cu3AZgSrLvlQEQzfH4T4G9mppAUR%2BwDSkseGBoBZGgWUjhdNtK7m7W1imyHpG%2F7Emo\"}]}",
+        "server": "cloudflare",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+        "x-codex-active-limit": "premium",
+        "x-codex-credits-balance": "0",
+        "x-codex-credits-has-credits": "False",
+        "x-codex-credits-unlimited": "False",
+        "x-codex-plan-type": "pro",
+        "x-codex-primary-over-secondary-limit-percent": "0",
+        "x-codex-primary-reset-after-seconds": "269953",
+        "x-codex-primary-reset-at": "1790690888",
+        "x-codex-primary-used-percent": "57",
+        "x-codex-primary-window-minutes": "10080",
+        "x-codex-secondary-reset-after-seconds": "0",
+        "x-codex-secondary-reset-at": "",
+        "x-codex-secondary-used-percent": "0",
+        "x-codex-secondary-window-minutes": "0",
+        "x-codex-turn-state": "gAAAAABqt6fHpQbd3YY0Ys9Oh_1Gv5Rg44ckM-BgJLdVe54aA4CF8d_msH7vmzQ2N4KsH45f3eYxiW85vsTBsqwnUgIEcxTyAnf-WmJU1x6o54EikSo8LaEXecW2PiraCi_bV9gJ_Gbri6xatAp6wOgOS17rwNWHeFk0lYGLOcKSV_so9z9x_YuAa03kPnNE2w6o6VbMofoSiESefWDov5qubNA8cNdhlVJv4Y8hHyTmV4TatunaRWGJw_DHDxq7jhANa13dq5pGJ_ArSeLQG0o6bimNPaokGwA0jJ_Z31GqXHLZZrDcBR9VVAm4nWZLP6l9YhYGeVChw67FOluxwLM6_CR5WqoNR7cNE6i2amGtSyqiX1zN5frw4_CPtBF1vlb20_iBCR4fZ38N1YHNT94FtTCs5I9DhSSBqmuG29y2pLhbY-Mo1s1CBEOxp8PoGahDSKnaoA7--tIh7hCPLcWF3ecT1-ejUC-ZLiivN-plW43eNoMU6LL38go-T-Np-nw0gUYTojEznjaJ3WrdrfEl8ak3bghZfxwWkSCJ571w_-KaQuJGFLZVFwvWg8iEhEvD_gHIEPj4L5s4W3UNTMWZntH0uvV8oTQLNOnDVz5IDVMcklQJ-s5eSdEvjhYh3CHxbob3ozAWdXwF2e5Y8uPImIFVYryYuydFmTH8RGwwMC37YDcDKQ5DJfCG6KVIzc-CaruY-yQnvhPtn57kpbi-xCBMJu9tHYmWmFR_k6qBp2oL1OVxGkFmrFWud-Cie4WW-opoa_7t",
+        "x-content-type-options": "nosniff",
+        "x-models-etag": "W/\"d7d9f769f6a07227fcd98ca4080ab92c\"",
+        "x-oai-request-id": "bfe796c7-afcd-425c-b6b2-6f49c2f9b4e8",
+        "x-openai-proxy-wasm": "v0.1"
+      },
+      "body": "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_08e2359dfd995f83016ab7a7c8b30087d19206cfd498502cbf\",\"object\":\"response\",\"created_at\":1790420936,\"status\":\"in_progress\",\"access_programs\":null,\"background\":false,\"completed_at\":null,\"error\":null,\"frequency_penalty\":0.0,\"incomplete_details\":null,\"instructions\":\"You are a helpful assistant.\",\"max_output_tokens\":null,\"max_tool_calls\":null,\"model\":\"gpt-5.5\",\"moderation\":null,\"output\":[],\"parallel_tool_calls\":true,\"presence_penalty\":0.0,\"previous_response_id\":null,\"prompt_cache_key\":\"7efe294c-bd5d-469e-8878-24c2fded0604\",\"prompt_cache_retention\":\"24h\",\"reasoning\":{\"context\":\"current_turn\",\"effort\":\"medium\",\"mode\":\"standard\",\"summary\":null},\"safety_identifier\":\"user-5Ie5j0kecta5YwLt7gnZVvVU\",\"service_tier\":\"auto\",\"store\":false,\"temperature\":1.0,\"text\":{\"format\":{\"type\":\"text\"},\"verbosity\":\"medium\"},\"tool_choice\":\"auto\",\"tool_usage\":{\"image_gen\":{\"input_tokens\":0,\"input_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"total_tokens\":0},\"web_search\":{\"num_requests\":0}},\"tools\":[{\"type\":\"function\",\"description\":\"Weather forecast for a city on a date.\",\"name\":\"get_forecast\",\"output_schema\":null,\"parameters\":{\"type\":\"object\",\"properties\":{\"location\":{\"type\":\"string\",\"description\":\"City name\"},\"date\":{\"type\":\"string\",\"description\":\"YYYY-MM-DD\"}},\"required\":[\"location\",\"date\"],\"additionalProperties\":false},\"strict\":true}],\"top_logprobs\":0,\"top_p\":0.98,\"truncation\":\"disabled\",\"usage\":null,\"user\":null,\"metadata\":{}},\"sequence_number\":0}\n\nevent: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"response\":{\"id\":\"resp_08e2359dfd995f83016ab7a7c8b30087d19206cfd498502cbf\",\"object\":\"response\",\"created_at\":1790420936,\"status\":\"in_progress\",\"access_programs\":null,\"background\":false,\"completed_at\":null,\"error\":null,\"frequency_penalty\":0.0,\"incomplete_details\":null,\"instructions\":\"You are a helpful assistant.\",\"max_output_tokens\":null,\"max_tool_calls\":null,\"model\":\"gpt-5.5\",\"moderation\":null,\"output\":[],\"parallel_tool_calls\":true,\"presence_penalty\":0.0,\"previous_response_id\":null,\"prompt_cache_key\":\"7efe294c-bd5d-469e-8878-24c2fded0604\",\"prompt_cache_retention\":\"24h\",\"reasoning\":{\"context\":\"current_turn\",\"effort\":\"medium\",\"mode\":\"standard\",\"summary\":null},\"safety_identifier\":\"user-5Ie5j0kecta5YwLt7gnZVvVU\",\"service_tier\":\"auto\",\"store\":false,\"temperature\":1.0,\"text\":{\"format\":{\"type\":\"text\"},\"verbosity\":\"medium\"},\"tool_choice\":\"auto\",\"tool_usage\":{\"image_gen\":{\"input_tokens\":0,\"input_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"total_tokens\":0},\"web_search\":{\"num_requests\":0}},\"tools\":[{\"type\":\"function\",\"description\":\"Weather forecast for a city on a date.\",\"name\":\"get_forecast\",\"output_schema\":null,\"parameters\":{\"type\":\"object\",\"properties\":{\"location\":{\"type\":\"string\",\"description\":\"City name\"},\"date\":{\"type\":\"string\",\"description\":\"YYYY-MM-DD\"}},\"required\":[\"location\",\"date\"],\"additionalProperties\":false},\"strict\":true}],\"top_logprobs\":0,\"top_p\":0.98,\"truncation\":\"disabled\",\"usage\":null,\"user\":null,\"metadata\":{}},\"sequence_number\":1}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"item\":{\"id\":\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\",\"type\":\"function_call\",\"status\":\"in_progress\",\"arguments\":\"\",\"call_id\":\"call_cZCIRGDY5PjiguKAQMi3aVDp\",\"name\":\"get_forecast\"},\"output_index\":0,\"sequence_number\":2}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"{\\\"\",\"item_id\":\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\",\"obfuscation\":\"2rLcgPA0UOaQvM\",\"output_index\":0,\"sequence_number\":3}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"location\",\"item_id\":\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\",\"obfuscation\":\"q1U1nXRo\",\"output_index\":0,\"sequence_number\":4}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"\\\":\\\"\",\"item_id\":\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\",\"obfuscation\":\"TJRYVbZFZQ7Qq\",\"output_index\":0,\"sequence_number\":5}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"Mont\",\"item_id\":\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\",\"obfuscation\":\"s3295RXMI7N9\",\"output_index\":0,\"sequence_number\":6}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"real\",\"item_id\":\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\",\"obfuscation\":\"np5zvtLvDLfR\",\"output_index\":0,\"sequence_number\":7}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"\\\",\\\"\",\"item_id\":\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\",\"obfuscation\":\"14viC5rcL3xuv\",\"output_index\":0,\"sequence_number\":8}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"date\",\"item_id\":\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\",\"obfuscation\":\"SeYwGzrK6WaE\",\"output_index\":0,\"sequence_number\":9}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"\\\":\\\"\",\"item_id\":\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\",\"obfuscation\":\"m2AjVifkSgkxA\",\"output_index\":0,\"sequence_number\":10}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"202\",\"item_id\":\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\",\"obfuscation\":\"flvkmPsykWHXS\",\"output_index\":0,\"sequence_number\":11}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"6\",\"item_id\":\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\",\"obfuscation\":\"Za5bcg9Uk1SBI5a\",\"output_index\":0,\"sequence_number\":12}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"-\",\"item_id\":\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\",\"obfuscation\":\"oTszwFpgIwa9x9K\",\"output_index\":0,\"sequence_number\":13}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"10\",\"item_id\":\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\",\"obfuscation\":\"54kR68eXMhIl1P\",\"output_index\":0,\"sequence_number\":14}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"-\",\"item_id\":\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\",\"obfuscation\":\"fhLGWHieYURdPvU\",\"output_index\":0,\"sequence_number\":15}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"01\",\"item_id\":\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\",\"obfuscation\":\"uEUrLwFJNrJn8X\",\"output_index\":0,\"sequence_number\":16}\n\nevent: response.function_call_arguments.delta\ndata: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"\\\"}\",\"item_id\":\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\",\"obfuscation\":\"Bw9pXxNoQLnx4u\",\"output_index\":0,\"sequence_number\":17}\n\nevent: response.function_call_arguments.done\ndata: {\"type\":\"response.function_call_arguments.done\",\"arguments\":\"{\\\"location\\\":\\\"Montreal\\\",\\\"date\\\":\\\"2026-10-01\\\"}\",\"item_id\":\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\",\"output_index\":0,\"sequence_number\":18}\n\nevent: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\",\"type\":\"function_call\",\"status\":\"completed\",\"arguments\":\"{\\\"location\\\":\\\"Montreal\\\",\\\"date\\\":\\\"2026-10-01\\\"}\",\"call_id\":\"call_cZCIRGDY5PjiguKAQMi3aVDp\",\"name\":\"get_forecast\"},\"output_index\":0,\"sequence_number\":19}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_08e2359dfd995f83016ab7a7c8b30087d19206cfd498502cbf\",\"object\":\"response\",\"created_at\":1790420936,\"status\":\"completed\",\"access_programs\":null,\"background\":false,\"completed_at\":1790420939,\"error\":null,\"frequency_penalty\":0.0,\"incomplete_details\":null,\"instructions\":\"You are a helpful assistant.\",\"max_output_tokens\":null,\"max_tool_calls\":null,\"model\":\"gpt-5.5\",\"moderation\":null,\"output\":[],\"parallel_tool_calls\":true,\"presence_penalty\":0.0,\"previous_response_id\":null,\"prompt_cache_key\":\"7efe294c-bd5d-469e-8878-24c2fded0604\",\"prompt_cache_retention\":\"24h\",\"reasoning\":{\"context\":\"current_turn\",\"effort\":\"medium\",\"mode\":\"standard\",\"summary\":null},\"safety_identifier\":\"user-5Ie5j0kecta5YwLt7gnZVvVU\",\"service_tier\":\"default\",\"store\":false,\"temperature\":1.0,\"text\":{\"format\":{\"type\":\"text\"},\"verbosity\":\"medium\"},\"tool_choice\":\"auto\",\"tool_usage\":{\"image_gen\":{\"input_tokens\":0,\"input_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"total_tokens\":0},\"web_search\":{\"num_requests\":0}},\"tools\":[{\"type\":\"function\",\"description\":\"Weather forecast for a city on a date.\",\"name\":\"get_forecast\",\"output_schema\":null,\"parameters\":{\"type\":\"object\",\"properties\":{\"location\":{\"type\":\"string\",\"description\":\"City name\"},\"date\":{\"type\":\"string\",\"description\":\"YYYY-MM-DD\"}},\"required\":[\"location\",\"date\"],\"additionalProperties\":false},\"strict\":true}],\"top_logprobs\":0,\"top_p\":0.98,\"truncation\":\"disabled\",\"usage\":{\"attribution\":{\"items\":{\"msg_08e2359dfd995f83016ab7a7c8d68487d1963dcf7bd4b9ecbc\":{\"cache_write_tokens\":0,\"cached_tokens\":0,\"content\":[{\"cache_write_tokens\":0,\"cached_tokens\":0,\"input_tokens\":29,\"output_tokens\":0}],\"input_tokens\":29,\"output_tokens\":0},\"fc_08e2359dfd995f83016ab7a7ca091087d1afae350bd3025fbe\":{\"cache_write_tokens\":0,\"cached_tokens\":0,\"input_tokens\":2,\"output_tokens\":29}},\"request_fields\":{\"tools\":{\"cache_write_tokens\":0,\"cached_tokens\":0,\"input_tokens\":52,\"output_tokens\":0},\"instructions\":{\"cache_write_tokens\":0,\"cached_tokens\":0,\"input_tokens\":10,\"output_tokens\":0}}},\"input_tokens\":93,\"input_tokens_details\":{\"cache_write_tokens\":0,\"cached_tokens\":0},\"output_tokens\":29,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":122},\"user\":null,\"metadata\":{}},\"sequence_number\":20}\n\n"
+    },
+    {
+      "sent": {
+        "body": {
+          "model": "gpt-5.5",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "Use the tool: what is the forecast for Montreal on 2026-10-01? Then answer in one sentence."
+                }
+              ]
+            },
+            {
+              "type": "function_call",
+              "call_id": "call_cZCIRGDY5PjiguKAQMi3aVDp",
+              "name": "get_forecast",
+              "arguments": "{\"location\":\"Montreal\",\"date\":\"2026-10-01\"}"
+            },
+            {
+              "type": "function_call_output",
+              "call_id": "call_cZCIRGDY5PjiguKAQMi3aVDp",
+              "output": "{\"forecast\": \"sunny\", \"high_c\": 14}"
+            }
+          ],
+          "stream": true,
+          "tools": [
+            {
+              "type": "function",
+              "name": "get_forecast",
+              "description": "Weather forecast for a city on a date.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "location": {
+                    "type": "string",
+                    "description": "City name"
+                  },
+                  "date": {
+                    "type": "string",
+                    "description": "YYYY-MM-DD"
+                  }
+                },
+                "required": [
+                  "location",
+                  "date"
+                ]
+              }
+            }
+          ],
+          "instructions": "You are a helpful assistant.",
+          "store": false
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "chatgpt-account-id": "\u003credacted\u003e",
+          "content-type": "application/json",
+          "openai-beta": "responses=experimental",
+          "originator": "\u003credacted\u003e"
+        },
+        "method": "POST",
+        "url": "https://chatgpt.com/backend-api/codex/responses"
+      },
+      "status": 200,
+      "response_headers": {
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411d05cefc388df-YUL",
+        "connection": "keep-alive",
+        "cross-origin-opener-policy": "same-origin-allow-popups",
+        "date": "Sat, 26 Sep 2026 11:09:00 GMT",
+        "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.01,\"max_age\":604800}",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=f5TWgDj2bhquadYnyIbzBnLTG4yIEj9N7DPHyPLO5DzQ5SY5i%2B1EyYohGuflY5pePPgl2zz%2B16CTTQmC8bUfUBXyXmNGah%2FAy2P3BM6dYE0a%2FF1yQ%2BPrauZyYVaA\"}]}",
+        "server": "cloudflare",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+        "x-codex-active-limit": "premium",
+        "x-codex-credits-balance": "0",
+        "x-codex-credits-has-credits": "False",
+        "x-codex-credits-unlimited": "False",
+        "x-codex-plan-type": "pro",
+        "x-codex-primary-over-secondary-limit-percent": "0",
+        "x-codex-primary-reset-after-seconds": "269949",
+        "x-codex-primary-reset-at": "1790690888",
+        "x-codex-primary-used-percent": "57",
+        "x-codex-primary-window-minutes": "10080",
+        "x-codex-secondary-reset-after-seconds": "0",
+        "x-codex-secondary-reset-at": "",
+        "x-codex-secondary-used-percent": "0",
+        "x-codex-secondary-window-minutes": "0",
+        "x-codex-turn-state": "gAAAAABqt6fMctY-TBLpCcWL6Ev0dBLi8_i95jwbfMlGx9NcYNF_uKRz4T7thivuDmoukKpXsg1VgQHjSnlRgIs9-FYoMfl6gjuFUm2q3Wj_9-XPYJ0LuBkcm63_ekNb7-DmvdwbjNbwXkdBhEXtJwU_UodyXAZ-fwlapGkwi2tm0oHarCBFOi6l1BGOGAvEo2qISLJeER4KdTI8Vs8F2exkS01hITezjNI41nsSwtuOhQ3nCOzlonXf-EH7jis3wYqxD2LyBWUE1Nbs_dti5m7olRoDS0QssTWtP2sNKNCSz_izcjV1wRJz7HJK7HT1JaTwNrPIP-vUGGlJ_mISgf8jeCIlni58IfveYgAFaZqfgHX4eNEF3tZSSFSVqsBb5WwTgj0Hgk_JvMCau6zypHQGmhovFnBuYu5BUHMn2Nd-vmjnQ4RjFslsCUjprp8LuobebaeFL1lldxBZ9bC_Nc2shB6WsFm1kt9HFudTj63nR1QiyANjDmnOHbQD0O9O3TYereV8KSBxovQWOy8U0LejDot5nBdf3jE0DvoqSHM4y2wUOr8UPMx5EpueZIUlFVHknmAisN929Xt2Gf8uYy-N_HsAt0TN0FWtOse5kZUD2pgV1RsH8g2J1SFSp_bddManbx493OxuO3aGJgPgMbIt--sUMzDM4OiBX8xPqOj1CUuvuJYJfanfd2GEpyh7IuJ7Ic7KrGXtpR4XwQfhopqiaTPA2nWlEGX0cONUktZWiC3QIzOAhIIvViWhWefuXjprmwArv5ve",
+        "x-content-type-options": "nosniff",
+        "x-models-etag": "W/\"d7d9f769f6a07227fcd98ca4080ab92c\"",
+        "x-oai-request-id": "007259ae-9ffa-46bb-9144-41d2de66fcaa",
+        "x-openai-proxy-wasm": "v0.1"
+      },
+      "body": "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_0539bc46d4d27146016ab7a7cc914c87d1b6168be3fea78ddd\",\"object\":\"response\",\"created_at\":1790420940,\"status\":\"in_progress\",\"access_programs\":null,\"background\":false,\"completed_at\":null,\"error\":null,\"frequency_penalty\":0.0,\"incomplete_details\":null,\"instructions\":\"You are a helpful assistant.\",\"max_output_tokens\":null,\"max_tool_calls\":null,\"model\":\"gpt-5.5\",\"moderation\":null,\"output\":[],\"parallel_tool_calls\":true,\"presence_penalty\":0.0,\"previous_response_id\":null,\"prompt_cache_key\":\"4d61d9a4-269f-41cb-9caf-ce9a047b8e4c\",\"prompt_cache_retention\":\"24h\",\"reasoning\":{\"context\":\"current_turn\",\"effort\":\"medium\",\"mode\":\"standard\",\"summary\":null},\"safety_identifier\":\"user-5Ie5j0kecta5YwLt7gnZVvVU\",\"service_tier\":\"auto\",\"store\":false,\"temperature\":1.0,\"text\":{\"format\":{\"type\":\"text\"},\"verbosity\":\"medium\"},\"tool_choice\":\"auto\",\"tool_usage\":{\"image_gen\":{\"input_tokens\":0,\"input_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"total_tokens\":0},\"web_search\":{\"num_requests\":0}},\"tools\":[{\"type\":\"function\",\"description\":\"Weather forecast for a city on a date.\",\"name\":\"get_forecast\",\"output_schema\":null,\"parameters\":{\"type\":\"object\",\"properties\":{\"location\":{\"type\":\"string\",\"description\":\"City name\"},\"date\":{\"type\":\"string\",\"description\":\"YYYY-MM-DD\"}},\"required\":[\"location\",\"date\"],\"additionalProperties\":false},\"strict\":true}],\"top_logprobs\":0,\"top_p\":0.98,\"truncation\":\"disabled\",\"usage\":null,\"user\":null,\"metadata\":{}},\"sequence_number\":0}\n\nevent: response.in_progress\ndata: {\"type\":\"response.in_progress\",\"response\":{\"id\":\"resp_0539bc46d4d27146016ab7a7cc914c87d1b6168be3fea78ddd\",\"object\":\"response\",\"created_at\":1790420940,\"status\":\"in_progress\",\"access_programs\":null,\"background\":false,\"completed_at\":null,\"error\":null,\"frequency_penalty\":0.0,\"incomplete_details\":null,\"instructions\":\"You are a helpful assistant.\",\"max_output_tokens\":null,\"max_tool_calls\":null,\"model\":\"gpt-5.5\",\"moderation\":null,\"output\":[],\"parallel_tool_calls\":true,\"presence_penalty\":0.0,\"previous_response_id\":null,\"prompt_cache_key\":\"4d61d9a4-269f-41cb-9caf-ce9a047b8e4c\",\"prompt_cache_retention\":\"24h\",\"reasoning\":{\"context\":\"current_turn\",\"effort\":\"medium\",\"mode\":\"standard\",\"summary\":null},\"safety_identifier\":\"user-5Ie5j0kecta5YwLt7gnZVvVU\",\"service_tier\":\"auto\",\"store\":false,\"temperature\":1.0,\"text\":{\"format\":{\"type\":\"text\"},\"verbosity\":\"medium\"},\"tool_choice\":\"auto\",\"tool_usage\":{\"image_gen\":{\"input_tokens\":0,\"input_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"total_tokens\":0},\"web_search\":{\"num_requests\":0}},\"tools\":[{\"type\":\"function\",\"description\":\"Weather forecast for a city on a date.\",\"name\":\"get_forecast\",\"output_schema\":null,\"parameters\":{\"type\":\"object\",\"properties\":{\"location\":{\"type\":\"string\",\"description\":\"City name\"},\"date\":{\"type\":\"string\",\"description\":\"YYYY-MM-DD\"}},\"required\":[\"location\",\"date\"],\"additionalProperties\":false},\"strict\":true}],\"top_logprobs\":0,\"top_p\":0.98,\"truncation\":\"disabled\",\"usage\":null,\"user\":null,\"metadata\":{}},\"sequence_number\":1}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"item\":{\"id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"type\":\"message\",\"status\":\"in_progress\",\"content\":[],\"phase\":\"final_answer\",\"role\":\"assistant\"},\"output_index\":0,\"sequence_number\":2}\n\nevent: response.content_part.added\ndata: {\"type\":\"response.content_part.added\",\"content_index\":0,\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"output_index\":0,\"part\":{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"\"},\"sequence_number\":3}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\"The\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"uPRd0D4qLsgx4\",\"output_index\":0,\"sequence_number\":4}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\" forecast\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"WufDtLx\",\"output_index\":0,\"sequence_number\":5}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\" for\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"DCjTiMVf1p4k\",\"output_index\":0,\"sequence_number\":6}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\" Montreal\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"lomSTAC\",\"output_index\":0,\"sequence_number\":7}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\" on\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"H4EiuprprxnA4\",\"output_index\":0,\"sequence_number\":8}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\" \",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"88GCRymDZEgto5s\",\"output_index\":0,\"sequence_number\":9}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\"202\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"Vrz9L7CGXjVep\",\"output_index\":0,\"sequence_number\":10}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\"6\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"C6PBPdWmWNjI9wZ\",\"output_index\":0,\"sequence_number\":11}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\"-\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"8xI6dzhd4DUBb3H\",\"output_index\":0,\"sequence_number\":12}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\"10\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"Vc5mJh4CC2zlxz\",\"output_index\":0,\"sequence_number\":13}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\"-\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"qPgJm09UoIqicXi\",\"output_index\":0,\"sequence_number\":14}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\"01\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"XusHz25iM6tewA\",\"output_index\":0,\"sequence_number\":15}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\" is\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"62s9qbXWr6Elf\",\"output_index\":0,\"sequence_number\":16}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\" sunny\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"aqFDtq55NO\",\"output_index\":0,\"sequence_number\":17}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\" with\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"Hn4zcvwKO22\",\"output_index\":0,\"sequence_number\":18}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\" a\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"7iIHjz1NkWJzzw\",\"output_index\":0,\"sequence_number\":19}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\" high\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"nFKM4eqh1n6\",\"output_index\":0,\"sequence_number\":20}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\" of\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"3jbhF7r4TZ2PI\",\"output_index\":0,\"sequence_number\":21}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\" \",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"ZJoLxdeZLkGyCuN\",\"output_index\":0,\"sequence_number\":22}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\"14\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"tSYTJz22xdFvGo\",\"output_index\":0,\"sequence_number\":23}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\"°C\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"N96BMqV4x7s3nY\",\"output_index\":0,\"sequence_number\":24}\n\nevent: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"content_index\":0,\"delta\":\".\",\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"obfuscation\":\"nxQTiDYM9WS2wSg\",\"output_index\":0,\"sequence_number\":25}\n\nevent: response.output_text.done\ndata: {\"type\":\"response.output_text.done\",\"content_index\":0,\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"logprobs\":[],\"output_index\":0,\"sequence_number\":26,\"text\":\"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\"}\n\nevent: response.content_part.done\ndata: {\"type\":\"response.content_part.done\",\"content_index\":0,\"item_id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"output_index\":0,\"part\":{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\"},\"sequence_number\":27}\n\nevent: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\",\"type\":\"message\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"annotations\":[],\"logprobs\":[],\"text\":\"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\"}],\"phase\":\"final_answer\",\"role\":\"assistant\"},\"output_index\":0,\"sequence_number\":28}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_0539bc46d4d27146016ab7a7cc914c87d1b6168be3fea78ddd\",\"object\":\"response\",\"created_at\":1790420940,\"status\":\"completed\",\"access_programs\":null,\"background\":false,\"completed_at\":1790420941,\"error\":null,\"frequency_penalty\":0.0,\"incomplete_details\":null,\"instructions\":\"You are a helpful assistant.\",\"max_output_tokens\":null,\"max_tool_calls\":null,\"model\":\"gpt-5.5\",\"moderation\":null,\"output\":[],\"parallel_tool_calls\":true,\"presence_penalty\":0.0,\"previous_response_id\":null,\"prompt_cache_key\":\"4d61d9a4-269f-41cb-9caf-ce9a047b8e4c\",\"prompt_cache_retention\":\"24h\",\"reasoning\":{\"context\":\"current_turn\",\"effort\":\"medium\",\"mode\":\"standard\",\"summary\":null},\"safety_identifier\":\"user-5Ie5j0kecta5YwLt7gnZVvVU\",\"service_tier\":\"default\",\"store\":false,\"temperature\":1.0,\"text\":{\"format\":{\"type\":\"text\"},\"verbosity\":\"medium\"},\"tool_choice\":\"auto\",\"tool_usage\":{\"image_gen\":{\"input_tokens\":0,\"input_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"output_tokens\":0,\"output_tokens_details\":{\"image_tokens\":0,\"text_tokens\":0},\"total_tokens\":0},\"web_search\":{\"num_requests\":0}},\"tools\":[{\"type\":\"function\",\"description\":\"Weather forecast for a city on a date.\",\"name\":\"get_forecast\",\"output_schema\":null,\"parameters\":{\"type\":\"object\",\"properties\":{\"location\":{\"type\":\"string\",\"description\":\"City name\"},\"date\":{\"type\":\"string\",\"description\":\"YYYY-MM-DD\"}},\"required\":[\"location\",\"date\"],\"additionalProperties\":false},\"strict\":true}],\"top_logprobs\":0,\"top_p\":0.98,\"truncation\":\"disabled\",\"usage\":{\"attribution\":{\"items\":{\"msg_0539bc46d4d27146016ab7a7cc9d0087d1bf71e331977b9240\":{\"cache_write_tokens\":0,\"cached_tokens\":0,\"content\":[{\"cache_write_tokens\":0,\"cached_tokens\":0,\"input_tokens\":29,\"output_tokens\":0}],\"input_tokens\":29,\"output_tokens\":0},\"fc_0539bc46d4d27146016ab7a7cc9cb087d1837bce2d87599eb9\":{\"cache_write_tokens\":0,\"cached_tokens\":0,\"input_tokens\":31,\"output_tokens\":0},\"fc_0539bc46d4d27146016ab7a7cc9ce087d19272de400cca827c\":{\"cache_write_tokens\":0,\"cached_tokens\":0,\"content\":[{\"cache_write_tokens\":0,\"cached_tokens\":0,\"input_tokens\":24,\"output_tokens\":0}],\"input_tokens\":24,\"output_tokens\":0},\"msg_0539bc46d4d27146016ab7a7cd2c4c87d1ace71c19f2d2dc3d\":{\"cache_write_tokens\":0,\"cached_tokens\":0,\"content\":[{\"cache_write_tokens\":0,\"cached_tokens\":0,\"input_tokens\":2,\"output_tokens\":26}],\"input_tokens\":2,\"output_tokens\":26}},\"request_fields\":{\"tools\":{\"cache_write_tokens\":0,\"cached_tokens\":0,\"input_tokens\":52,\"output_tokens\":0},\"instructions\":{\"cache_write_tokens\":0,\"cached_tokens\":0,\"input_tokens\":10,\"output_tokens\":0}}},\"input_tokens\":148,\"input_tokens_details\":{\"cache_write_tokens\":0,\"cached_tokens\":0},\"output_tokens\":26,\"output_tokens_details\":{\"reasoning_tokens\":0},\"total_tokens\":174},\"user\":null,\"metadata\":{}},\"sequence_number\":29}\n\n"
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "resp_08e2359dfd995f83016ab7a7c8b30087d19206cfd498502cbf",
+        "model": "gpt-5.5",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "tool_call",
+              "id": "call_cZCIRGDY5PjiguKAQMi3aVDp",
+              "name": "get_forecast",
+              "input": {
+                "location": "Montreal",
+                "date": "2026-10-01"
+              }
+            }
+          ]
+        },
+        "finish_reason": "tool_call",
+        "usage": {
+          "input_tokens": 93,
+          "output_tokens": 29,
+          "total_tokens": 122,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "reasoning_tokens": 0
+        }
+      }
+    },
+    {
+      "response": {
+        "id": "resp_0539bc46d4d27146016ab7a7cc914c87d1b6168be3fea78ddd",
+        "model": "gpt-5.5",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C."
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 148,
+          "output_tokens": 26,
+          "total_tokens": 174,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "reasoning_tokens": 0
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "openai-codex:gpt-5.5",
+  "notes": [
+    "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+    "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:09:01Z",
+  "verdict": "ok"
+}

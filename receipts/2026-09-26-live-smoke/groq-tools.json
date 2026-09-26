@@ -1,0 +1,315 @@
+{
+  "binding": "groq",
+  "check": "tools",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "openai/gpt-oss-20b",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Use the tool: what is the forecast for Montreal on 2026-10-01? Then answer in one sentence."
+            }
+          ],
+          "max_tokens": 2000,
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "get_forecast",
+                "description": "Weather forecast for a city on a date.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "string",
+                      "description": "City name"
+                    },
+                    "date": {
+                      "type": "string",
+                      "description": "YYYY-MM-DD"
+                    }
+                  },
+                  "required": [
+                    "location",
+                    "date"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411cd32ccd5a314-YUL",
+        "connection": "keep-alive",
+        "content-length": "865",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:06:50 GMT",
+        "server": "cloudflare",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=15552000",
+        "vary": "Origin",
+        "x-groq-region": "yul",
+        "x-ratelimit-limit-requests": "500000",
+        "x-ratelimit-limit-tokens": "250000",
+        "x-ratelimit-remaining-requests": "499999",
+        "x-ratelimit-remaining-tokens": "249396",
+        "x-ratelimit-reset-requests": "172ms",
+        "x-ratelimit-reset-tokens": "144ms",
+        "x-request-id": "req_01m3epayz0ef091y588nm903xx"
+      },
+      "body": {
+        "id": "chatcmpl-7e75e6c6-a8f9-4930-8060-0cf16b425713",
+        "object": "chat.completion",
+        "created": 1790420810,
+        "model": "openai/gpt-oss-20b",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "reasoning": "We need to call get_forecast with date and location.",
+              "tool_calls": [
+                {
+                  "id": "fc_8d09f3ef-bd64-4a8f-91a9-9f3bf4c85e5b",
+                  "type": "function",
+                  "function": {
+                    "name": "get_forecast",
+                    "arguments": "{\"date\":\"2026-10-01\",\"location\":\"Montreal\"}"
+                  }
+                }
+              ]
+            },
+            "logprobs": null,
+            "finish_reason": "tool_calls"
+          }
+        ],
+        "usage": {
+          "queue_time": 0.002891137,
+          "prompt_tokens": 159,
+          "prompt_time": 0.007639958,
+          "completion_tokens": 47,
+          "completion_time": 0.161967671,
+          "total_tokens": 206,
+          "total_time": 0.169607629,
+          "completion_tokens_details": {
+            "reasoning_tokens": 13
+          }
+        },
+        "usage_breakdown": null,
+        "system_fingerprint": "fp_7d448090ba",
+        "x_groq": {
+          "id": "req_01m3epayz0ef091y588nm903xx",
+          "seed": 835035407
+        },
+        "service_tier": "on_demand"
+      }
+    },
+    {
+      "sent": {
+        "body": {
+          "model": "openai/gpt-oss-20b",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Use the tool: what is the forecast for Montreal on 2026-10-01? Then answer in one sentence."
+            },
+            {
+              "role": "assistant",
+              "content": "We need to call get_forecast with date and location.",
+              "tool_calls": [
+                {
+                  "id": "fc_8d09f3ef-bd64-4a8f-91a9-9f3bf4c85e5b",
+                  "type": "function",
+                  "function": {
+                    "name": "get_forecast",
+                    "arguments": "{\"date\":\"2026-10-01\",\"location\":\"Montreal\"}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "tool_call_id": "fc_8d09f3ef-bd64-4a8f-91a9-9f3bf4c85e5b",
+              "content": "{\"forecast\": \"sunny\", \"high_c\": 14}"
+            }
+          ],
+          "max_tokens": 2000,
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "get_forecast",
+                "description": "Weather forecast for a city on a date.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "string",
+                      "description": "City name"
+                    },
+                    "date": {
+                      "type": "string",
+                      "description": "YYYY-MM-DD"
+                    }
+                  },
+                  "required": [
+                    "location",
+                    "date"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411cd343e04a314-YUL",
+        "connection": "keep-alive",
+        "content-length": "813",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:06:51 GMT",
+        "server": "cloudflare",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=15552000",
+        "vary": "Origin",
+        "x-groq-region": "yul",
+        "x-ratelimit-limit-requests": "500000",
+        "x-ratelimit-limit-tokens": "250000",
+        "x-ratelimit-remaining-requests": "499999",
+        "x-ratelimit-remaining-tokens": "249746",
+        "x-ratelimit-reset-requests": "172ms",
+        "x-ratelimit-reset-tokens": "60ms",
+        "x-request-id": "req_01m3epaz66ea4rwp4kyfphjm3q"
+      },
+      "body": {
+        "id": "chatcmpl-3939c0e2-8a33-4138-ab09-abfb61d99ccf",
+        "object": "chat.completion",
+        "created": 1790420811,
+        "model": "openai/gpt-oss-20b",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "The forecast for Montreal on October 1, 2026 is sunny with a high of about 14 °C.",
+              "reasoning": "We have to answer in one sentence. Forecast: sunny, high 14°C. Provide one sentence."
+            },
+            "logprobs": null,
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "queue_time": 0.003358844,
+          "prompt_tokens": 209,
+          "prompt_time": 0.010088223,
+          "completion_tokens": 55,
+          "completion_time": 0.055813563,
+          "total_tokens": 264,
+          "total_time": 0.065901786,
+          "completion_tokens_details": {
+            "reasoning_tokens": 22
+          }
+        },
+        "usage_breakdown": null,
+        "system_fingerprint": "fp_d6de37e6be",
+        "x_groq": {
+          "id": "req_01m3epaz66ea4rwp4kyfphjm3q",
+          "seed": 1772581752
+        },
+        "service_tier": "on_demand"
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "chatcmpl-7e75e6c6-a8f9-4930-8060-0cf16b425713",
+        "model": "openai/gpt-oss-20b",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "We need to call get_forecast with date and location."
+            },
+            {
+              "type": "tool_call",
+              "id": "fc_8d09f3ef-bd64-4a8f-91a9-9f3bf4c85e5b",
+              "name": "get_forecast",
+              "input": {
+                "date": "2026-10-01",
+                "location": "Montreal"
+              }
+            }
+          ]
+        },
+        "finish_reason": "tool_call",
+        "usage": {
+          "input_tokens": 159,
+          "output_tokens": 47,
+          "total_tokens": 206,
+          "reasoning_tokens": 13
+        }
+      }
+    },
+    {
+      "response": {
+        "id": "chatcmpl-3939c0e2-8a33-4138-ab09-abfb61d99ccf",
+        "model": "openai/gpt-oss-20b",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "We have to answer in one sentence. Forecast: sunny, high 14°C. Provide one sentence."
+            },
+            {
+              "type": "text",
+              "text": "The forecast for Montreal on October 1, 2026 is sunny with a high of about 14 °C."
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 209,
+          "output_tokens": 55,
+          "total_tokens": 264,
+          "reasoning_tokens": 22
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "groq:openai/gpt-oss-20b",
+  "notes": [
+    "call get_forecast({\"date\":\"2026-10-01\",\"location\":\"Montreal\"})",
+    "final \"The forecast for Montreal on October\\u202f1,\\u202f2026 is sunny with a high of about\\u202f14\\u202f°C.\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:06:51Z",
+  "verdict": "ok"
+}

@@ -1,0 +1,794 @@
+[
+  {
+    "binding": "anthropic",
+    "model": "anthropic:claude-haiku-4-5",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+    ],
+    "ms": 1237
+  },
+  {
+    "binding": "anthropic",
+    "model": "anthropic:claude-haiku-4-5",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [reasoning answer]; answer \"$0.05\""
+    ],
+    "ms": 1902
+  },
+  {
+    "binding": "anthropic",
+    "model": "anthropic:claude-haiku-4-5",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+      "final \"The forecast for Montreal on October 1st, 2026 is sunny with a high of 14°C.\""
+    ],
+    "ms": 1640
+  },
+  {
+    "binding": "anthropic",
+    "model": "anthropic:claude-haiku-4-5",
+    "check": "order-sorted-control",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [answer reasoning]; answer \"$0.05\""
+    ],
+    "ms": 2706
+  },
+  {
+    "binding": "anthropic",
+    "model": "anthropic:claude-haiku-4-5",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "12 models"
+    ],
+    "ms": 146
+  },
+  {
+    "binding": "claude-code-account",
+    "model": "claude-code:claude-haiku-4-5",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+    ],
+    "ms": 1445
+  },
+  {
+    "binding": "claude-code-account",
+    "model": "claude-code:claude-haiku-4-5",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [reasoning answer]; answer \"The ball costs $0.05 (or 5 cents).\""
+    ],
+    "ms": 3682
+  },
+  {
+    "binding": "claude-code-account",
+    "model": "claude-code:claude-haiku-4-5",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+      "final \"On October 1st, 2026, Montreal is expected to have sunny weather with a high of 14°C.\""
+    ],
+    "ms": 1580
+  },
+  {
+    "binding": "claude-code-account",
+    "model": "claude-code:claude-haiku-4-5",
+    "check": "order-sorted-control",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [answer reasoning]; answer \"$0.05\""
+    ],
+    "ms": 2930
+  },
+  {
+    "binding": "claude-code-account",
+    "model": "claude-code:claude-haiku-4-5",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "12 models"
+    ],
+    "ms": 159
+  },
+  {
+    "binding": "deepseek",
+    "model": "deepseek:deepseek-v4-flash",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+    ],
+    "ms": 2316
+  },
+  {
+    "binding": "deepseek",
+    "model": "deepseek:deepseek-v4-flash",
+    "check": "order",
+    "verdict": "provider-refused",
+    "notes": [
+      "DeepSeek has no json_schema mode and answers 400 (lm15-python compat.py, OpenAIChatJsonSchema): InvalidRequestError (invalid_request): This response_format type is unavailable now (request_id: 96cc57c2-1ae6-4a94-8f7e-e157da43d8b9) (invalid_request_error)"
+    ],
+    "ms": 351
+  },
+  {
+    "binding": "deepseek",
+    "model": "deepseek:deepseek-v4-flash",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+      "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\""
+    ],
+    "ms": 1483
+  },
+  {
+    "binding": "deepseek",
+    "model": "deepseek:deepseek-v4-flash",
+    "check": "order-sorted-control",
+    "verdict": "provider-refused",
+    "notes": [
+      "DeepSeek has no json_schema mode and answers 400: InvalidRequestError (invalid_request): This response_format type is unavailable now (request_id: a278a956-69f8-403d-9206-f520a2b18248) (invalid_request_error)"
+    ],
+    "ms": 316
+  },
+  {
+    "binding": "deepseek",
+    "model": "deepseek:deepseek-v4-flash",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "2 models"
+    ],
+    "ms": 307
+  },
+  {
+    "binding": "gemini",
+    "model": "gemini:gemini-2.5-flash",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 1 chunks"
+    ],
+    "ms": 1142
+  },
+  {
+    "binding": "gemini",
+    "model": "gemini:gemini-2.5-flash",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [reasoning answer]; answer \"$0.05\""
+    ],
+    "ms": 3119
+  },
+  {
+    "binding": "gemini",
+    "model": "gemini:gemini-2.5-flash",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"date\":\"2026-10-01\",\"location\":\"Montreal\"})",
+      "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14 degrees Celsius.\""
+    ],
+    "ms": 1339
+  },
+  {
+    "binding": "gemini",
+    "model": "gemini:gemini-2.5-flash",
+    "check": "order-sorted-control",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [answer reasoning]; answer \"$0.05\""
+    ],
+    "ms": 3000
+  },
+  {
+    "binding": "gemini",
+    "model": "gemini:gemini-2.5-flash",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "61 models"
+    ],
+    "ms": 106
+  },
+  {
+    "binding": "github-copilot-account",
+    "model": "github-copilot:gpt-4.1",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+    ],
+    "ms": 1466
+  },
+  {
+    "binding": "github-copilot-account",
+    "model": "github-copilot:gpt-4.1",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [answer reasoning]; answer \"$0.05\""
+    ],
+    "ms": 963
+  },
+  {
+    "binding": "github-copilot-account",
+    "model": "github-copilot:gpt-4.1",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"date\":\"2026-10-01\",\"location\":\"Montreal\"})",
+      "final \"The weather forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\""
+    ],
+    "ms": 1049
+  },
+  {
+    "binding": "github-copilot-account",
+    "model": "github-copilot:gpt-4.1",
+    "check": "order-sorted-control",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [answer reasoning]; answer \"$0.05\""
+    ],
+    "ms": 1061
+  },
+  {
+    "binding": "github-copilot-account",
+    "model": "github-copilot:gpt-4.1",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "59 models"
+    ],
+    "ms": 94
+  },
+  {
+    "binding": "groq",
+    "model": "groq:openai/gpt-oss-20b",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+    ],
+    "ms": 334
+  },
+  {
+    "binding": "groq",
+    "model": "groq:openai/gpt-oss-20b",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [reasoning answer]; answer \"0.05\""
+    ],
+    "ms": 393
+  },
+  {
+    "binding": "groq",
+    "model": "groq:openai/gpt-oss-20b",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"date\":\"2026-10-01\",\"location\":\"Montreal\"})",
+      "final \"The forecast for Montreal on October\\u202f1,\\u202f2026 is sunny with a high of about\\u202f14\\u202f°C.\""
+    ],
+    "ms": 357
+  },
+  {
+    "binding": "groq",
+    "model": "groq:openai/gpt-oss-20b",
+    "check": "order-sorted-control",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [answer reasoning]; answer \"$0.05\""
+    ],
+    "ms": 669
+  },
+  {
+    "binding": "groq",
+    "model": "groq:openai/gpt-oss-20b",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "12 models"
+    ],
+    "ms": 102
+  },
+  {
+    "binding": "meta",
+    "model": "meta:muse-spark-1.3",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 1 chunks"
+    ],
+    "ms": 7761
+  },
+  {
+    "binding": "meta",
+    "model": "meta:muse-spark-1.3",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [answer reasoning]; answer \"$0.05\""
+    ],
+    "ms": 6975
+  },
+  {
+    "binding": "meta",
+    "model": "meta:muse-spark-1.3",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"date\":\"2026-10-01\",\"location\":\"Montreal\"})",
+      "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\""
+    ],
+    "ms": 5537
+  },
+  {
+    "binding": "meta",
+    "model": "meta:muse-spark-1.3",
+    "check": "order-sorted-control",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [answer reasoning]; answer \"$0.05\""
+    ],
+    "ms": 7881
+  },
+  {
+    "binding": "meta",
+    "model": "meta:muse-spark-1.3",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "8 models"
+    ],
+    "ms": 186
+  },
+  {
+    "binding": "moonshotai",
+    "model": "moonshotai:kimi-k3",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+    ],
+    "ms": 8373
+  },
+  {
+    "binding": "moonshotai",
+    "model": "moonshotai:kimi-k3",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [reasoning answer]; answer \"$0.05\""
+    ],
+    "ms": 11160
+  },
+  {
+    "binding": "moonshotai",
+    "model": "moonshotai:kimi-k3",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"date\":\"2026-10-01\",\"location\":\"Montreal\"})",
+      "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\""
+    ],
+    "ms": 8894
+  },
+  {
+    "binding": "moonshotai",
+    "model": "moonshotai:kimi-k3",
+    "check": "order-sorted-control",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [reasoning answer]; answer \"$0.05\""
+    ],
+    "ms": 10616
+  },
+  {
+    "binding": "moonshotai",
+    "model": "moonshotai:kimi-k3",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "4 models"
+    ],
+    "ms": 247
+  },
+  {
+    "binding": "openai",
+    "model": "gpt-5-mini",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+    ],
+    "ms": 4134
+  },
+  {
+    "binding": "openai",
+    "model": "gpt-5-mini",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [reasoning answer]; answer \"$0.05\""
+    ],
+    "ms": 4384
+  },
+  {
+    "binding": "openai",
+    "model": "gpt-5-mini",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+      "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\""
+    ],
+    "ms": 4169
+  },
+  {
+    "binding": "openai",
+    "model": "gpt-5-mini",
+    "check": "order-sorted-control",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [answer reasoning]; answer \"$0.05\""
+    ],
+    "ms": 4226
+  },
+  {
+    "binding": "openai",
+    "model": "gpt-5-mini",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "140 models"
+    ],
+    "ms": 935
+  },
+  {
+    "binding": "openai-codex-account",
+    "model": "openai-codex:gpt-5.5",
+    "check": "hello",
+    "verdict": "signed-out",
+    "notes": [
+      "complete: AuthOperationError (auth_operation): openai-codex: signed out; sign in again (Auth.Login) or pass a key explicitly (APIKeys)"
+    ],
+    "ms": 0
+  },
+  {
+    "binding": "openai-codex-account",
+    "model": "openai-codex:gpt-5.5",
+    "check": "order",
+    "verdict": "signed-out",
+    "notes": [
+      "AuthOperationError (auth_operation): openai-codex: signed out; sign in again (Auth.Login) or pass a key explicitly (APIKeys)"
+    ],
+    "ms": 0
+  },
+  {
+    "binding": "openai-codex-account",
+    "model": "openai-codex:gpt-5.5",
+    "check": "tools",
+    "verdict": "signed-out",
+    "notes": [
+      "first call: AuthOperationError (auth_operation): openai-codex: signed out; sign in again (Auth.Login) or pass a key explicitly (APIKeys)"
+    ],
+    "ms": 0
+  },
+  {
+    "binding": "openai-codex-account",
+    "model": "openai-codex:gpt-5.5",
+    "check": "order-sorted-control",
+    "verdict": "signed-out",
+    "notes": [
+      "AuthOperationError (auth_operation): openai-codex: signed out; sign in again (Auth.Login) or pass a key explicitly (APIKeys)"
+    ],
+    "ms": 0
+  },
+  {
+    "binding": "openai-codex-account",
+    "model": "openai-codex:gpt-5.5",
+    "check": "models",
+    "verdict": "signed-out",
+    "notes": [
+      "AuthOperationError (auth_operation): openai-codex: signed out; sign in again (Auth.Login) or pass a key explicitly (APIKeys)"
+    ],
+    "ms": 0
+  },
+  {
+    "binding": "openai-codex-cli",
+    "model": "openai-codex:gpt-5.5",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+    ],
+    "ms": 2634
+  },
+  {
+    "binding": "openai-codex-cli",
+    "model": "openai-codex:gpt-5.5",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [reasoning answer]; answer \"$0.05\""
+    ],
+    "ms": 3653
+  },
+  {
+    "binding": "openai-codex-cli",
+    "model": "openai-codex:gpt-5.5",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+      "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\""
+    ],
+    "ms": 6149
+  },
+  {
+    "binding": "openai-codex-cli",
+    "model": "openai-codex:gpt-5.5",
+    "check": "order-sorted-control",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [answer reasoning]; answer \"{\\\"ball_cost\\\":\\\"$0.05\\\"}\""
+    ],
+    "ms": 4957
+  },
+  {
+    "binding": "openai-codex-cli",
+    "model": "openai-codex:gpt-5.5",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "6 models"
+    ],
+    "ms": 890
+  },
+  {
+    "binding": "openrouter",
+    "model": "openrouter:openai/gpt-4.1-nano",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+    ],
+    "ms": 1225
+  },
+  {
+    "binding": "openrouter",
+    "model": "openrouter:openai/gpt-4.1-nano",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [reasoning answer]; answer \"$0.05\""
+    ],
+    "ms": 1241
+  },
+  {
+    "binding": "openrouter",
+    "model": "openrouter:openai/gpt-4.1-nano",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+      "final \"The forecast for Montreal on October 1, 2026, is sunny with a high of 14°C.\""
+    ],
+    "ms": 1652
+  },
+  {
+    "binding": "openrouter",
+    "model": "openrouter:openai/gpt-4.1-nano",
+    "check": "order-sorted-control",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [answer reasoning]; answer \"The ball costs $0.05.\""
+    ],
+    "ms": 858
+  },
+  {
+    "binding": "openrouter",
+    "model": "openrouter:openai/gpt-4.1-nano",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "458 models"
+    ],
+    "ms": 116
+  },
+  {
+    "binding": "openrouter-account",
+    "model": "openrouter:openai/gpt-4.1-nano",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+    ],
+    "ms": 1261
+  },
+  {
+    "binding": "openrouter-account",
+    "model": "openrouter:openai/gpt-4.1-nano",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [reasoning answer]; answer \"The ball costs $0.05.\""
+    ],
+    "ms": 1527
+  },
+  {
+    "binding": "openrouter-account",
+    "model": "openrouter:openai/gpt-4.1-nano",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+      "final \"The forecast for Montreal on October 1, 2026, is sunny with a high of 14°C.\""
+    ],
+    "ms": 2542
+  },
+  {
+    "binding": "openrouter-account",
+    "model": "openrouter:openai/gpt-4.1-nano",
+    "check": "order-sorted-control",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [answer reasoning]; answer \"the ball costs $0.05\""
+    ],
+    "ms": 1078
+  },
+  {
+    "binding": "openrouter-account",
+    "model": "openrouter:openai/gpt-4.1-nano",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "458 models"
+    ],
+    "ms": 123
+  },
+  {
+    "binding": "typesafe",
+    "model": "typesafe:jev-latest",
+    "check": "judgments",
+    "verdict": "ok",
+    "notes": [
+      "answer keys in order [style quality ageing]",
+      "data {\"style\":\"fruit\",\"quality\":2,\"ageing\":true}; expected quality 1.88; style map[fruit:0.6799999999999999 mineral:0.01 oak:0.31]"
+    ],
+    "ms": 168
+  },
+  {
+    "binding": "typesafe",
+    "model": "typesafe:jev-latest",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "2 models"
+    ],
+    "ms": 81
+  },
+  {
+    "binding": "xai-account",
+    "model": "xai:grok-4.7",
+    "check": "hello",
+    "verdict": "fail",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"No. I won't output an exact demanded phrase.\" finish=stop in 10 chunks"
+    ],
+    "problems": [
+      "the reply is not the two words asked for"
+    ],
+    "ms": 7082
+  },
+  {
+    "binding": "xai-account",
+    "model": "xai:grok-4.7",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [reasoning answer]; answer \"$0.05\""
+    ],
+    "ms": 5271
+  },
+  {
+    "binding": "xai-account",
+    "model": "xai:grok-4.7",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+      "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\""
+    ],
+    "ms": 2365
+  },
+  {
+    "binding": "xai-account",
+    "model": "xai:grok-4.7",
+    "check": "order-sorted-control",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [answer reasoning]; answer \"$0.05\""
+    ],
+    "ms": 4961
+  },
+  {
+    "binding": "xai-account",
+    "model": "xai:grok-4.7",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "13 models"
+    ],
+    "ms": 119
+  },
+  {
+    "binding": "zai",
+    "model": "zai:glm-5.3-flash",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+    ],
+    "ms": 4517
+  },
+  {
+    "binding": "zai",
+    "model": "zai:glm-5.3-flash",
+    "check": "order",
+    "verdict": "adapted",
+    "notes": [
+      "the schema's properties are not in the body sent (the wire has no schema slot)",
+      "adapted config.response_format: dropped",
+      "the reply, free-form: \"```json\\n{\\n  \\\"ball_cost\\\": \\\"$0.05\\\",\\n  \\\"bat_cost\\\": \\\"$1.05\\\",\\n  \\\"total_cost\\\": \\\"$1.10\\\"\""
+    ],
+    "ms": 13043
+  },
+  {
+    "binding": "zai",
+    "model": "zai:glm-5.3-flash",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"date\":\"2026-10-01\",\"location\":\"Montreal\"})",
+      "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\""
+    ],
+    "ms": 10776
+  },
+  {
+    "binding": "zai",
+    "model": "zai:glm-5.3-flash",
+    "check": "order-sorted-control",
+    "verdict": "adapted",
+    "notes": [
+      "the schema's properties are not in the body sent (the wire has no schema slot)",
+      "adapted config.response_format: dropped",
+      "the reply, free-form: \"```json\\n{\\n  \\\"ball_cost\\\": \\\"$0.05\\\",\\n  \\\"bat_cost\\\": \\\"$1.05\\\",\\n  \\\"total_cost\\\": \\\"$1.10\\\"\""
+    ],
+    "ms": 11152
+  },
+  {
+    "binding": "zai",
+    "model": "zai:glm-5.3-flash",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "11 models"
+    ],
+    "ms": 263
+  }
+]

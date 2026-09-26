@@ -1,0 +1,110 @@
+{
+  "binding": "github-copilot-account",
+  "check": "models",
+  "exchanges": [
+    {
+      "sent": {
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json",
+          "copilot-integration-id": "vscode-chat",
+          "editor-plugin-version": "\u003credacted\u003e",
+          "editor-version": "vscode/1.107.0",
+          "user-agent": "GitHubCopilotChat/0.35.0"
+        },
+        "method": "GET",
+        "url": "https://api.individual.githubcopilot.com/models"
+      },
+      "status": 200,
+      "response_headers": {
+        "cache-control": "private, max-age=21600",
+        "content-security-policy": "default-src 'none'; sandbox",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:09:48 GMT",
+        "strict-transport-security": "max-age=31536000",
+        "x-copilot-api-exp-assignment-context": "e4hcf520:1109203;permission_prompt_control:1332567;ccr_pr_nudge_control:1319470;wzoi2426:1412286;3aced641:1389836;",
+        "x-copilot-service-request-id": "a22724e3-7f45-4d68-9272-895e19d4bd03",
+        "x-github-backend": "Kubernetes",
+        "x-github-edge-region": "iad",
+        "x-github-request-id": "EC10:21720E:1BADDE6:2144119:6AB7A7FC"
+      },
+      "body": {
+        "entries_omitted": true
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "ids": [
+        "claude-fable-5.1",
+        "claude-fable-5",
+        "claude-opus-4.7",
+        "claude-opus-4.8-fast",
+        "claude-opus-4.8",
+        "claude-opus-5.5",
+        "claude-opus-5",
+        "claude-sonnet-5",
+        "copilot-search-a",
+        "copilot-search-b",
+        "copilot-search-c",
+        "exec-agent-a",
+        "exec-agent-b",
+        "exec-agent-c",
+        "gemini-3.5-flash",
+        "gemini-3.6-flash",
+        "gemini-3.7-flash",
+        "gemini-3.8-flash",
+        "gpt-5.3-codex",
+        "gpt-5.4-mini",
+        "gpt-5.4",
+        "gpt-5.5",
+        "gpt-5.6-luna",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "gpt-6-astra",
+        "gpt-6-luna",
+        "gpt-6-sol",
+        "grok-4.5",
+        "grok-4.6",
+        "grok-4.7",
+        "kimi-k2.7-code",
+        "kimi-k3-base",
+        "kimi-k3-copilot",
+        "kimi-k3",
+        "mai-code-1.1-flash",
+        "mai-code-1-flash-4th",
+        "mai-code-1-flash-secondary",
+        "mai-code-1-flash-tertiary",
+        "trajectory-compaction",
+        "gpt-5-mini",
+        "gpt-4o-mini-2024-07-18",
+        "gpt-4o-2024-11-20",
+        "gpt-4o-2024-08-06",
+        "text-embedding-3-small",
+        "text-embedding-3-small-inference",
+        "claude-haiku-4.5",
+        "gpt-4.1-2025-04-14",
+        "gpt-3.5-turbo-0613",
+        "gpt-4",
+        "gpt-4-0613",
+        "gpt-4-0125-preview",
+        "gpt-4o-2024-05-13",
+        "gpt-4-o-preview",
+        "gpt-4.1",
+        "gpt-3.5-turbo",
+        "gpt-4o-mini",
+        "gpt-4o",
+        "text-embedding-ada-002"
+      ]
+    }
+  ],
+  "managed": true,
+  "model": "github-copilot:gpt-4.1",
+  "notes": [
+    "59 models"
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:09:48Z",
+  "verdict": "ok"
+}

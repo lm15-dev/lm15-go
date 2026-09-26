@@ -1,0 +1,148 @@
+{
+  "binding": "groq",
+  "check": "order",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "openai/gpt-oss-20b",
+          "messages": [
+            {
+              "role": "user",
+              "content": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer in JSON."
+            }
+          ],
+          "max_tokens": 2000,
+          "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+              "name": "worked_answer",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reasoning": {
+                    "type": "string",
+                    "description": "Work the problem out step by step before answering."
+                  },
+                  "answer": {
+                    "type": "string",
+                    "description": "The final answer only."
+                  }
+                },
+                "required": [
+                  "reasoning",
+                  "answer"
+                ],
+                "additionalProperties": false
+              },
+              "strict": true
+            }
+          }
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411cd305a9da314-YUL",
+        "connection": "keep-alive",
+        "content-length": "1641",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:06:50 GMT",
+        "server": "cloudflare",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=15552000",
+        "vary": "Origin",
+        "x-groq-region": "yul",
+        "x-ratelimit-limit-requests": "500000",
+        "x-ratelimit-limit-tokens": "250000",
+        "x-ratelimit-remaining-requests": "499998",
+        "x-ratelimit-remaining-tokens": "249208",
+        "x-ratelimit-reset-requests": "345ms",
+        "x-ratelimit-reset-tokens": "190ms",
+        "x-request-id": "req_01m3epayjkef2tpdjsppykcb32"
+      },
+      "body": {
+        "id": "chatcmpl-b399cbe0-5053-43e0-b07a-70f39b1a00dd",
+        "object": "chat.completion",
+        "created": 1790420810,
+        "model": "openai/gpt-oss-20b",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "{\"reasoning\":\"Let the ball cost x dollars. Then the bat costs x + 1.00 dollars. The total cost is x + (x + 1.00) = 1.10. Solve: 2x + 1.00 = 1.10 → 2x = 0.10 → x = 0.05.\",\"answer\":\"0.05\"}",
+              "reasoning": "We need to produce JSON with schema fields answer and reasoning. Provide compact JSON. Ensure fields present: \"reasoning\" and \"answer\". Provide reasoning string explaining step by step. Then answer string with amount. The ball cost? Let ball = x, bat = x+1.00. Sum 1.10 =\u003e 2x+1 = 1.10 =\u003e 2x = 0.10 =\u003e x=0.05. So ball costs $0.05. Provide answer string \"$0.05\" or \"0.05\" maybe. Use \"0.05\" numeric? The schema says answer type string, so string representation. Provide \"0.05\". Provide reasoning: explanation. Ensure compact JSON: no newlines? The output should be compact JSON but we can format with minimal whitespace. But it's okay if we produce a single line JSON object. Must be valid JSON. So: {\"reasoning\":\"...\",\"answer\":\"0.05\"} . Provide reasoning. Let's produce."
+            },
+            "logprobs": null,
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "queue_time": 0.003125006,
+          "prompt_tokens": 220,
+          "prompt_time": 0.012474955,
+          "completion_tokens": 300,
+          "completion_time": 0.323682958,
+          "total_tokens": 520,
+          "total_time": 0.336157913,
+          "completion_tokens_details": {
+            "reasoning_tokens": 206
+          }
+        },
+        "usage_breakdown": null,
+        "system_fingerprint": "fp_7d448090ba",
+        "x_groq": {
+          "id": "req_01m3epayjkef2tpdjsppykcb32",
+          "seed": 1851661032
+        },
+        "service_tier": "on_demand"
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "chatcmpl-b399cbe0-5053-43e0-b07a-70f39b1a00dd",
+        "model": "openai/gpt-oss-20b",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "We need to produce JSON with schema fields answer and reasoning. Provide compact JSON. Ensure fields present: \"reasoning\" and \"answer\". Provide reasoning string explaining step by step. Then answer string with amount. The ball cost? Let ball = x, bat = x+1.00. Sum 1.10 =\u003e 2x+1 = 1.10 =\u003e 2x = 0.10 =\u003e x=0.05. So ball costs $0.05. Provide answer string \"$0.05\" or \"0.05\" maybe. Use \"0.05\" numeric? The schema says answer type string, so string representation. Provide \"0.05\". Provide reasoning: explanation. Ensure compact JSON: no newlines? The output should be compact JSON but we can format with minimal whitespace. But it's okay if we produce a single line JSON object. Must be valid JSON. So: {\"reasoning\":\"...\",\"answer\":\"0.05\"} . Provide reasoning. Let's produce."
+            },
+            {
+              "type": "text",
+              "text": "{\"reasoning\":\"Let the ball cost x dollars. Then the bat costs x + 1.00 dollars. The total cost is x + (x + 1.00) = 1.10. Solve: 2x + 1.00 = 1.10 → 2x = 0.10 → x = 0.05.\",\"answer\":\"0.05\"}"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 220,
+          "output_tokens": 300,
+          "total_tokens": 520,
+          "reasoning_tokens": 206
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "groq:openai/gpt-oss-20b",
+  "notes": [
+    "the model's JSON keys, in the order written: [reasoning answer]; answer \"0.05\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:06:50Z",
+  "verdict": "ok"
+}

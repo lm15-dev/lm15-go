@@ -1,0 +1,201 @@
+{
+  "binding": "meta",
+  "check": "order-sorted-control",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "muse-spark-1.3",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer in JSON."
+                }
+              ]
+            }
+          ],
+          "stream": false,
+          "max_output_tokens": 2000,
+          "text": {
+            "format": {
+              "type": "json_schema",
+              "name": "worked_answer",
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "answer": {
+                    "description": "The final answer only.",
+                    "type": "string"
+                  },
+                  "reasoning": {
+                    "description": "Work the problem out step by step before answering.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reasoning",
+                  "answer"
+                ],
+                "type": "object"
+              },
+              "strict": true
+            }
+          }
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.meta.ai/v1/responses"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-allow-origin": "*",
+        "connection": "keep-alive",
+        "content-length": "1535",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:08:09 GMT",
+        "x-ratelimit-limit-requests": "3000",
+        "x-ratelimit-limit-tokens": "4000000",
+        "x-ratelimit-remaining-requests": "2996",
+        "x-ratelimit-remaining-tokens": "3996942",
+        "x-request-id": "d6bb4c3e-5b46-4799-8019-a2c59b2b064d",
+        "x-route": "model-api-rust"
+      },
+      "body": {
+        "top_logprobs": 0,
+        "temperature": 1.0,
+        "top_p": 1.0,
+        "service_tier": "auto",
+        "model": "muse-spark-1.3",
+        "reasoning": {
+          "effort": "high"
+        },
+        "background": false,
+        "text": {
+          "format": {
+            "type": "json_schema",
+            "name": "worked_answer",
+            "schema": {
+              "additionalProperties": false,
+              "required": [
+                "reasoning",
+                "answer"
+              ],
+              "properties": {
+                "answer": {
+                  "description": "The final answer only.",
+                  "type": "string"
+                },
+                "reasoning": {
+                  "description": "Work the problem out step by step before answering.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "strict": true
+          }
+        },
+        "tools": [],
+        "tool_choice": "auto",
+        "truncation": "disabled",
+        "id": "resp_6ab7a79906b9c6e49fd946ba",
+        "object": "response",
+        "status": "completed",
+        "created_at": 1790420889.0,
+        "completed_at": 1790420889.0,
+        "error": null,
+        "incomplete_details": null,
+        "output": [
+          {
+            "type": "reasoning",
+            "id": "rs_6ab7a79906b9c6e49fd946ba:rs_0e96ae8c-266d-4207-8d8f-8623cfb40473",
+            "summary": [],
+            "status": "completed"
+          },
+          {
+            "type": "message",
+            "id": "msg_80d73abe-7253-4c23-9441-386ddc178d9a",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "{\"answer\": \"$0.05\", \"reasoning\": \"Let x be the cost of the ball in dollars. Then the bat costs x + 1.00. Total: x + (x + 1.00) = 1.10. So 2x + 1.00 = 1.10. Subtract 1.00: 2x = 0.10. Divide by 2: x = 0.05. Therefore the ball costs $0.05.\"}",
+                "annotations": [],
+                "logprobs": []
+              }
+            ],
+            "status": "completed"
+          }
+        ],
+        "instructions": null,
+        "usage": {
+          "input_tokens": 43,
+          "input_tokens_details": {
+            "cached_tokens": 40
+          },
+          "output_tokens": 1041,
+          "output_tokens_details": {
+            "reasoning_tokens": 926
+          },
+          "total_tokens": 1084
+        },
+        "parallel_tool_calls": true,
+        "store": true,
+        "max_output_tokens": 2000
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "resp_6ab7a79906b9c6e49fd946ba",
+        "model": "muse-spark-1.3",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "",
+              "continuation": [
+                {
+                  "provider": "openai",
+                  "kind": "reasoning_item",
+                  "data": {
+                    "id": "rs_6ab7a79906b9c6e49fd946ba:rs_0e96ae8c-266d-4207-8d8f-8623cfb40473"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": "{\"answer\": \"$0.05\", \"reasoning\": \"Let x be the cost of the ball in dollars. Then the bat costs x + 1.00. Total: x + (x + 1.00) = 1.10. So 2x + 1.00 = 1.10. Subtract 1.00: 2x = 0.10. Divide by 2: x = 0.05. Therefore the ball costs $0.05.\"}"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 43,
+          "output_tokens": 1041,
+          "total_tokens": 1084,
+          "cache_read_tokens": 40,
+          "reasoning_tokens": 926
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "meta:muse-spark-1.3",
+  "notes": [
+    "the model's JSON keys, in the order written: [answer reasoning]; answer \"$0.05\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:08:09Z",
+  "verdict": "ok"
+}

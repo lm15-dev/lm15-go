@@ -1,0 +1,59 @@
+{
+  "binding": "moonshotai",
+  "check": "models",
+  "exchanges": [
+    {
+      "sent": {
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "GET",
+        "url": "https://api.moonshot.ai/v1/models"
+      },
+      "status": 200,
+      "response_headers": {
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411d0156c90a294-YUL",
+        "connection": "keep-alive",
+        "content-type": "application/json; charset=utf-8",
+        "date": "Sat, 26 Sep 2026 11:08:49 GMT",
+        "msh-gid": "enterprise-tier-2",
+        "msh-org-id": "org-2d81b908daee4ecd89737068dbe45f75",
+        "msh-project-id": "proj-c00c4b5712a8482a86fe23010c93783e",
+        "msh-request-id": "a635a627-b99a-11f1-82b6-00163e4d6e71",
+        "msh-trace-mode": "on",
+        "msh-uid": "d9cjddbmrb776abja5p0",
+        "server": "cloudflare",
+        "server-timing": "cfCacheStatus;desc=\"DYNAMIC\", cfEdge;dur=230,cfOrigin;dur=9",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=31536000; includeSubDomains",
+        "vary": "Accept-Encoding, Origin",
+        "x-internal-adhoc-canary": "274176817",
+        "x-msh-trace-id": "efca305174f8502e148697abe3bafa8e"
+      },
+      "body": {
+        "entries_omitted": true
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "ids": [
+        "kimi-k2.6",
+        "kimi-k2.7-code-highspeed",
+        "kimi-k2.7-code",
+        "kimi-k3"
+      ]
+    }
+  ],
+  "managed": false,
+  "model": "moonshotai:kimi-k3",
+  "notes": [
+    "4 models"
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:08:49Z",
+  "verdict": "ok"
+}

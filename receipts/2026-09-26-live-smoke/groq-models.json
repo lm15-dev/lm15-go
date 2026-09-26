@@ -1,0 +1,63 @@
+{
+  "binding": "groq",
+  "check": "models",
+  "exchanges": [
+    {
+      "sent": {
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "GET",
+        "url": "https://api.groq.com/openai/v1/models"
+      },
+      "status": 200,
+      "response_headers": {
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "private, max-age=0, no-store, no-cache, must-revalidate",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411cd392a4ea314-YUL",
+        "connection": "keep-alive",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:06:51 GMT",
+        "server": "cloudflare",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=15552000",
+        "vary": "Origin",
+        "via": "1.1 google",
+        "x-groq-region": "dls",
+        "x-request-id": "req_01m3epazz0e0ev730jqxhwg3en"
+      },
+      "body": {
+        "entries_omitted": true
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "ids": [
+        "whisper-large-v3",
+        "openai/gpt-oss-safeguard-20b",
+        "canopylabs/orpheus-v1-english",
+        "qwen/qwen3.8-27b",
+        "openai/gpt-oss-120b",
+        "meta-llama/llama-prompt-guard-2-22m",
+        "openai/gpt-oss-20b",
+        "allam-2-7b",
+        "meta-llama/llama-prompt-guard-2-86m",
+        "qwen/qwen3.6-27b",
+        "canopylabs/orpheus-arabic-saudi",
+        "whisper-large-v3-turbo"
+      ]
+    }
+  ],
+  "managed": false,
+  "model": "groq:openai/gpt-oss-20b",
+  "notes": [
+    "12 models"
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:06:51Z",
+  "verdict": "ok"
+}

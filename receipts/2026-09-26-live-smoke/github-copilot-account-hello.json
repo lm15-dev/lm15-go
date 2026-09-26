@@ -1,0 +1,246 @@
+{
+  "binding": "github-copilot-account",
+  "check": "hello",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "gpt-4.1",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Reply with exactly the two words: hello world"
+            }
+          ],
+          "max_completion_tokens": 1000
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json",
+          "copilot-integration-id": "vscode-chat",
+          "editor-plugin-version": "\u003credacted\u003e",
+          "editor-version": "vscode/1.107.0",
+          "user-agent": "GitHubCopilotChat/0.35.0"
+        },
+        "method": "POST",
+        "url": "https://api.individual.githubcopilot.com/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "content-length": "1415",
+        "content-security-policy": "default-src 'none'; sandbox",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:09:44 GMT",
+        "strict-transport-security": "max-age=31536000",
+        "x-copilot-api-exp-assignment-context": "e4hcf520:1109203;permission_prompt_control:1332567;ccr_pr_nudge_control:1319470;wzoi2426:1412286;3aced641:1389836;",
+        "x-copilot-service-request-id": "2e18cd50-9e24-4156-b41d-1f0be5ef8781",
+        "x-github-backend": "Kubernetes",
+        "x-github-copilot-request-te": "true",
+        "x-github-edge-region": "iad",
+        "x-github-request-id": "EC10:21720E:1BAD127:21431B6:6AB7A7F7",
+        "x-request-id": "00000-03bf2a17-0bdd-44c4-a0f7-98d2cf1c54fc"
+      },
+      "body": {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "content_filter_results": {
+              "hate": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "self_harm": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "sexual": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "violence": {
+                "filtered": false,
+                "severity": "safe"
+              }
+            },
+            "message": {
+              "content": "hello world",
+              "padding": "abcdefghijklmnopqrstuvwxyz0",
+              "role": "assistant"
+            }
+          }
+        ],
+        "id": "chatcmpl-ESKZkUBmh8YyuTu55fmHmQrwDUrC4",
+        "usage": {
+          "completion_tokens": 2,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens": 16,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 18
+        },
+        "model": "gpt-4.1-2025-04-14",
+        "prompt_filter_results": [
+          {
+            "content_filter_results": {
+              "hate": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "self_harm": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "sexual": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "violence": {
+                "filtered": false,
+                "severity": "safe"
+              }
+            },
+            "prompt_index": 0
+          }
+        ],
+        "service_tier": "default",
+        "system_fingerprint": "fp_6ab89a131e",
+        "copilot_usage": {
+          "token_details": [
+            {
+              "batch_size": 1000000,
+              "cost_per_batch": 0,
+              "model": "gpt-4.1",
+              "token_count": 16,
+              "token_type": "input"
+            },
+            {
+              "batch_size": 1000000,
+              "cost_per_batch": 0,
+              "model": "gpt-4.1",
+              "token_count": 0,
+              "token_type": "cache_read"
+            },
+            {
+              "batch_size": 1000000,
+              "cost_per_batch": 0,
+              "model": "gpt-4.1",
+              "token_count": 0,
+              "token_type": "cache_write"
+            },
+            {
+              "batch_size": 1000000,
+              "cost_per_batch": 0,
+              "model": "gpt-4.1",
+              "token_count": 2,
+              "token_type": "output"
+            }
+          ],
+          "total_nano_aiu": 0
+        }
+      }
+    },
+    {
+      "sent": {
+        "body": {
+          "model": "gpt-4.1",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Reply with exactly the two words: hello world"
+            }
+          ],
+          "stream": true,
+          "stream_options": {
+            "include_usage": true
+          },
+          "max_completion_tokens": 1000
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json",
+          "copilot-integration-id": "vscode-chat",
+          "editor-plugin-version": "\u003credacted\u003e",
+          "editor-version": "vscode/1.107.0",
+          "user-agent": "GitHubCopilotChat/0.35.0"
+        },
+        "method": "POST",
+        "url": "https://api.individual.githubcopilot.com/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "cache-control": "no-cache",
+        "content-security-policy": "default-src 'none'; sandbox",
+        "content-type": "text/event-stream",
+        "date": "Sat, 26 Sep 2026 11:09:45 GMT",
+        "strict-transport-security": "max-age=31536000",
+        "x-copilot-api-exp-assignment-context": "e4hcf520:1109203;permission_prompt_control:1332567;ccr_pr_nudge_control:1319470;wzoi2426:1412286;3aced641:1389836;",
+        "x-copilot-service-request-id": "29550334-98bd-4829-af8d-94da809e6ac1",
+        "x-github-backend": "Kubernetes",
+        "x-github-copilot-request-te": "true",
+        "x-github-edge-region": "iad",
+        "x-github-request-id": "EC10:21720E:1BAD317:2143406:6AB7A7F8",
+        "x-request-id": "00000-61e116bd-25b1-43fa-9c9d-bc9f5438ded1"
+      },
+      "body": "data: {\"choices\":[],\"created\":0,\"id\":\"\",\"model\":\"gpt-4.1-2025-04-14\",\"prompt_filter_results\":[{\"content_filter_results\":{\"hate\":{\"filtered\":false,\"severity\":\"safe\"},\"self_harm\":{\"filtered\":false,\"severity\":\"safe\"},\"sexual\":{\"filtered\":false,\"severity\":\"safe\"},\"violence\":{\"filtered\":false,\"severity\":\"safe\"}},\"prompt_index\":0}]}\n\ndata: {\"choices\":[{\"index\":0,\"content_filter_results\":{},\"delta\":{\"content\":\"\",\"role\":\"assistant\"}}],\"created\":1790420985,\"id\":\"chatcmpl-ESKZlyPh4tet75iOpDJkZozIxff9X\",\"model\":\"gpt-4.1-2025-04-14\",\"system_fingerprint\":\"fp_6ab89a131e\"}\n\ndata: {\"choices\":[{\"index\":0,\"content_filter_results\":{},\"delta\":{\"content\":\"hello\"}}],\"created\":1790420985,\"id\":\"chatcmpl-ESKZlyPh4tet75iOpDJkZozIxff9X\",\"model\":\"gpt-4.1-2025-04-14\",\"system_fingerprint\":\"fp_6ab89a131e\"}\n\ndata: {\"choices\":[{\"index\":0,\"content_filter_results\":{},\"delta\":{\"content\":\" world\"}}],\"created\":1790420985,\"id\":\"chatcmpl-ESKZlyPh4tet75iOpDJkZozIxff9X\",\"model\":\"gpt-4.1-2025-04-14\",\"system_fingerprint\":\"fp_6ab89a131e\"}\n\ndata: {\"choices\":[{\"finish_reason\":\"stop\",\"index\":0,\"content_filter_results\":{},\"delta\":{\"content\":null}}],\"created\":1790420985,\"id\":\"chatcmpl-ESKZlyPh4tet75iOpDJkZozIxff9X\",\"usage\":{\"completion_tokens\":2,\"completion_tokens_details\":{\"accepted_prediction_tokens\":0,\"rejected_prediction_tokens\":0},\"prompt_tokens\":16,\"prompt_tokens_details\":{\"cached_tokens\":0},\"total_tokens\":18},\"model\":\"gpt-4.1-2025-04-14\",\"system_fingerprint\":\"fp_6ab89a131e\",\"copilot_usage\":{\"token_details\":[{\"batch_size\":1000000,\"cost_per_batch\":0,\"model\":\"gpt-4.1\",\"token_count\":16,\"token_type\":\"input\"},{\"batch_size\":1000000,\"cost_per_batch\":0,\"model\":\"gpt-4.1\",\"token_count\":0,\"token_type\":\"cache_read\"},{\"batch_size\":1000000,\"cost_per_batch\":0,\"model\":\"gpt-4.1\",\"token_count\":0,\"token_type\":\"cache_write\"},{\"batch_size\":1000000,\"cost_per_batch\":0,\"model\":\"gpt-4.1\",\"token_count\":2,\"token_type\":\"output\"}],\"total_nano_aiu\":0}}\n\ndata: [DONE]\n\n"
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "chatcmpl-ESKZkUBmh8YyuTu55fmHmQrwDUrC4",
+        "model": "gpt-4.1-2025-04-14",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 16,
+          "output_tokens": 2,
+          "total_tokens": 18,
+          "cache_read_tokens": 0
+        }
+      }
+    },
+    {
+      "response": {
+        "model": "gpt-4.1",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 16,
+          "output_tokens": 2,
+          "total_tokens": 18,
+          "cache_read_tokens": 0
+        }
+      }
+    }
+  ],
+  "managed": true,
+  "model": "github-copilot:gpt-4.1",
+  "notes": [
+    "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:09:45Z",
+  "verdict": "ok"
+}

@@ -1,0 +1,156 @@
+{
+  "binding": "xai-account",
+  "check": "order-sorted-control",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "grok-4.7",
+          "messages": [
+            {
+              "role": "user",
+              "content": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer in JSON."
+            }
+          ],
+          "max_tokens": 2000,
+          "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+              "name": "worked_answer",
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "answer": {
+                    "description": "The final answer only.",
+                    "type": "string"
+                  },
+                  "reasoning": {
+                    "description": "Work the problem out step by step before answering.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reasoning",
+                  "answer"
+                ],
+                "type": "object"
+              },
+              "strict": true
+            }
+          }
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.x.ai/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-allow-origin": "*",
+        "access-control-expose-headers": "*",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a411d0e6d8893282-YUL",
+        "connection": "keep-alive",
+        "content-length": "1074",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:09:27 GMT",
+        "server": "cloudflare",
+        "server-timing": "cfCacheStatus;desc=\"DYNAMIC\", cfEdge;dur=5,cfOrigin;dur=4945",
+        "set-cookie": "\u003credacted\u003e",
+        "strict-transport-security": "max-age=31536000",
+        "traceparent": "00-49d85925e477efe1a6d2ce9f225047c3-173f51410004e72b-01",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "x-data-retention": "general",
+        "x-metrics-e2e-ms": "4865.9",
+        "x-metrics-ttft-ms": "320.0",
+        "x-ratelimit-limit-requests": "8300",
+        "x-ratelimit-limit-tokens": "53000000",
+        "x-ratelimit-remaining-requests": "8300",
+        "x-ratelimit-remaining-tokens": "53000000",
+        "x-request-id": "eb330892-ff11-9c79-bd51-ce5425adc19e",
+        "x-zero-data-retention": "false"
+      },
+      "body": {
+        "id": "eb330892-ff11-9c79-bd51-ce5425adc19e",
+        "object": "chat.completion",
+        "created": 1790420962,
+        "model": "grok-4.7",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "{\"answer\": \"$0.05\", \"reasoning\": \"Let the ball cost x dollars. Then the bat costs x + 1 dollars. Their sum is 1.10, so x + (x + 1) = 1.10, which simplifies to 2x = 0.10, hence x = 0.05. The bat costs $1.05, which is exactly $1 more than the ball, and the total is $1.10.\"}",
+              "reasoning_content": "The problem is: \"A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost?\"\n",
+              "refusal": null
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 1363,
+          "completion_tokens": 100,
+          "total_tokens": 1728,
+          "prompt_tokens_details": {
+            "text_tokens": 1363,
+            "audio_tokens": 0,
+            "image_tokens": 0,
+            "cached_tokens": 1280
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 265,
+            "audio_tokens": 0,
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "num_sources_used": 0,
+          "cost_in_usd_ticks": 10186400
+        },
+        "system_fingerprint": "fp_c60958d81f66f847",
+        "service_tier": "default"
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "eb330892-ff11-9c79-bd51-ce5425adc19e",
+        "model": "grok-4.7",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "The problem is: \"A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost?\"\n"
+            },
+            {
+              "type": "text",
+              "text": "{\"answer\": \"$0.05\", \"reasoning\": \"Let the ball cost x dollars. Then the bat costs x + 1 dollars. Their sum is 1.10, so x + (x + 1) = 1.10, which simplifies to 2x = 0.10, hence x = 0.05. The bat costs $1.05, which is exactly $1 more than the ball, and the total is $1.10.\"}"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 1363,
+          "output_tokens": 100,
+          "total_tokens": 1728,
+          "cache_read_tokens": 1280,
+          "reasoning_tokens": 265,
+          "input_audio_tokens": 0,
+          "output_audio_tokens": 0
+        }
+      }
+    }
+  ],
+  "managed": true,
+  "model": "xai:grok-4.7",
+  "notes": [
+    "the model's JSON keys, in the order written: [answer reasoning]; answer \"$0.05\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:09:27Z",
+  "verdict": "ok"
+}

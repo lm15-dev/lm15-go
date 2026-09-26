@@ -1,0 +1,138 @@
+{
+  "binding": "zai",
+  "check": "order-sorted-control",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "glm-5.3-flash",
+          "messages": [
+            {
+              "role": "user",
+              "content": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer in JSON."
+            }
+          ],
+          "max_tokens": 2000
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.z.ai/api/paas/v4/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "alt-svc": "h3=\":443\"; ma=3600",
+        "connection": "keep-alive",
+        "content-length": "2229",
+        "content-type": "application/json; charset=UTF-8",
+        "date": "Sat, 26 Sep 2026 11:07:41 GMT",
+        "ga-traceid": "04990f01a84b6f2a2bfd707345bc55c3",
+        "set-cookie": "\u003credacted\u003e",
+        "vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, Origin",
+        "x-log-id": "2026092619073033848fbfe6a6420c",
+        "x-request-id": "0f498223-0276-4f76-bc17-bcc3c640faa5"
+      },
+      "body": {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "content": "```json\n{\n  \"ball_cost\": \"$0.05\",\n  \"bat_cost\": \"$1.05\",\n  \"total_cost\": \"$1.10\",\n  \"explanation\": \"Let the ball cost x. The bat costs x + $1.00. So x + (x + $1.00) = $1.10, which gives 2x = $0.10, so x = $0.05.\",\n  \"common_wrong_answer\": \"$0.10\",\n  \"why_wrong\": \"If the ball were $0.10, the bat would be $1.10, making the total $1.20, not $1.10.\"\n}\n```",
+              "reasoning_content": "This is the classic bat and ball problem from the Cognitive Reflection Test.\n\nThe intuitive answer is $0.10, but that's wrong because if the ball costs $0.10, the bat costs $1.10, and together they'd cost $1.20.\n\nThe correct answer: Let ball = x, bat = x + $1.00\nx + (x + $1.00) = $1.10\n2x = $0.10\nx = $0.05\n\nSo the ball costs $0.05 and the bat costs $1.05. Total: $1.10. ✓\n\nThe question asks for the answer in JSON format. Let me provide a clean JSON response. I could include just the answer, or provide more detail like the verification. Let me include the ball cost, bat cost, and perhaps a brief verification.\n\nJSON format:\n```json\n{\n  \"ball_cost\": 0.05,\n  \"bat_cost\": 1.05,\n  \"total\": 1.10,\n  \"explanation\": \"...\"\n}\n```\n\nI should be careful with JSON - numbers like 1.10 might be better represented as strings or just numbers. In JSON, 1.10 is valid but serializes as 1.1. I could use strings \"$0.05\" for clarity or numbers. Let me provide both the numeric value and perhaps currency strings.\n\nSimple approach:\n```json\n{\n  \"ball_cost\": 0.05,\n  \"bat_cost\": 1.05,\n  \"total_cost\": 1.10,\n  \"explanation\": \"If the ball cost $0.10, the bat would cost $1.10, totaling $1.20. Instead, let the ball = x and bat = x + 1.00. Solving 2x + 1.00 = 1.10 gives x = 0.05.\"\n}\n```\n\nI'll wrap it in a code block for readability. The answer should be concise.",
+              "role": "assistant"
+            }
+          }
+        ],
+        "created": 1790420861,
+        "id": "2026092619073033848fbfe6a6420c",
+        "model": "glm-5.3-flash",
+        "object": "chat.completion",
+        "request_id": "2026092619073033848fbfe6a6420c",
+        "usage": {
+          "completion_tokens": 564,
+          "completion_tokens_details": {
+            "reasoning_tokens": 419
+          },
+          "prompt_tokens": 48,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 612
+        }
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "2026092619073033848fbfe6a6420c",
+        "model": "glm-5.3-flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "This is the classic bat and ball problem from the Cognitive Reflection Test.\n\nThe intuitive answer is $0.10, but that's wrong because if the ball costs $0.10, the bat costs $1.10, and together they'd cost $1.20.\n\nThe correct answer: Let ball = x, bat = x + $1.00\nx + (x + $1.00) = $1.10\n2x = $0.10\nx = $0.05\n\nSo the ball costs $0.05 and the bat costs $1.05. Total: $1.10. ✓\n\nThe question asks for the answer in JSON format. Let me provide a clean JSON response. I could include just the answer, or provide more detail like the verification. Let me include the ball cost, bat cost, and perhaps a brief verification.\n\nJSON format:\n```json\n{\n  \"ball_cost\": 0.05,\n  \"bat_cost\": 1.05,\n  \"total\": 1.10,\n  \"explanation\": \"...\"\n}\n```\n\nI should be careful with JSON - numbers like 1.10 might be better represented as strings or just numbers. In JSON, 1.10 is valid but serializes as 1.1. I could use strings \"$0.05\" for clarity or numbers. Let me provide both the numeric value and perhaps currency strings.\n\nSimple approach:\n```json\n{\n  \"ball_cost\": 0.05,\n  \"bat_cost\": 1.05,\n  \"total_cost\": 1.10,\n  \"explanation\": \"If the ball cost $0.10, the bat would cost $1.10, totaling $1.20. Instead, let the ball = x and bat = x + 1.00. Solving 2x + 1.00 = 1.10 gives x = 0.05.\"\n}\n```\n\nI'll wrap it in a code block for readability. The answer should be concise."
+            },
+            {
+              "type": "text",
+              "text": "```json\n{\n  \"ball_cost\": \"$0.05\",\n  \"bat_cost\": \"$1.05\",\n  \"total_cost\": \"$1.10\",\n  \"explanation\": \"Let the ball cost x. The bat costs x + $1.00. So x + (x + $1.00) = $1.10, which gives 2x = $0.10, so x = $0.05.\",\n  \"common_wrong_answer\": \"$0.10\",\n  \"why_wrong\": \"If the ball were $0.10, the bat would be $1.10, making the total $1.20, not $1.10.\"\n}\n```"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 48,
+          "output_tokens": 564,
+          "total_tokens": 612,
+          "cache_read_tokens": 0,
+          "reasoning_tokens": 419
+        },
+        "adaptations": [
+          {
+            "field": "config.response_format",
+            "action": "dropped",
+            "reason": "this server accepts response_format type \"json_schema\" and does not apply it; use {'type': 'json_object'} and describe the shape in the prompt",
+            "asked": {
+              "type": "json_schema",
+              "name": "worked_answer",
+              "strict": true,
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "answer": {
+                    "description": "The final answer only.",
+                    "type": "string"
+                  },
+                  "reasoning": {
+                    "description": "Work the problem out step by step before answering.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reasoning",
+                  "answer"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "managed": false,
+  "model": "zai:glm-5.3-flash",
+  "notes": [
+    "the schema's properties are not in the body sent (the wire has no schema slot)",
+    "adapted config.response_format: dropped",
+    "the reply, free-form: \"```json\\n{\\n  \\\"ball_cost\\\": \\\"$0.05\\\",\\n  \\\"bat_cost\\\": \\\"$1.05\\\",\\n  \\\"total_cost\\\": \\\"$1.10\\\"\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:07:41Z",
+  "verdict": "adapted"
+}

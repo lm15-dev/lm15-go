@@ -1,0 +1,424 @@
+{
+  "binding": "meta",
+  "check": "tools",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "muse-spark-1.3",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "Use the tool: what is the forecast for Montreal on 2026-10-01? Then answer in one sentence."
+                }
+              ]
+            }
+          ],
+          "stream": false,
+          "max_output_tokens": 2000,
+          "tools": [
+            {
+              "type": "function",
+              "name": "get_forecast",
+              "description": "Weather forecast for a city on a date.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "location": {
+                    "type": "string",
+                    "description": "City name"
+                  },
+                  "date": {
+                    "type": "string",
+                    "description": "YYYY-MM-DD"
+                  }
+                },
+                "required": [
+                  "location",
+                  "date"
+                ]
+              }
+            }
+          ]
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.meta.ai/v1/responses"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-allow-origin": "*",
+        "connection": "keep-alive",
+        "content-length": "1526",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:07:58 GMT",
+        "x-ratelimit-limit-requests": "3000",
+        "x-ratelimit-limit-tokens": "4000000",
+        "x-ratelimit-remaining-requests": "2998",
+        "x-ratelimit-remaining-tokens": "3998648",
+        "x-request-id": "a3894748-1cc1-4a75-89ff-f717016931f9",
+        "x-route": "model-api-rust"
+      },
+      "body": {
+        "top_logprobs": 0,
+        "temperature": 1.0,
+        "top_p": 1.0,
+        "service_tier": "auto",
+        "model": "muse-spark-1.3",
+        "reasoning": {
+          "effort": "high"
+        },
+        "background": false,
+        "tools": [
+          {
+            "type": "function",
+            "name": "get_forecast",
+            "description": "Weather forecast for a city on a date.",
+            "parameters": {
+              "type": "object",
+              "required": [
+                "location",
+                "date"
+              ],
+              "properties": {
+                "date": {
+                  "description": "YYYY-MM-DD",
+                  "type": "string"
+                },
+                "location": {
+                  "description": "City name",
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ],
+        "tool_choice": "auto",
+        "truncation": "disabled",
+        "id": "resp_6ab7a78d8749c1d39945443f",
+        "object": "response",
+        "status": "completed",
+        "created_at": 1790420877.0,
+        "completed_at": 1790420877.0,
+        "error": null,
+        "incomplete_details": null,
+        "output": [
+          {
+            "type": "reasoning",
+            "id": "rs_6ab7a78d8749c1d39945443f:rs_934a351b-7495-4d7b-82ba-a7da8bd504ae",
+            "summary": [],
+            "status": "completed"
+          },
+          {
+            "type": "message",
+            "id": "rs_b8ee76b5-b073-48cf-b415-e1d593402aa2",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "I'll check the Montreal forecast for October 1st.",
+                "annotations": [],
+                "logprobs": []
+              }
+            ],
+            "phase": "commentary",
+            "status": "completed"
+          },
+          {
+            "type": "function_call",
+            "id": "fc_9100a121-d5cd-4116-a2f5-cbdd23232dcd",
+            "call_id": "call_9100a121-d5cd-4116-a2f5-cbdd23232dcd",
+            "name": "get_forecast",
+            "arguments": "{\"date\":\"2026-10-01\",\"location\":\"Montreal\"}",
+            "status": "completed"
+          }
+        ],
+        "instructions": null,
+        "usage": {
+          "input_tokens": 589,
+          "input_tokens_details": {
+            "cached_tokens": 113
+          },
+          "output_tokens": 275,
+          "output_tokens_details": {
+            "reasoning_tokens": 183
+          },
+          "total_tokens": 864
+        },
+        "parallel_tool_calls": true,
+        "store": true,
+        "max_output_tokens": 2000
+      }
+    },
+    {
+      "sent": {
+        "body": {
+          "model": "muse-spark-1.3",
+          "input": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "Use the tool: what is the forecast for Montreal on 2026-10-01? Then answer in one sentence."
+                }
+              ]
+            },
+            {
+              "type": "reasoning",
+              "id": "rs_6ab7a78d8749c1d39945443f:rs_934a351b-7495-4d7b-82ba-a7da8bd504ae",
+              "summary": []
+            },
+            {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "output_text",
+                  "text": "I'll check the Montreal forecast for October 1st."
+                }
+              ],
+              "phase": "commentary"
+            },
+            {
+              "type": "function_call",
+              "call_id": "call_9100a121-d5cd-4116-a2f5-cbdd23232dcd",
+              "name": "get_forecast",
+              "arguments": "{\"date\":\"2026-10-01\",\"location\":\"Montreal\"}"
+            },
+            {
+              "type": "function_call_output",
+              "call_id": "call_9100a121-d5cd-4116-a2f5-cbdd23232dcd",
+              "output": "{\"forecast\": \"sunny\", \"high_c\": 14}"
+            }
+          ],
+          "stream": false,
+          "max_output_tokens": 2000,
+          "tools": [
+            {
+              "type": "function",
+              "name": "get_forecast",
+              "description": "Weather forecast for a city on a date.",
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "location": {
+                    "type": "string",
+                    "description": "City name"
+                  },
+                  "date": {
+                    "type": "string",
+                    "description": "YYYY-MM-DD"
+                  }
+                },
+                "required": [
+                  "location",
+                  "date"
+                ]
+              }
+            }
+          ]
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.meta.ai/v1/responses"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-allow-origin": "*",
+        "connection": "keep-alive",
+        "content-length": "1290",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:08:01 GMT",
+        "x-ratelimit-limit-requests": "3000",
+        "x-ratelimit-limit-tokens": "4000000",
+        "x-ratelimit-remaining-requests": "2997",
+        "x-ratelimit-remaining-tokens": "3997897",
+        "x-request-id": "9faf93bc-5111-48b3-afca-e5c792db5c91",
+        "x-route": "model-api-rust"
+      },
+      "body": {
+        "top_logprobs": 0,
+        "temperature": 1.0,
+        "top_p": 1.0,
+        "service_tier": "auto",
+        "model": "muse-spark-1.3",
+        "reasoning": {
+          "effort": "high"
+        },
+        "background": false,
+        "tools": [
+          {
+            "type": "function",
+            "name": "get_forecast",
+            "description": "Weather forecast for a city on a date.",
+            "parameters": {
+              "properties": {
+                "date": {
+                  "description": "YYYY-MM-DD",
+                  "type": "string"
+                },
+                "location": {
+                  "description": "City name",
+                  "type": "string"
+                }
+              },
+              "type": "object",
+              "required": [
+                "location",
+                "date"
+              ]
+            }
+          }
+        ],
+        "tool_choice": "auto",
+        "truncation": "disabled",
+        "id": "resp_6ab7a791bfbe3a2112784736",
+        "object": "response",
+        "status": "completed",
+        "created_at": 1790420881.0,
+        "completed_at": 1790420881.0,
+        "error": null,
+        "incomplete_details": null,
+        "output": [
+          {
+            "type": "reasoning",
+            "id": "rs_6ab7a791bfbe3a2112784736:rs_15b07639-ba25-4b5b-b900-79559c0beea5",
+            "summary": [],
+            "status": "completed"
+          },
+          {
+            "type": "message",
+            "id": "msg_f4b701c0-13a6-45c0-a057-4ac6da992bad",
+            "role": "assistant",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.",
+                "annotations": [],
+                "logprobs": []
+              }
+            ],
+            "status": "completed"
+          }
+        ],
+        "instructions": null,
+        "usage": {
+          "input_tokens": 719,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens": 236,
+          "output_tokens_details": {
+            "reasoning_tokens": 204
+          },
+          "total_tokens": 955
+        },
+        "parallel_tool_calls": true,
+        "store": true,
+        "max_output_tokens": 2000
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "resp_6ab7a78d8749c1d39945443f",
+        "model": "muse-spark-1.3",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "",
+              "continuation": [
+                {
+                  "provider": "openai",
+                  "kind": "reasoning_item",
+                  "data": {
+                    "id": "rs_6ab7a78d8749c1d39945443f:rs_934a351b-7495-4d7b-82ba-a7da8bd504ae"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": "I'll check the Montreal forecast for October 1st."
+            },
+            {
+              "type": "tool_call",
+              "id": "call_9100a121-d5cd-4116-a2f5-cbdd23232dcd",
+              "name": "get_forecast",
+              "input": {
+                "date": "2026-10-01",
+                "location": "Montreal"
+              }
+            }
+          ]
+        },
+        "finish_reason": "tool_call",
+        "usage": {
+          "input_tokens": 589,
+          "output_tokens": 275,
+          "total_tokens": 864,
+          "cache_read_tokens": 113,
+          "reasoning_tokens": 183
+        }
+      }
+    },
+    {
+      "response": {
+        "id": "resp_6ab7a791bfbe3a2112784736",
+        "model": "muse-spark-1.3",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "",
+              "continuation": [
+                {
+                  "provider": "openai",
+                  "kind": "reasoning_item",
+                  "data": {
+                    "id": "rs_6ab7a791bfbe3a2112784736:rs_15b07639-ba25-4b5b-b900-79559c0beea5"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "text": "The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C."
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 719,
+          "output_tokens": 236,
+          "total_tokens": 955,
+          "cache_read_tokens": 0,
+          "reasoning_tokens": 204
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "meta:muse-spark-1.3",
+  "notes": [
+    "call get_forecast({\"date\":\"2026-10-01\",\"location\":\"Montreal\"})",
+    "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:08:01Z",
+  "verdict": "ok"
+}

@@ -1,0 +1,206 @@
+{
+  "binding": "github-copilot-account",
+  "check": "order-sorted-control",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "gpt-4.1",
+          "messages": [
+            {
+              "role": "user",
+              "content": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer in JSON."
+            }
+          ],
+          "max_completion_tokens": 1000,
+          "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+              "name": "worked_answer",
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "answer": {
+                    "description": "The final answer only.",
+                    "type": "string"
+                  },
+                  "reasoning": {
+                    "description": "Work the problem out step by step before answering.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "reasoning",
+                  "answer"
+                ],
+                "type": "object"
+              },
+              "strict": true
+            }
+          }
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json",
+          "copilot-integration-id": "vscode-chat",
+          "editor-plugin-version": "\u003credacted\u003e",
+          "editor-version": "vscode/1.107.0",
+          "user-agent": "GitHubCopilotChat/0.35.0"
+        },
+        "method": "POST",
+        "url": "https://api.individual.githubcopilot.com/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "content-length": "1720",
+        "content-security-policy": "default-src 'none'; sandbox",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:09:48 GMT",
+        "strict-transport-security": "max-age=31536000",
+        "x-copilot-api-exp-assignment-context": "e4hcf520:1109203;permission_prompt_control:1332567;ccr_pr_nudge_control:1319470;wzoi2426:1412286;3aced641:1389836;",
+        "x-copilot-service-request-id": "947e33e0-2a42-438b-86a1-a526f4a30645",
+        "x-github-backend": "Kubernetes",
+        "x-github-copilot-request-te": "true",
+        "x-github-edge-region": "iad",
+        "x-github-request-id": "EC10:21720E:1BADACF:2143D65:6AB7A7FB",
+        "x-request-id": "00000-8bdab546-045c-409c-8a0c-c1577ac67ab8"
+      },
+      "body": {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "content_filter_results": {
+              "hate": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "self_harm": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "sexual": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "violence": {
+                "filtered": false,
+                "severity": "safe"
+              }
+            },
+            "message": {
+              "content": "{\"answer\":\"$0.05\",\"reasoning\":\"Let x be the cost of the ball. The bat costs $1 more than the ball, so the bat costs x + $1.00. The total cost is x + (x + 1.00) = 1.10. Simplify: 2x + 1.00 = 1.10. Subtract 1.00 from both sides: 2x = 0.10. Divide both sides by 2: x = 0.05. Therefore, the ball costs $0.05.\"}",
+              "padding": "abcdefghijklmnopqrstuv",
+              "role": "assistant"
+            }
+          }
+        ],
+        "id": "chatcmpl-ESKZnVPTuUyk4UDXrlBZzj8RJOUVh",
+        "usage": {
+          "completion_tokens": 122,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens": 100,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 222
+        },
+        "model": "gpt-4.1-2025-04-14",
+        "prompt_filter_results": [
+          {
+            "content_filter_results": {
+              "hate": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "self_harm": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "sexual": {
+                "filtered": false,
+                "severity": "safe"
+              },
+              "violence": {
+                "filtered": false,
+                "severity": "safe"
+              }
+            },
+            "prompt_index": 0
+          }
+        ],
+        "service_tier": "default",
+        "system_fingerprint": "fp_6ab89a131e",
+        "copilot_usage": {
+          "token_details": [
+            {
+              "batch_size": 1000000,
+              "cost_per_batch": 0,
+              "model": "gpt-4.1",
+              "token_count": 100,
+              "token_type": "input"
+            },
+            {
+              "batch_size": 1000000,
+              "cost_per_batch": 0,
+              "model": "gpt-4.1",
+              "token_count": 0,
+              "token_type": "cache_read"
+            },
+            {
+              "batch_size": 1000000,
+              "cost_per_batch": 0,
+              "model": "gpt-4.1",
+              "token_count": 0,
+              "token_type": "cache_write"
+            },
+            {
+              "batch_size": 1000000,
+              "cost_per_batch": 0,
+              "model": "gpt-4.1",
+              "token_count": 122,
+              "token_type": "output"
+            }
+          ],
+          "total_nano_aiu": 0
+        }
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "chatcmpl-ESKZnVPTuUyk4UDXrlBZzj8RJOUVh",
+        "model": "gpt-4.1-2025-04-14",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "{\"answer\":\"$0.05\",\"reasoning\":\"Let x be the cost of the ball. The bat costs $1 more than the ball, so the bat costs x + $1.00. The total cost is x + (x + 1.00) = 1.10. Simplify: 2x + 1.00 = 1.10. Subtract 1.00 from both sides: 2x = 0.10. Divide both sides by 2: x = 0.05. Therefore, the ball costs $0.05.\"}"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 100,
+          "output_tokens": 122,
+          "total_tokens": 222,
+          "cache_read_tokens": 0
+        }
+      }
+    }
+  ],
+  "managed": true,
+  "model": "github-copilot:gpt-4.1",
+  "notes": [
+    "the model's JSON keys, in the order written: [answer reasoning]; answer \"$0.05\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:09:48Z",
+  "verdict": "ok"
+}

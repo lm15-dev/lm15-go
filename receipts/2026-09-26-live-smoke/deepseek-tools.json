@@ -1,0 +1,292 @@
+{
+  "binding": "deepseek",
+  "check": "tools",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "deepseek-v4-flash",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Use the tool: what is the forecast for Montreal on 2026-10-01? Then answer in one sentence."
+            }
+          ],
+          "max_tokens": 2000,
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "get_forecast",
+                "description": "Weather forecast for a city on a date.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "string",
+                      "description": "City name"
+                    },
+                    "date": {
+                      "type": "string",
+                      "description": "YYYY-MM-DD"
+                    }
+                  },
+                  "required": [
+                    "location",
+                    "date"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.deepseek.com/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-allow-credentials": "true",
+        "connection": "keep-alive",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:06:59 GMT",
+        "server": "elb",
+        "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "via": "1.1 c084db96d65700304a568083708ffe5c.cloudfront.net (CloudFront)",
+        "x-amz-cf-id": "40KrJtE6otPyL3Rwioid4y3hsGXahqX4PNG2DnZba58siP7aL9IzpQ==",
+        "x-amz-cf-pop": "YUL62-P4",
+        "x-cache": "Miss from cloudfront",
+        "x-content-type-options": "nosniff",
+        "x-ds-trace-id": "dada2d9fdc2f63f83d172ca1f95c8d14"
+      },
+      "body": {
+        "id": "96935c5d-1599-4416-9097-9efbaf6022e5",
+        "object": "chat.completion",
+        "created": 1790420819,
+        "model": "deepseek-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "",
+              "reasoning_content": "",
+              "tool_calls": [
+                {
+                  "index": 0,
+                  "id": "call_00_ET_XSCuuD0Mims6ssO5iSJk8004",
+                  "type": "function",
+                  "function": {
+                    "name": "get_forecast",
+                    "arguments": "{\"location\": \"Montreal\", \"date\": \"2026-10-01\"}"
+                  }
+                }
+              ]
+            },
+            "logprobs": null,
+            "finish_reason": "tool_calls"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 345,
+          "completion_tokens": 62,
+          "total_tokens": 407,
+          "prompt_tokens_details": {
+            "cached_tokens": 128
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          },
+          "prompt_cache_hit_tokens": 128,
+          "prompt_cache_miss_tokens": 217
+        },
+        "system_fingerprint": "aeb56401ca74e127821c4f9126dcb669"
+      }
+    },
+    {
+      "sent": {
+        "body": {
+          "model": "deepseek-v4-flash",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Use the tool: what is the forecast for Montreal on 2026-10-01? Then answer in one sentence."
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "reasoning_content": "",
+              "tool_calls": [
+                {
+                  "id": "call_00_ET_XSCuuD0Mims6ssO5iSJk8004",
+                  "type": "function",
+                  "function": {
+                    "name": "get_forecast",
+                    "arguments": "{\"location\":\"Montreal\",\"date\":\"2026-10-01\"}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "tool_call_id": "call_00_ET_XSCuuD0Mims6ssO5iSJk8004",
+              "content": "{\"forecast\": \"sunny\", \"high_c\": 14}"
+            }
+          ],
+          "max_tokens": 2000,
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "get_forecast",
+                "description": "Weather forecast for a city on a date.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "string",
+                      "description": "City name"
+                    },
+                    "date": {
+                      "type": "string",
+                      "description": "YYYY-MM-DD"
+                    }
+                  },
+                  "required": [
+                    "location",
+                    "date"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.deepseek.com/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-allow-credentials": "true",
+        "connection": "keep-alive",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:07:00 GMT",
+        "server": "elb",
+        "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "via": "1.1 c084db96d65700304a568083708ffe5c.cloudfront.net (CloudFront)",
+        "x-amz-cf-id": "3PcroiFQGglNbmwXOJSKoxvx7ZJvDw-1yE0L-ViejXLGLSmODMCsow==",
+        "x-amz-cf-pop": "YUL62-P4",
+        "x-cache": "Miss from cloudfront",
+        "x-content-type-options": "nosniff",
+        "x-ds-trace-id": "7e72abffeabae0159ca7f720d7edbd6c"
+      },
+      "body": {
+        "id": "1f83a22e-2d48-4b46-b74f-fa1c8bd5c696",
+        "object": "chat.completion",
+        "created": 1790420820,
+        "model": "deepseek-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.",
+              "reasoning_content": "The tool returned the forecast. Answer in one sentence."
+            },
+            "logprobs": null,
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 433,
+          "completion_tokens": 35,
+          "total_tokens": 468,
+          "prompt_tokens_details": {
+            "cached_tokens": 256
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 11
+          },
+          "prompt_cache_hit_tokens": 256,
+          "prompt_cache_miss_tokens": 177
+        },
+        "system_fingerprint": "aeb56401ca74e127821c4f9126dcb669"
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "96935c5d-1599-4416-9097-9efbaf6022e5",
+        "model": "deepseek-flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "tool_call",
+              "id": "call_00_ET_XSCuuD0Mims6ssO5iSJk8004",
+              "name": "get_forecast",
+              "input": {
+                "location": "Montreal",
+                "date": "2026-10-01"
+              }
+            }
+          ]
+        },
+        "finish_reason": "tool_call",
+        "usage": {
+          "input_tokens": 345,
+          "output_tokens": 62,
+          "total_tokens": 407,
+          "cache_read_tokens": 128,
+          "reasoning_tokens": 0
+        }
+      }
+    },
+    {
+      "response": {
+        "id": "1f83a22e-2d48-4b46-b74f-fa1c8bd5c696",
+        "model": "deepseek-flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "The tool returned the forecast. Answer in one sentence."
+            },
+            {
+              "type": "text",
+              "text": "The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C."
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 433,
+          "output_tokens": 35,
+          "total_tokens": 468,
+          "cache_read_tokens": 256,
+          "reasoning_tokens": 11
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "deepseek:deepseek-v4-flash",
+  "notes": [
+    "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+    "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:07:01Z",
+  "verdict": "ok"
+}

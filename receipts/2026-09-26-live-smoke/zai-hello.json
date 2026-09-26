@@ -1,0 +1,169 @@
+{
+  "binding": "zai",
+  "check": "hello",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "glm-5.3-flash",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Reply with exactly the two words: hello world"
+            }
+          ],
+          "max_tokens": 2000
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.z.ai/api/paas/v4/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "alt-svc": "h3=\":443\"; ma=3600",
+        "connection": "keep-alive",
+        "content-length": "606",
+        "content-type": "application/json; charset=UTF-8",
+        "date": "Sat, 26 Sep 2026 11:07:04 GMT",
+        "ga-traceid": "e264f9c369f9e7fe1a3819d6947fba87",
+        "set-cookie": "\u003credacted\u003e",
+        "vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, Origin",
+        "x-log-id": "202609261907015c2b94d944594ee9",
+        "x-request-id": "3154a56e-832a-4274-b9c9-a7b13313492e"
+      },
+      "body": {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+              "content": "hello world",
+              "reasoning_content": "The user has asked me to reply with exactly two words: \"hello world\". This is a simple, harmless request. I should just comply with exactly those two words.",
+              "role": "assistant"
+            }
+          }
+        ],
+        "created": 1790420824,
+        "id": "202609261907015c2b94d944594ee9",
+        "model": "glm-5.3-flash",
+        "object": "chat.completion",
+        "request_id": "202609261907015c2b94d944594ee9",
+        "usage": {
+          "completion_tokens": 38,
+          "completion_tokens_details": {
+            "reasoning_tokens": 34
+          },
+          "prompt_tokens": 21,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 59
+        }
+      }
+    },
+    {
+      "sent": {
+        "body": {
+          "model": "glm-5.3-flash",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Reply with exactly the two words: hello world"
+            }
+          ],
+          "stream": true,
+          "stream_options": {
+            "include_usage": true
+          },
+          "max_tokens": 2000
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.z.ai/api/paas/v4/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "alt-svc": "h3=\":443\"; ma=3600",
+        "connection": "keep-alive",
+        "content-type": "text/event-stream;charset=UTF-8",
+        "date": "Sat, 26 Sep 2026 11:07:06 GMT",
+        "ga-traceid": "a98dfd998e076a7c6eb254a73c55873f",
+        "set-cookie": "\u003credacted\u003e",
+        "vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers, Origin, Access-Control-Request-Method, Access-Control-Request-Headers, Origin",
+        "x-log-id": "20260926190704d24793c8a3774c26",
+        "x-request-id": "720c10b7-03ea-4f89-8d36-a71c91533aa8"
+      },
+      "body": "data: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\"The\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" user\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" wants\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" me\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" to\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" reply\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" with\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" exactly\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" the\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" two\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" words\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" \\\"\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\"hello\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" world\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\"\\\".\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" This\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" is\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" a\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" simple\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\",\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" clear\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" instruction\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\".\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" I\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" should\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" just\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" respond\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" with\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" those\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" exact\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" two\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" words\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" and\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" nothing\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\" else\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"reasoning_content\":\".\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hello\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\" world\"}}]}\n\ndata: {\"id\":\"20260926190704d24793c8a3774c26\",\"created\":1790420824,\"object\":\"chat.completion.chunk\",\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,\"finish_reason\":\"stop\",\"delta\":{\"role\":\"assistant\",\"content\":\"\"}}],\"usage\":{\"prompt_tokens\":21,\"completion_tokens\":40,\"total_tokens\":61,\"prompt_tokens_details\":{\"cached_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":36}}}\n\ndata: [DONE]\n\n"
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "202609261907015c2b94d944594ee9",
+        "model": "glm-5.3-flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "The user has asked me to reply with exactly two words: \"hello world\". This is a simple, harmless request. I should just comply with exactly those two words."
+            },
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 21,
+          "output_tokens": 38,
+          "total_tokens": 59,
+          "cache_read_tokens": 0,
+          "reasoning_tokens": 34
+        }
+      }
+    },
+    {
+      "response": {
+        "model": "glm-5.3-flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "The user wants me to reply with exactly the two words \"hello world\". This is a simple, clear instruction. I should just respond with those exact two words and nothing else."
+            },
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 21,
+          "output_tokens": 40,
+          "total_tokens": 61,
+          "cache_read_tokens": 0,
+          "reasoning_tokens": 36
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "zai:glm-5.3-flash",
+  "notes": [
+    "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:07:06Z",
+  "verdict": "ok"
+}

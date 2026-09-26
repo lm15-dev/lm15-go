@@ -1,0 +1,180 @@
+{
+  "binding": "deepseek",
+  "check": "hello",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "deepseek-v4-flash",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Reply with exactly the two words: hello world"
+            }
+          ],
+          "max_tokens": 2000
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.deepseek.com/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-allow-credentials": "true",
+        "connection": "keep-alive",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:06:57 GMT",
+        "server": "elb",
+        "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "via": "1.1 c084db96d65700304a568083708ffe5c.cloudfront.net (CloudFront)",
+        "x-amz-cf-id": "BRfC_OAyFAG4IrjhoMF3p3z31IaVrMDD1QEc3N3kuRz1s5TlCr8lSA==",
+        "x-amz-cf-pop": "YUL62-P4",
+        "x-cache": "Miss from cloudfront",
+        "x-content-type-options": "nosniff",
+        "x-ds-trace-id": "4db285df90defdbba42116996c722371"
+      },
+      "body": {
+        "id": "310ab44b-43b4-4488-b8e9-34b7b91bdc28",
+        "object": "chat.completion",
+        "created": 1790420817,
+        "model": "deepseek-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "hello world",
+              "reasoning_content": "The user wants exactly two words: \"hello world\". I should reply with just that."
+            },
+            "logprobs": null,
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 39,
+          "completion_tokens": 21,
+          "total_tokens": 60,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 18
+          },
+          "prompt_cache_hit_tokens": 0,
+          "prompt_cache_miss_tokens": 39
+        },
+        "system_fingerprint": "aeb56401ca74e127821c4f9126dcb669"
+      }
+    },
+    {
+      "sent": {
+        "body": {
+          "model": "deepseek-v4-flash",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Reply with exactly the two words: hello world"
+            }
+          ],
+          "stream": true,
+          "stream_options": {
+            "include_usage": true
+          },
+          "max_tokens": 2000
+        },
+        "headers": {
+          "authorization": "\u003credacted\u003e",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.deepseek.com/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-allow-credentials": "true",
+        "cache-control": "no-cache",
+        "connection": "keep-alive",
+        "content-type": "text/event-stream; charset=utf-8",
+        "date": "Sat, 26 Sep 2026 11:06:58 GMT",
+        "server": "elb",
+        "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+        "vary": "origin, access-control-request-method, access-control-request-headers",
+        "via": "1.1 c084db96d65700304a568083708ffe5c.cloudfront.net (CloudFront)",
+        "x-amz-cf-id": "UBfq2FmvuPnQGzhAJ-gyokm44Xp4BcM56UciwoJXUqEcjPspCMSx4w==",
+        "x-amz-cf-pop": "YUL62-P4",
+        "x-cache": "Miss from cloudfront",
+        "x-content-type-options": "nosniff",
+        "x-ds-trace-id": "1dee52bf336e75bf2f3765823cb77fdc"
+      },
+      "body": "data: {\"id\":\"97ce17d4-53a2-40cb-ae9d-f77476ac9cfa\",\"object\":\"chat.completion.chunk\",\"created\":1790420818,\"model\":\"deepseek-flash\",\"system_fingerprint\":\"aeb56401ca74e127821c4f9126dcb669\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":null,\"reasoning_content\":\"\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"97ce17d4-53a2-40cb-ae9d-f77476ac9cfa\",\"object\":\"chat.completion.chunk\",\"created\":1790420818,\"model\":\"deepseek-flash\",\"system_fingerprint\":\"aeb56401ca74e127821c4f9126dcb669\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"reasoning_content\":\"The\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"97ce17d4-53a2-40cb-ae9d-f77476ac9cfa\",\"object\":\"chat.completion.chunk\",\"created\":1790420818,\"model\":\"deepseek-flash\",\"system_fingerprint\":\"aeb56401ca74e127821c4f9126dcb669\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"reasoning_content\":\" user\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"97ce17d4-53a2-40cb-ae9d-f77476ac9cfa\",\"object\":\"chat.completion.chunk\",\"created\":1790420818,\"model\":\"deepseek-flash\",\"system_fingerprint\":\"aeb56401ca74e127821c4f9126dcb669\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"reasoning_content\":\" wants\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"97ce17d4-53a2-40cb-ae9d-f77476ac9cfa\",\"object\":\"chat.completion.chunk\",\"created\":1790420818,\"model\":\"deepseek-flash\",\"system_fingerprint\":\"aeb56401ca74e127821c4f9126dcb669\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"reasoning_content\":\" exactly\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"97ce17d4-53a2-40cb-ae9d-f77476ac9cfa\",\"object\":\"chat.completion.chunk\",\"created\":1790420818,\"model\":\"deepseek-flash\",\"system_fingerprint\":\"aeb56401ca74e127821c4f9126dcb669\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"reasoning_content\":\" \\\"\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"97ce17d4-53a2-40cb-ae9d-f77476ac9cfa\",\"object\":\"chat.completion.chunk\",\"created\":1790420818,\"model\":\"deepseek-flash\",\"system_fingerprint\":\"aeb56401ca74e127821c4f9126dcb669\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"reasoning_content\":\"hello\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"97ce17d4-53a2-40cb-ae9d-f77476ac9cfa\",\"object\":\"chat.completion.chunk\",\"created\":1790420818,\"model\":\"deepseek-flash\",\"system_fingerprint\":\"aeb56401ca74e127821c4f9126dcb669\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"reasoning_content\":\" world\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"97ce17d4-53a2-40cb-ae9d-f77476ac9cfa\",\"object\":\"chat.completion.chunk\",\"created\":1790420818,\"model\":\"deepseek-flash\",\"system_fingerprint\":\"aeb56401ca74e127821c4f9126dcb669\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"reasoning_content\":\"\\\"\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"97ce17d4-53a2-40cb-ae9d-f77476ac9cfa\",\"object\":\"chat.completion.chunk\",\"created\":1790420818,\"model\":\"deepseek-flash\",\"system_fingerprint\":\"aeb56401ca74e127821c4f9126dcb669\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"reasoning_content\":\" as\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"97ce17d4-53a2-40cb-ae9d-f77476ac9cfa\",\"object\":\"chat.completion.chunk\",\"created\":1790420818,\"model\":\"deepseek-flash\",\"system_fingerprint\":\"aeb56401ca74e127821c4f9126dcb669\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"reasoning_content\":\" two\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"97ce17d4-53a2-40cb-ae9d-f77476ac9cfa\",\"object\":\"chat.completion.chunk\",\"created\":1790420818,\"model\":\"deepseek-flash\",\"system_fingerprint\":\"aeb56401ca74e127821c4f9126dcb669\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"reasoning_content\":\" words\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"97ce17d4-53a2-40cb-ae9d-f77476ac9cfa\",\"object\":\"chat.completion.chunk\",\"created\":1790420818,\"model\":\"deepseek-flash\",\"system_fingerprint\":\"aeb56401ca74e127821c4f9126dcb669\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"reasoning_content\":\".\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"97ce17d4-53a2-40cb-ae9d-f77476ac9cfa\",\"object\":\"chat.completion.chunk\",\"created\":1790420818,\"model\":\"deepseek-flash\",\"system_fingerprint\":\"aeb56401ca74e127821c4f9126dcb669\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"reasoning_content\":\" Simple\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"97ce17d4-53a2-40cb-ae9d-f77476ac9cfa\",\"object\":\"chat.completion.chunk\",\"created\":1790420818,\"model\":\"deepseek-flash\",\"system_fingerprint\":\"aeb56401ca74e127821c4f9126dcb669\",\"choices\":[{\"index\":0,\"delta\":{\"content\":null,\"reasoning_content\":\".\"},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"97ce17d4-53a2-40cb-ae9d-f77476ac9cfa\",\"object\":\"chat.completion.chunk\",\"created\":1790420818,\"model\":\"deepseek-flash\",\"system_fingerprint\":\"aeb56401ca74e127821c4f9126dcb669\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hello\",\"reasoning_content\":null},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"97ce17d4-53a2-40cb-ae9d-f77476ac9cfa\",\"object\":\"chat.completion.chunk\",\"created\":1790420818,\"model\":\"deepseek-flash\",\"system_fingerprint\":\"aeb56401ca74e127821c4f9126dcb669\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world\",\"reasoning_content\":null},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"id\":\"97ce17d4-53a2-40cb-ae9d-f77476ac9cfa\",\"object\":\"chat.completion.chunk\",\"created\":1790420818,\"model\":\"deepseek-flash\",\"system_fingerprint\":\"aeb56401ca74e127821c4f9126dcb669\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\",\"reasoning_content\":null},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":39,\"completion_tokens\":17,\"total_tokens\":56,\"prompt_tokens_details\":{\"cached_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":14},\"prompt_cache_hit_tokens\":0,\"prompt_cache_miss_tokens\":39}}\n\ndata: [DONE]\n\n"
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "310ab44b-43b4-4488-b8e9-34b7b91bdc28",
+        "model": "deepseek-flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "The user wants exactly two words: \"hello world\". I should reply with just that."
+            },
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 39,
+          "output_tokens": 21,
+          "total_tokens": 60,
+          "cache_read_tokens": 0,
+          "reasoning_tokens": 18
+        }
+      }
+    },
+    {
+      "response": {
+        "model": "deepseek-v4-flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "The user wants exactly \"hello world\" as two words. Simple."
+            },
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 39,
+          "output_tokens": 17,
+          "total_tokens": 56,
+          "cache_read_tokens": 0,
+          "reasoning_tokens": 14
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "deepseek:deepseek-v4-flash",
+  "notes": [
+    "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:06:59Z",
+  "verdict": "ok"
+}

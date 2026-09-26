@@ -1,0 +1,169 @@
+{
+  "binding": "gemini",
+  "check": "hello",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Reply with exactly the two words: hello world"
+                }
+              ]
+            }
+          ],
+          "generationConfig": {
+            "maxOutputTokens": 4000
+          }
+        },
+        "headers": {
+          "content-type": "application/json",
+          "x-goog-api-key": "\u003credacted\u003e"
+        },
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+      },
+      "status": 200,
+      "response_headers": {
+        "accept-ranges": "none",
+        "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+        "content-type": "application/json; charset=UTF-8",
+        "date": "Sat, 26 Sep 2026 11:06:41 GMT",
+        "server": "scaffolding on HTTPServer2",
+        "server-timing": "gfet4t7; dur=575",
+        "vary": "X-Origin, Referer, Origin,Accept-Encoding",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-gemini-service-tier": "standard",
+        "x-xss-protection": "0"
+      },
+      "body": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "hello world"
+                }
+              ],
+              "role": "model"
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 10,
+          "candidatesTokenCount": 2,
+          "totalTokenCount": 47,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 10
+            }
+          ],
+          "thoughtsTokenCount": 35,
+          "serviceTier": "standard"
+        },
+        "modelVersion": "gemini-2.5-flash",
+        "responseId": "Qae3ar6qFrWY_uMPpM7juQk"
+      }
+    },
+    {
+      "sent": {
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "Reply with exactly the two words: hello world"
+                }
+              ]
+            }
+          ],
+          "generationConfig": {
+            "maxOutputTokens": 4000
+          }
+        },
+        "headers": {
+          "content-type": "application/json",
+          "x-goog-api-key": "\u003credacted\u003e"
+        },
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
+      },
+      "status": 200,
+      "response_headers": {
+        "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+        "content-disposition": "attachment",
+        "content-type": "text/event-stream",
+        "date": "Sat, 26 Sep 2026 11:06:42 GMT",
+        "server": "scaffolding on HTTPServer2",
+        "server-timing": "gfet4t7; dur=516",
+        "vary": "Origin, X-Origin, Referer",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-xss-protection": "0"
+      },
+      "body": "data: {\"candidates\": [{\"content\": {\"parts\": [{\"text\": \"hello world\"}],\"role\": \"model\"},\"finishReason\": \"STOP\",\"index\": 0}],\"usageMetadata\": {\"promptTokenCount\": 10,\"candidatesTokenCount\": 2,\"totalTokenCount\": 34,\"promptTokensDetails\": [{\"modality\": \"TEXT\",\"tokenCount\": 10}],\"thoughtsTokenCount\": 22,\"serviceTier\": \"standard\"},\"modelVersion\": \"gemini-2.5-flash\",\"responseId\": \"Qae3apeuObun_uMPqtSLkA4\"}\r\n\r\n"
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "Qae3ar6qFrWY_uMPpM7juQk",
+        "model": "gemini-2.5-flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 2,
+          "total_tokens": 47,
+          "reasoning_tokens": 35
+        }
+      }
+    },
+    {
+      "response": {
+        "model": "gemini-2.5-flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 10,
+          "output_tokens": 2,
+          "total_tokens": 34,
+          "reasoning_tokens": 22
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "gemini:gemini-2.5-flash",
+  "notes": [
+    "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 1 chunks"
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:06:42Z",
+  "verdict": "ok"
+}

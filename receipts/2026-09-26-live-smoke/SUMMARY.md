@@ -96,7 +96,8 @@ reference was checked offline to build the identical body. Sent under
 (2026-09-26, one direct request). lm15 already makes this choice for
 structured output (`responseJsonSchema` when the schema needs full JSON
 Schema); tools do not have it yet. The `tools` check leaves
-`additionalProperties` out so it tests the tool loop.
+`additionalProperties` out so it tests the tool loop. Fixed the same day in
+every SDK (lm15-contract MAP-16); see `../2026-09-26-live-smoke-map16`.
 
 ## Receipts
 

@@ -3,6 +3,7 @@ package lm15
 import (
 	"encoding/base64"
 	"encoding/binary"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -168,25 +169,99 @@ func geminiNumber(v float64) any {
 	return jsonFloat(v)
 }
 
-func containsKey(v any, key string) bool {
-	switch x := jsonView(v).(type) {
-	case JSONObject:
-		if _, ok := x.Lookup(key); ok {
-			return true
+// geminiSchemaFields are the keys of Gemini's Schema object
+// (generate-content#v1beta.Schema): what its OpenAPI fields parse.
+var geminiSchemaFields = map[string]bool{
+	"type": true, "format": true, "title": true, "description": true, "nullable": true, "enum": true,
+	"maxItems": true, "minItems": true, "properties": true, "required": true, "minProperties": true,
+	"maxProperties": true, "minLength": true, "maxLength": true, "pattern": true, "example": true,
+	"anyOf": true, "propertyOrdering": true, "default": true, "items": true, "minimum": true, "maximum": true,
+}
+
+// jsonListOf reads any Go slice or array (a decoded []any, or a []string or
+// []int a caller wrote) as a list; bytes are not a JSON list.
+func jsonListOf(v any) ([]any, bool) {
+	if l, ok := v.([]any); ok {
+		return l, true
+	}
+	rv := reflect.ValueOf(v)
+	if !rv.IsValid() || (rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array) || rv.Type().Elem().Kind() == reflect.Uint8 {
+		return nil, false
+	}
+	out := make([]any, rv.Len())
+	for i := range out {
+		out[i] = rv.Index(i).Interface()
+	}
+	return out, true
+}
+
+// geminiOpenAPISchema is MAP-16: can Gemini's OpenAPI field
+// (responseSchema, functionDeclarations[].parameters) carry schema? No,
+// when a schema node — the root, a value of properties, items, an element
+// of anyOf (or anyOf itself when it is one object) — is a boolean, has a
+// key that is not a field of Gemini's Schema object, has a list type, or
+// has an enum list with an element that is not a string: the OpenAPI field
+// answers 400 there and the JSON Schema field accepts it (live 2026-09-26,
+// lm15-contract mapping/gemini-schema-field.json). Anything else stays on
+// the OpenAPI field; example and default are values, never walked.
+func geminiOpenAPISchema(schema any) bool {
+	stack := []any{schema}
+	for len(stack) > 0 {
+		node := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if _, ok := node.(bool); ok {
+			return false
 		}
-		for _, item := range x.All() {
-			if containsKey(item, key) {
-				return true
+		obj, ok := jsonView(node).(JSONObject)
+		if !ok {
+			continue
+		}
+		for _, m := range obj {
+			if !geminiSchemaFields[m.Key] {
+				return false
 			}
-		}
-	case []any:
-		for _, item := range x {
-			if containsKey(item, key) {
-				return true
+			switch m.Key {
+			case "type":
+				if _, isList := jsonListOf(m.Value); isList {
+					return false
+				}
+			case "enum":
+				if items, isList := jsonListOf(m.Value); isList {
+					for _, item := range items {
+						if _, isString := item.(string); !isString {
+							return false
+						}
+					}
+				}
+			case "properties":
+				if props, isObject := jsonView(m.Value).(JSONObject); isObject {
+					for _, p := range props {
+						stack = append(stack, p.Value)
+					}
+				}
+			case "items":
+				stack = append(stack, m.Value)
+			case "anyOf":
+				if items, isList := jsonListOf(m.Value); isList {
+					stack = append(stack, items...)
+				} else {
+					stack = append(stack, m.Value)
+				}
 			}
 		}
 	}
-	return false
+	return true
+}
+
+// geminiFunctionDeclaration is MAP-16 for a tool: parameters or
+// parametersJsonSchema, the schema verbatim either way (INV-002).
+func geminiFunctionDeclaration(ft FunctionTool) JSONObject {
+	params := ft.EffectiveParameters()
+	field := "parameters"
+	if !geminiOpenAPISchema(params) {
+		field = "parametersJsonSchema"
+	}
+	return JSONObject{{"name", ft.Name}, {"description", nilIfEmpty(ft.Description)}, {field, params}}
 }
 
 func geminiResponseFormat(f JSONObject) JSONObject {
@@ -195,7 +270,7 @@ func geminiResponseFormat(f JSONObject) JSONObject {
 	}
 	schema := f.Get("schema")
 	field := "responseSchema"
-	if containsKey(schema, "additionalProperties") {
+	if !geminiOpenAPISchema(schema) {
 		field = "responseJsonSchema"
 	}
 	return JSONObject{{"responseMimeType", "application/json"}, {field, schema}}
@@ -713,7 +788,7 @@ func (l *GeminiLM) payload(req *Request, scope *adaptScope) (JSONObject, error) 
 		var tools []any
 		for _, t := range req.Tools {
 			if ft, ok := t.(FunctionTool); ok {
-				declarations = append(declarations, JSONObject{{"name", ft.Name}, {"description", nilIfEmpty(ft.Description)}, {"parameters", ft.EffectiveParameters()}})
+				declarations = append(declarations, geminiFunctionDeclaration(ft))
 			}
 		}
 		if len(declarations) > 0 {
@@ -1195,7 +1270,7 @@ func (l *GeminiLM) cacheCreateRequest(prefix *Request, ttlSeconds *int, label st
 		var declarations, tools []any
 		for _, t := range prefix.Tools {
 			if ft, ok := t.(FunctionTool); ok {
-				declarations = append(declarations, JSONObject{{"name", ft.Name}, {"description", nilIfEmpty(ft.Description)}, {"parameters", ft.EffectiveParameters()}})
+				declarations = append(declarations, geminiFunctionDeclaration(ft))
 			}
 		}
 		if len(declarations) > 0 {

@@ -1,0 +1,128 @@
+{
+  "binding": "gemini",
+  "check": "order",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "contents": [
+            {
+              "role": "user",
+              "parts": [
+                {
+                  "text": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer in JSON."
+                }
+              ]
+            }
+          ],
+          "generationConfig": {
+            "maxOutputTokens": 4000,
+            "responseMimeType": "application/json",
+            "responseJsonSchema": {
+              "type": "object",
+              "properties": {
+                "reasoning": {
+                  "type": "string",
+                  "description": "Work the problem out step by step before answering."
+                },
+                "answer": {
+                  "type": "string",
+                  "description": "The final answer only."
+                }
+              },
+              "required": [
+                "reasoning",
+                "answer"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "headers": {
+          "content-type": "application/json",
+          "x-goog-api-key": "\u003credacted\u003e"
+        },
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+      },
+      "status": 200,
+      "response_headers": {
+        "accept-ranges": "none",
+        "alt-svc": "h3=\":443\"; ma=2592000,h3-29=\":443\"; ma=2592000",
+        "content-type": "application/json; charset=UTF-8",
+        "date": "Sat, 26 Sep 2026 11:44:50 GMT",
+        "server": "scaffolding on HTTPServer2",
+        "server-timing": "gfet4t7; dur=2952",
+        "vary": "X-Origin, Referer, Origin,Accept-Encoding",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "SAMEORIGIN",
+        "x-gemini-service-tier": "standard",
+        "x-xss-protection": "0"
+      },
+      "body": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "{\"reasoning\": \"Let B be the cost of the bat and L be the cost of the ball.We are given two equations based on the problem statement:1) B + L = 1.10 (The total cost of the bat and ball is $1.10)2) B = L + 1.00 (The bat costs $1.00 more than the ball)Substitute the second equation into the first equation: (L + 1.00) + L = 1.10Combine like terms: 2L + 1.00 = 1.10Subtract 1.00 from both sides: 2L = 1.10 - 1.002L = 0.10Divide by 2: L = 0.10 / 2L = 0.05So, the ball costs $0.05.To verify: If the ball costs $0.05, then the bat costs $0.05 + $1.00 = $1.05. The total cost would be $1.05 + $0.05 = $1.10, which matches the problem statement.\", \"answer\": \"$0.05\"}"
+                }
+              ],
+              "role": "model"
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 39,
+          "candidatesTokenCount": 269,
+          "totalTokenCount": 692,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 39
+            }
+          ],
+          "thoughtsTokenCount": 384,
+          "serviceTier": "standard"
+        },
+        "modelVersion": "gemini-2.5-flash",
+        "responseId": "L7C3atb-ONHL_uMPtdigmQI"
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "L7C3atb-ONHL_uMPtdigmQI",
+        "model": "gemini-2.5-flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "{\"reasoning\": \"Let B be the cost of the bat and L be the cost of the ball.We are given two equations based on the problem statement:1) B + L = 1.10 (The total cost of the bat and ball is $1.10)2) B = L + 1.00 (The bat costs $1.00 more than the ball)Substitute the second equation into the first equation: (L + 1.00) + L = 1.10Combine like terms: 2L + 1.00 = 1.10Subtract 1.00 from both sides: 2L = 1.10 - 1.002L = 0.10Divide by 2: L = 0.10 / 2L = 0.05So, the ball costs $0.05.To verify: If the ball costs $0.05, then the bat costs $0.05 + $1.00 = $1.05. The total cost would be $1.05 + $0.05 = $1.10, which matches the problem statement.\", \"answer\": \"$0.05\"}"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 39,
+          "output_tokens": 269,
+          "total_tokens": 692,
+          "reasoning_tokens": 384
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "gemini:gemini-2.5-flash",
+  "notes": [
+    "the model's JSON keys, in the order written: [reasoning answer]; answer \"$0.05\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:44:50Z",
+  "verdict": "ok"
+}

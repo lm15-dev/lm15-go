@@ -1,0 +1,64 @@
+{
+  "binding": "anthropic",
+  "check": "models",
+  "exchanges": [
+    {
+      "sent": {
+        "headers": {
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+          "x-api-key": "\u003credacted\u003e"
+        },
+        "method": "GET",
+        "url": "https://api.anthropic.com/v1/models?limit=1000"
+      },
+      "status": 200,
+      "response_headers": {
+        "anthropic-organization-id": "705202b1-79ca-4ef0-9604-08f21cdd602f",
+        "anthropic-workspace-id": "wrkspc_01VxzyaMjxiUw97skFpL6AjK",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a41204c43e285b53-YUL",
+        "connection": "keep-alive",
+        "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:44:46 GMT",
+        "request-id": "req_011CfRzagnvXpYxy3ZrbsiBq",
+        "server": "cloudflare",
+        "server-timing": "x-originResponse;dur=98",
+        "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+        "vary": "Accept-Encoding",
+        "x-robots-tag": "none"
+      },
+      "body": {
+        "entries_omitted": true
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "ids": [
+        "claude-opus-5-5",
+        "claude-fable-5-1",
+        "claude-opus-5",
+        "claude-sonnet-5",
+        "claude-fable-5",
+        "claude-opus-4-8",
+        "claude-opus-4-7",
+        "claude-sonnet-4-6",
+        "claude-opus-4-6",
+        "claude-opus-4-5-20251101",
+        "claude-haiku-4-5-20251001",
+        "claude-sonnet-4-5-20250929"
+      ]
+    }
+  ],
+  "managed": false,
+  "model": "anthropic:claude-haiku-4-5",
+  "notes": [
+    "12 models"
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:44:46Z",
+  "verdict": "ok"
+}

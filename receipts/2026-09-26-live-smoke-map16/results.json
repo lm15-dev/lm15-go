@@ -1,0 +1,125 @@
+[
+  {
+    "binding": "anthropic",
+    "model": "anthropic:claude-haiku-4-5",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+    ],
+    "ms": 1218
+  },
+  {
+    "binding": "anthropic",
+    "model": "anthropic:claude-haiku-4-5",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [reasoning answer]; answer \"The ball costs $0.05\""
+    ],
+    "ms": 1576
+  },
+  {
+    "binding": "anthropic",
+    "model": "anthropic:claude-haiku-4-5",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+      "final \"The forecast for Montreal on October 1st, 2026 is sunny with a high of 14°C.\""
+    ],
+    "ms": 1613
+  },
+  {
+    "binding": "anthropic",
+    "model": "anthropic:claude-haiku-4-5",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "12 models"
+    ],
+    "ms": 142
+  },
+  {
+    "binding": "gemini",
+    "model": "gemini:gemini-2.5-flash",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 1 chunks"
+    ],
+    "ms": 955
+  },
+  {
+    "binding": "gemini",
+    "model": "gemini:gemini-2.5-flash",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [reasoning answer]; answer \"$0.05\""
+    ],
+    "ms": 2958
+  },
+  {
+    "binding": "gemini",
+    "model": "gemini:gemini-2.5-flash",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+      "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14 degrees Celsius.\""
+    ],
+    "ms": 1430
+  },
+  {
+    "binding": "gemini",
+    "model": "gemini:gemini-2.5-flash",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "61 models"
+    ],
+    "ms": 97
+  },
+  {
+    "binding": "openai",
+    "model": "gpt-5-mini",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+    ],
+    "ms": 6273
+  },
+  {
+    "binding": "openai",
+    "model": "gpt-5-mini",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [reasoning answer]; answer \"$0.05\""
+    ],
+    "ms": 4693
+  },
+  {
+    "binding": "openai",
+    "model": "gpt-5-mini",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+      "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\""
+    ],
+    "ms": 2650
+  },
+  {
+    "binding": "openai",
+    "model": "gpt-5-mini",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "140 models"
+    ],
+    "ms": 894
+  }
+]

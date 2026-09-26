@@ -368,10 +368,10 @@ func tools(ctx context.Context, router *lm15.LMRouter, b binding) (result, []any
 			lm15.KV("date", lm15.JSONObject{lm15.KV("type", "string"), lm15.KV("description", "YYYY-MM-DD")}),
 		}),
 		lm15.KV("required", []any{"location", "date"}),
-		// No additionalProperties: Gemini's functionDeclarations.parameters
-		// is an OpenAPI subset and answers 400 on it (every SDK sends it
-		// there as given; parametersJsonSchema accepts it, observed
-		// 2026-09-26). The tool loop is what this check is about.
+		// OpenAI strict mode wants it; Gemini's OpenAPI parameters field
+		// refuses it, so on Gemini this schema goes as parametersJsonSchema
+		// (MAP-16, 2026-09-26).
+		lm15.KV("additionalProperties", false),
 	}
 	tool := lm15.FunctionTool{Name: "get_forecast", Description: "Weather forecast for a city on a date.", Parameters: params}
 	req := &lm15.Request{Model: b.model, Tools: []lm15.Tool{tool},

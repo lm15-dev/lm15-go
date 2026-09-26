@@ -1,0 +1,148 @@
+{
+  "binding": "anthropic",
+  "check": "order",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "claude-haiku-4-5",
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer in JSON."
+                }
+              ]
+            }
+          ],
+          "stream": false,
+          "max_tokens": 1000,
+          "output_config": {
+            "format": {
+              "type": "json_schema",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reasoning": {
+                    "type": "string",
+                    "description": "Work the problem out step by step before answering."
+                  },
+                  "answer": {
+                    "type": "string",
+                    "description": "The final answer only."
+                  }
+                },
+                "required": [
+                  "reasoning",
+                  "answer"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "headers": {
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json",
+          "x-api-key": "\u003credacted\u003e"
+        },
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages"
+      },
+      "status": 200,
+      "response_headers": {
+        "anthropic-organization-id": "705202b1-79ca-4ef0-9604-08f21cdd602f",
+        "anthropic-ratelimit-input-tokens-limit": "10000000",
+        "anthropic-ratelimit-input-tokens-remaining": "10000000",
+        "anthropic-ratelimit-input-tokens-reset": "2026-09-26T11:44:44Z",
+        "anthropic-ratelimit-output-tokens-limit": "2000000",
+        "anthropic-ratelimit-output-tokens-remaining": "2000000",
+        "anthropic-ratelimit-output-tokens-reset": "2026-09-26T11:44:45Z",
+        "anthropic-ratelimit-requests-limit": "20000",
+        "anthropic-ratelimit-requests-remaining": "19999",
+        "anthropic-ratelimit-requests-reset": "2026-09-26T11:44:43Z",
+        "anthropic-ratelimit-tokens-limit": "12000000",
+        "anthropic-ratelimit-tokens-remaining": "12000000",
+        "anthropic-ratelimit-tokens-reset": "2026-09-26T11:44:44Z",
+        "anthropic-workspace-id": "wrkspc_01VxzyaMjxiUw97skFpL6AjK",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a41204b04cdb5b53-YUL",
+        "connection": "keep-alive",
+        "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 11:44:45 GMT",
+        "request-id": "req_011CfRzaTFayStHy7ypsTEif",
+        "server": "cloudflare",
+        "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+        "traceresponse": "00-6564e7d568b03b9455d28e3b5c53feb5-86212e10c7820d97-01",
+        "vary": "Accept-Encoding",
+        "x-robots-tag": "none"
+      },
+      "body": {
+        "model": "claude-haiku-4-5-20251001",
+        "id": "msg_011CfRzaTbgN5UczBVj3JHho",
+        "type": "message",
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"reasoning\": \"Let me denote the cost of the ball as x dollars. The bat costs $1.00 more than the ball, so the bat costs (x + 1.00) dollars. The total cost is $1.10, so: x + (x + 1.00) = 1.10. Simplifying: 2x + 1.00 = 1.10. Therefore: 2x = 0.10. So: x = 0.05. The ball costs $0.05.\", \"answer\": \"The ball costs $0.05\"}"
+          }
+        ],
+        "container": null,
+        "stop_reason": "end_turn",
+        "stop_sequence": null,
+        "stop_details": null,
+        "usage": {
+          "input_tokens": 235,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "cache_creation": {
+            "ephemeral_5m_input_tokens": 0,
+            "ephemeral_1h_input_tokens": 0
+          },
+          "output_tokens": 133,
+          "service_tier": "standard",
+          "inference_geo": "not_available"
+        },
+        "diagnostics": null
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "msg_011CfRzaTbgN5UczBVj3JHho",
+        "model": "claude-haiku-4-5-20251001",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "{\"reasoning\": \"Let me denote the cost of the ball as x dollars. The bat costs $1.00 more than the ball, so the bat costs (x + 1.00) dollars. The total cost is $1.10, so: x + (x + 1.00) = 1.10. Simplifying: 2x + 1.00 = 1.10. Therefore: 2x = 0.10. So: x = 0.05. The ball costs $0.05.\", \"answer\": \"The ball costs $0.05\"}"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 235,
+          "output_tokens": 133,
+          "total_tokens": 368,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "anthropic:claude-haiku-4-5",
+  "notes": [
+    "the model's JSON keys, in the order written: [reasoning answer]; answer \"The ball costs $0.05\""
+  ],
+  "port": "lm15-go 1.0.0a0",
+  "problems": null,
+  "timestamp": "2026-09-26T11:44:45Z",
+  "verdict": "ok"
+}

@@ -62,7 +62,7 @@ func (l *GeminiLM) liveSetupPayload(config *LiveConfig) (JSONObject, error) {
 	var functions []any
 	for _, t := range config.Tools {
 		if ft, ok := t.(FunctionTool); ok {
-			functions = append(functions, JSONObject{{"name", ft.Name}, {"description", nilIfEmpty(ft.Description)}, {"parameters", ft.EffectiveParameters()}})
+			functions = append(functions, geminiFunctionDeclaration(ft))
 		}
 	}
 	if len(functions) > 0 {

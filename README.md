@@ -6,8 +6,8 @@ names. Zero dependencies (standard library only). Builds for Linux, macOS,
 Windows and `GOOS=js GOARCH=wasm` (the browser).
 
 The contract commit this port is written against is in `CONTRACT_PIN`
-(2026-09-25). At that commit the port passes all 1,492 of the contract's
-cases.
+(2026-09-26). At that commit the port passes all 1,583 of the contract's
+checks.
 
 ## Versions
 
@@ -74,11 +74,12 @@ go build -o bin/lm15-vet ./cmd/lm15-vet     # harness/shims.json runs ./bin/lm15
 cd ../lm15-contract && python3 harness/check.py --shim go --direction all
 ```
 
-Last run (2026-09-25): request 398/398, response 308/308, stream 40/40,
+Last run (2026-09-26): request 400/400, response 310/310, stream 40/40,
 error 90/90, serde 129/129, auth 43/43, token 43/43, models 36/36, live
 24/24, files 48/48, batch 41/41, generation 20/20, video 27/27, cache
-11/11, router 22/22, ingest 169/169, managed (sign-in) 43/43. The request
-and serde directions include the opaque key-order check (INV-002).
+11/11, router 22/22, ingest 169/169, mapping (Gemini schema fields,
+MAP-16) 87/87, managed (sign-in) 43/43. The request and serde directions
+include the opaque key-order check (INV-002).
 Live traffic: `go run ./examples/live_smoke` (keys from the environment;
 `-managed` adds the saved sign-ins, `-control` the sorted-schema control)
 sends real requests and writes receipts; the last run is
@@ -166,6 +167,7 @@ for key, value := range schema.All() { fmt.Println(key, value) } // in order
 schema.Set("title", "Verdict")                 // write: Set (keeps a key's place), Delete
 ```
 
+`fmt.Println(obj)` prints the object as the JSON lm15 would send.
 `Set` and `Delete` copy before they write, so an object you passed to lm15,
 or got back from it, never changes through another copy; to change a nested
 object, change it and `Set` it back. `lm15.ObjectFromMap(m)` converts a Go

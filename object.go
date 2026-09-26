@@ -199,6 +199,17 @@ func asObject(v any) (JSONObject, bool) {
 	return out, true
 }
 
+// String is the object as compact JSON, in member order, so fmt.Println
+// and %v show what would be sent. An object that cannot be written (a
+// repeated key, a value with no JSON form) shows its members instead.
+func (o JSONObject) String() string {
+	b, err := EncodeJSON(o)
+	if err != nil {
+		return fmt.Sprintf("%v", []Member(o))
+	}
+	return string(b)
+}
+
 // MarshalJSON writes the members in order, compactly, without HTML
 // escaping. A repeated key is an error.
 func (o JSONObject) MarshalJSON() ([]byte, error) {

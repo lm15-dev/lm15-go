@@ -3,6 +3,7 @@ package lm15
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -210,5 +211,15 @@ func TestSetInCreatesAndWritesBackEveryLevel(t *testing.T) {
 	want := `{"setup":{"model":"m","realtimeInputConfig":{"automaticActivityDetection":{"disabled":true}},"generationConfig":{"responseModalities":["AUDIO"]}}}`
 	if got := mustEncode(t, o); got != want {
 		t.Fatalf("got  %s\nwant %s", got, want)
+	}
+}
+
+func TestStringIsCompactJSONInOrder(t *testing.T) {
+	o := JSONObject{KV("query", "wood mice"), KV("n", 1)}
+	if got := fmt.Sprint(o); got != `{"query":"wood mice","n":1}` {
+		t.Fatalf("Sprint: %s", got)
+	}
+	if got := fmt.Sprintf("%v", JSONObject{KV("a", 1), KV("a", 2)}); got != "[{a 1} {a 2}]" {
+		t.Fatalf("a repeated key: %s", got)
 	}
 }

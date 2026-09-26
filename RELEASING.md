@@ -25,8 +25,9 @@ retracted, `go get` installs `main` as a pseudo-version; a module pinned to
 
 The port must pass the contract at its `CONTRACT_PIN`
 (`python3 harness/check.py --shim go --direction all` in lm15-contract).
-It does: 1,492 of 1,492 cases at the pin set on 2026-09-25, including the
-opaque key-order check added to the harness that day. The blocker this
+It does: 1,583 of 1,583 checks at the pin set on 2026-09-26, including the
+opaque key-order check (2026-09-25) and the Gemini schema-field vectors
+(MAP-16, 2026-09-26). The blocker this
 section used to name (JSON objects written with sorted keys, which broke 23
 byte-pinned cases and a schema's property order) was fixed by making
 `JSONObject` an ordered type through the decoder and the builders.

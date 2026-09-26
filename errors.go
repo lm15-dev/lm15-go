@@ -513,11 +513,12 @@ type ModelNotFoundForm struct {
 var ModelNotFoundForms = []ModelNotFoundForm{
 	{Code: "not_found_error", Prefix: "model: "},                                    // Anthropic, Claude Code
 	{Code: "invalid_request_error", Contains: "The supported API model names are "}, // DeepSeek
-	{Code: "1211"},                                                                   // Z.AI: Unknown Model
-	{Code: "1214", Prefix: "modelCode: "},                                            // Z.AI: the model field is invalid
-	{Code: "400", Suffix: " is not a valid model ID"},                                // OpenRouter
-	{Code: "invalid-argument", Prefix: "Model not found: "},                          // xAI (2026-09-01)
-	{Code: "validation_error", Contains: "The provided model identifier is invalid"}, // Bedrock Chat
+	{Code: "1211"},                                                                                        // Z.AI: Unknown Model
+	{Code: "1214", Prefix: "modelCode: "},                                                                 // Z.AI: the model field is invalid
+	{Code: "400", Suffix: " is not a valid model ID"},                                                     // OpenRouter
+	{Code: "invalid-argument", Prefix: "Model not found: "},                                               // xAI (2026-09-01)
+	{Code: "validation_error", Contains: "The provided model identifier is invalid"},                      // Bedrock Chat
+	{Code: "invalid_request_error", Prefix: "Deployment ", Suffix: " doesn't exist or isn't accessible."}, // Parasail
 }
 
 // IsPinnedModelNotFound reports whether an error is one of the pinned MAP-15

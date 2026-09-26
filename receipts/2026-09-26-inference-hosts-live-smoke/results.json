@@ -1,0 +1,150 @@
+[
+  {
+    "binding": "deepinfra",
+    "model": "deepinfra:deepseek-ai/DeepSeek-V4.1-Flash",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+    ]
+  },
+  {
+    "binding": "deepinfra",
+    "model": "deepinfra:deepseek-ai/DeepSeek-V4.1-Flash",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [reasoning answer]; answer \"$0.05\""
+    ]
+  },
+  {
+    "binding": "deepinfra",
+    "model": "deepinfra:deepseek-ai/DeepSeek-V4.1-Flash",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+      "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\""
+    ]
+  },
+  {
+    "binding": "deepinfra",
+    "model": "deepinfra:deepseek-ai/DeepSeek-V4.1-Flash",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "187 models"
+    ]
+  },
+  {
+    "binding": "fireworks",
+    "model": "fireworks:accounts/fireworks/models/deepseek-v4p1-flash",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+    ]
+  },
+  {
+    "binding": "fireworks",
+    "model": "fireworks:accounts/fireworks/models/deepseek-v4p1-flash",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [reasoning answer]; answer \"$0.05\""
+    ]
+  },
+  {
+    "binding": "fireworks",
+    "model": "fireworks:accounts/fireworks/models/deepseek-v4p1-flash",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+      "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\""
+    ]
+  },
+  {
+    "binding": "fireworks",
+    "model": "fireworks:accounts/fireworks/models/deepseek-v4p1-flash",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "27 models"
+    ]
+  },
+  {
+    "binding": "parasail",
+    "model": "parasail:meta-llama/Llama-3.3-70B-Instruct",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+    ]
+  },
+  {
+    "binding": "parasail",
+    "model": "parasail:meta-llama/Llama-3.3-70B-Instruct",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [reasoning answer]; answer \"Solving the equation: 2x + $1.00 = $1.10, 2x = $1.10 - $1.00, 2x = $0.10, x = $0.10 / 2, x = $0.05. The ball costs $0.05.\""
+    ]
+  },
+  {
+    "binding": "parasail",
+    "model": "parasail:meta-llama/Llama-3.3-70B-Instruct",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+      "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14 degrees Celsius.\""
+    ]
+  },
+  {
+    "binding": "parasail",
+    "model": "parasail:meta-llama/Llama-3.3-70B-Instruct",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "91 models"
+    ]
+  },
+  {
+    "binding": "together",
+    "model": "together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    "check": "hello",
+    "verdict": "ok",
+    "notes": [
+      "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+    ]
+  },
+  {
+    "binding": "together",
+    "model": "together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    "check": "order",
+    "verdict": "ok",
+    "notes": [
+      "the model's JSON keys, in the order written: [reasoning answer]; answer \"To find the cost of the ball, we solve the equation: 2x + $1.00 = $1.10. Subtract $1.00 from both sides: 2x = $0.10. Divide both sides by 2: x = $0.05. Therefore, the ball costs $0.05.\""
+    ]
+  },
+  {
+    "binding": "together",
+    "model": "together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    "check": "tools",
+    "verdict": "ok",
+    "notes": [
+      "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+      "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14 degrees Celsius.\""
+    ]
+  },
+  {
+    "binding": "together",
+    "model": "together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    "check": "models",
+    "verdict": "ok",
+    "notes": [
+      "272 models"
+    ]
+  }
+]

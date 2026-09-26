@@ -1,0 +1,187 @@
+{
+  "binding": "fireworks",
+  "check": "hello",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "accounts/fireworks/models/deepseek-v4p1-flash",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Reply with exactly the two words: hello world"
+            }
+          ],
+          "max_completion_tokens": 2000
+        },
+        "headers": {
+          "authorization": "<redacted>",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.fireworks.ai/inference/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "connection": "keep-alive",
+        "content-length": "670",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 14:57:14 GMT",
+        "fireworks-cached-prompt-tokens": "0",
+        "fireworks-prompt-tokens": "39",
+        "fireworks-sampling-options": "{\"max_tokens\": 2000, \"temperature\": 1.0, \"top_k\": 0, \"top_p\": 1.0, \"min_p\": 0.0, \"typical_p\": 1.0, \"frequency_penalty\": 0.0, \"presence_penalty\": 0.0, \"repetition_penalty\": 1.0, \"mirostat_target\": null, \"mirostat_lr\": 0.1, \"cycle_multiplier\": 0.0, \"cycle_base\": 0.0, \"cycle_allowed_length\": 0, \"cycle_sequence_breakers\": []}",
+        "fireworks-server-processing-time": "0.365",
+        "fireworks-server-time-to-first-token": "0.140",
+        "fireworks-speculation-prompt-matched-tokens": "0",
+        "server": "istio-envoy",
+        "vary": "Origin",
+        "x-ratelimit-limit-tokens-cache-adjusted-prompt": "1800000",
+        "x-ratelimit-limit-tokens-generated": "72000",
+        "x-ratelimit-limit-tokens-prompt": "7200000",
+        "x-ratelimit-limit-tokens-uncached-prompt": "1800000",
+        "x-ratelimit-over-limit": "no",
+        "x-ratelimit-remaining-tokens-prompt": "7199961",
+        "x-request-id": "chatcmpl-4983621ba6b34fac81bc72fa7c846d77"
+      },
+      "body": {
+        "id": "chatcmpl-4983621ba6b34fac81bc72fa7c846d77",
+        "object": "chat.completion",
+        "created": 1790434634,
+        "model": "accounts/fireworks/models/deepseek-v4p1-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "hello world",
+              "reasoning_content": "We need answer exactly two words: hello world. Need comply. Ensure no punctuation? User says exactly the two words: hello world. So final should be \"hello world\".",
+              "tools": null
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 39,
+          "total_tokens": 78,
+          "completion_tokens": 39,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 35
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 35
+          }
+        }
+      }
+    },
+    {
+      "sent": {
+        "body": {
+          "model": "accounts/fireworks/models/deepseek-v4p1-flash",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Reply with exactly the two words: hello world"
+            }
+          ],
+          "stream": true,
+          "stream_options": {
+            "include_usage": true
+          },
+          "max_completion_tokens": 2000
+        },
+        "headers": {
+          "authorization": "<redacted>",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.fireworks.ai/inference/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "connection": "keep-alive",
+        "content-type": "text/event-stream; charset=utf-8",
+        "date": "Sat, 26 Sep 2026 14:57:15 GMT",
+        "fireworks-prompt-tokens": "39",
+        "fireworks-sampling-options": "{\"max_tokens\": 2000, \"temperature\": 1.0, \"top_k\": 0, \"top_p\": 1.0, \"min_p\": 0.0, \"typical_p\": 1.0, \"frequency_penalty\": 0.0, \"presence_penalty\": 0.0, \"repetition_penalty\": 1.0, \"mirostat_target\": null, \"mirostat_lr\": 0.1, \"cycle_multiplier\": 0.0, \"cycle_base\": 0.0, \"cycle_allowed_length\": 0, \"cycle_sequence_breakers\": []}",
+        "fireworks-server-time-to-first-token": "0.805",
+        "server": "istio-envoy",
+        "vary": "Origin",
+        "x-ratelimit-limit-tokens-cache-adjusted-prompt": "1800000",
+        "x-ratelimit-limit-tokens-generated": "72000",
+        "x-ratelimit-limit-tokens-prompt": "7200000",
+        "x-ratelimit-limit-tokens-uncached-prompt": "1800000",
+        "x-ratelimit-over-limit": "no",
+        "x-ratelimit-remaining-tokens-prompt": "7199961",
+        "x-request-id": "chatcmpl-92b4fc207f8344f1806e2d92642c9cdf"
+      },
+      "body": "data: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"We\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" need\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" answer\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" exactly\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" two\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" words\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\":\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" hello\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" world\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Need\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" comply\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Ensure\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" no\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" punctuation\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"?\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" User\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" says\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Reply\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" with\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" exactly\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" the\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" two\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" words\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\":\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" hello\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" world\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" So\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" final\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" should\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" be\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" \\\"\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"hello\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" world\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"\\\".\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\" Done\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\".\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hello\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world\"},\"finish_reason\":null,\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\",\"raw_output\":null}],\"usage\":null}\n\ndata: {\"id\":\"chatcmpl-92b4fc207f8344f1806e2d92642c9cdf\",\"object\":\"chat.completion.chunk\",\"created\":1790434635,\"model\":\"accounts/fireworks/models/deepseek-v4p1-flash\",\"choices\":[],\"usage\":{\"prompt_tokens\":39,\"total_tokens\":82,\"completion_tokens\":43,\"prompt_tokens_details\":{\"cached_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":39},\"output_tokens_details\":{\"reasoning_tokens\":39}}}\n\ndata: [DONE]\n\n"
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "chatcmpl-4983621ba6b34fac81bc72fa7c846d77",
+        "model": "accounts/fireworks/models/deepseek-v4p1-flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "We need answer exactly two words: hello world. Need comply. Ensure no punctuation? User says exactly the two words: hello world. So final should be \"hello world\"."
+            },
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 39,
+          "output_tokens": 39,
+          "total_tokens": 78,
+          "cache_read_tokens": 0,
+          "reasoning_tokens": 35
+        }
+      }
+    },
+    {
+      "response": {
+        "model": "accounts/fireworks/models/deepseek-v4p1-flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "We need answer exactly two words: hello world. Need comply. Ensure no punctuation? User says Reply with exactly the two words: hello world. So final should be \"hello world\". Done."
+            },
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 39,
+          "output_tokens": 43,
+          "total_tokens": 82,
+          "cache_read_tokens": 0,
+          "reasoning_tokens": 39
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "fireworks:accounts/fireworks/models/deepseek-v4p1-flash",
+  "notes": [
+    "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+  ],
+  "port": "lm15-go 1.1.0-rc.1",
+  "problems": null,
+  "timestamp": "2026-09-26T14:57:15Z",
+  "verdict": "ok"
+}

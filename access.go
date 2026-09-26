@@ -126,6 +126,46 @@ var Meta = AccessPolicy{
 	BaseURL:   OpenAIResponsesPresetBaseURLs["meta"],
 }
 
+// ─── Open-model inference hosts (changes/2026-09-26-inference-hosts-live.md) ───
+// A bearer key each, the provider's own documented variable; batch, files
+// and media endpoints they also sell are not registered.
+
+// DeepInfra is DeepInfra open-model inference (Chat Completions dialect).
+var DeepInfra = AccessPolicy{
+	Provider:  "deepinfra",
+	Supports:  EndpointSupport{Complete: true, Stream: true, Models: true},
+	AuthModes: []string{"bearer"},
+	EnvKeys:   []string{"DEEPINFRA_API_KEY"},
+	BaseURL:   OpenAIChatPresetBaseURLs["deepinfra"],
+}
+
+// Together is Together AI open-model inference (Chat Completions dialect).
+var Together = AccessPolicy{
+	Provider:  "together",
+	Supports:  EndpointSupport{Complete: true, Stream: true, Models: true},
+	AuthModes: []string{"bearer"},
+	EnvKeys:   []string{"TOGETHER_API_KEY"},
+	BaseURL:   OpenAIChatPresetBaseURLs["together"],
+}
+
+// Fireworks is Fireworks AI open-model inference (Chat Completions dialect).
+var Fireworks = AccessPolicy{
+	Provider:  "fireworks",
+	Supports:  EndpointSupport{Complete: true, Stream: true, Models: true},
+	AuthModes: []string{"bearer"},
+	EnvKeys:   []string{"FIREWORKS_API_KEY"},
+	BaseURL:   OpenAIChatPresetBaseURLs["fireworks"],
+}
+
+// Parasail is Parasail open-model inference (Chat Completions dialect).
+var Parasail = AccessPolicy{
+	Provider:  "parasail",
+	Supports:  EndpointSupport{Complete: true, Stream: true, Models: true},
+	AuthModes: []string{"bearer"},
+	EnvKeys:   []string{"PARASAIL_API_KEY"},
+	BaseURL:   OpenAIChatPresetBaseURLs["parasail"],
+}
+
 // Groq is Groq Cloud (Chat Completions dialect).
 var Groq = AccessPolicy{
 	Provider:  "groq",

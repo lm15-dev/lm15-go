@@ -106,11 +106,31 @@ func (l *OpenAIChatLM) modelsRequest() (*TransportRequest, error) {
 }
 
 func (l *OpenAIChatLM) modelsFromBody(body string) ([]ModelInfo, error) {
-	data, err := DecodeJSONObject([]byte(body))
+	// Two catalog shapes are in the wild: OpenAI's {"object": "list", "data":
+	// [...]} and a bare JSON array (Together, live 2026-09-26: 272 entries, no
+	// envelope). Anything else is a malformed reply, never an empty catalog:
+	// reading it as zero models would lose every entry silently.
+	data, err := DecodeJSON([]byte(body))
 	if err != nil {
 		return nil, err
 	}
-	return modelInfosFromEntries(data.Get("data"), l.provider, "openai_chat", func(e JSONObject) string { return stringOnly(e.Get("id")) }), nil
+	var entries any
+	switch v := data.(type) {
+	case []any:
+		entries = v
+	case JSONObject:
+		if list, ok := v.Get("data").([]any); ok {
+			entries = list
+		}
+	}
+	if entries == nil {
+		excerpt := body
+		if len(excerpt) > 200 {
+			excerpt = excerpt[:200]
+		}
+		return nil, providerErrorf(KindProvider, l.provider, nil, "malformed provider reply: a model catalog is {\"data\": [...]} or a JSON array of entries. Body starts: "+strconv.Quote(excerpt))
+	}
+	return modelInfosFromEntries(entries, l.provider, "openai_chat", func(e JSONObject) string { return stringOnly(e.Get("id")) }), nil
 }
 
 // ─── Request serialization ───────────────────────────────────────────
@@ -607,6 +627,21 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool, scope *adaptScope) (JS
 			}
 			r = nil
 		}
+		if r != nil && r.IsOff() && compat.ReasoningOff == "lowest" {
+			// The model cannot stop reasoning and this server accepts the off
+			// word and reasons anyway (compat ReasoningOff): send the lowest
+			// level and say so (MAP-13 §4.2, xAI's rule).
+			lowest := "low"
+			if len(compat.ReasoningEfforts) > 0 {
+				lowest = compat.ReasoningEfforts[0]
+			}
+			if err := scope.substituted("config.reasoning.effort", "this model cannot stop reasoning and the server accepts 'none' and reasons anyway (a paid no-op); the lowest level was sent", "off", lowest); err != nil {
+				return nil, err
+			}
+			rr := *r
+			rr.Effort = lowest
+			r = &rr
+		}
 		if r != nil && !r.IsOff() {
 			rr := *r
 			r = &rr
@@ -720,6 +755,17 @@ func chatFinishReason(raw any, hasToolCall bool, unmapped *[]JSONObject, path st
 	return FinishStop
 }
 
+// cachedTokensFromChat reads the nested count (OpenAI) first, then the flat
+// one some servers report instead (Together's non-reasoning models:
+// usage.cached_tokens, live 2026-09-26). Reading one place only turns a
+// reported 0 into "not reported".
+func cachedTokensFromChat(prompt, u JSONObject) *int {
+	if v := wireIntPtr(prompt.Get("cached_tokens")); v != nil {
+		return v
+	}
+	return wireIntPtr(u.Get("cached_tokens"))
+}
+
 func usageFromChat(u JSONObject) Usage {
 	prompt := wireObj(u.Get("prompt_tokens_details"))
 	completion := wireObj(u.Get("completion_tokens_details"))
@@ -728,7 +774,7 @@ func usageFromChat(u JSONObject) Usage {
 		OutputTokens:      wireIntPtr(u.Get("completion_tokens")),
 		TotalTokens:       wireIntPtr(u.Get("total_tokens")),
 		ReasoningTokens:   wireIntPtr(completion.Get("reasoning_tokens")),
-		CacheReadTokens:   wireIntPtr(prompt.Get("cached_tokens")),
+		CacheReadTokens:   cachedTokensFromChat(prompt, u),
 		CacheWriteTokens:  wireIntPtr(prompt.Get("cache_write_tokens")),
 		InputAudioTokens:  wireIntPtr(prompt.Get("audio_tokens")),
 		OutputAudioTokens: wireIntPtr(completion.Get("audio_tokens")),

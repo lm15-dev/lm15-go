@@ -152,6 +152,7 @@ var chatOverridable = map[string]bool{
 	"instruction_role": true, "max_tokens_field": true, "stream_usage": true, "thinking_format": true, "thinking_replay": true,
 	"assistant_reasoning_content": true, "strict_tools": true, "cache_control": true, "user_field": true,
 	"forced_tool_choice": true, "json_schema": true, "reasoning_efforts": true, "tool_result_media": true, "token_scoring": true,
+	"reasoning_off": true,
 }
 
 // ModelOverride is a per-model-family knob override (first matching prefix wins).
@@ -184,9 +185,16 @@ type OpenAIChatCompat struct {
 	// absent) 2026-09-17; the response-side check catches the latter.
 	TokenScoring     string
 	ReasoningEfforts []string
-	Routing          JSONObject
-	Extensions       JSONObject
-	ModelOverrides   []ModelOverride
+	// ReasoningOff is what an explicit reasoning-off becomes: auto | send |
+	// lowest. "send" puts the dial's off word on the wire (MAP-5). "lowest"
+	// is for a model that cannot stop reasoning on a server that accepts the
+	// off word and reasons anyway: the lowest level (ReasoningEfforts[0],
+	// else "low") is sent and the substitution recorded (MAP-13 §4.2).
+	// Ratified 2026-09-26 (changes/2026-09-26-inference-hosts-live.md).
+	ReasoningOff   string
+	Routing        JSONObject
+	Extensions     JSONObject
+	ModelOverrides []ModelOverride
 }
 
 // ResolvedOpenAIChatCompat is a fully resolved Chat policy.
@@ -207,6 +215,7 @@ type ResolvedOpenAIChatCompat struct {
 	ForcedToolChoice          string
 	JSONSchema                string
 	TokenScoring              string
+	ReasoningOff              string
 	ReasoningEfforts          []string
 	Routing                   JSONObject
 	Extensions                JSONObject
@@ -266,6 +275,8 @@ func (c OpenAIChatCompat) ForModel(model string) OpenAIChatCompat {
 					out.ToolResultMedia = value
 				case "token_scoring":
 					out.TokenScoring = value
+				case "reasoning_off":
+					out.ReasoningOff = value
 				case "reasoning_efforts":
 					out.ReasoningEfforts = strings.Split(value, ",")
 				}
@@ -295,6 +306,7 @@ func ResolveOpenAIChatCompat(p OpenAIChatCompat) ResolvedOpenAIChatCompat {
 		ForcedToolChoice:          pick(p.ForcedToolChoice, "send"),
 		JSONSchema:                pick(p.JSONSchema, "send"),
 		TokenScoring:              pick(p.TokenScoring, "none"),
+		ReasoningOff:              pick(p.ReasoningOff, "send"),
 		ReasoningEfforts:          p.ReasoningEfforts,
 		Routing:                   p.Routing,
 		Extensions:                p.Extensions,
@@ -334,6 +346,60 @@ var openaiChatPresets = map[string]OpenAIChatCompat{
 	"zai":        {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "deepseek", ThinkingReplay: "native", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", UserField: "user_id", ForcedToolChoice: "reject", JSONSchema: "reject", ToolResultMedia: "images"},
 	"meta":       {InstructionRole: "developer", MaxTokensField: "max_completion_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ToolResultName: "omit", StrictTools: "omit", CacheControl: "openai_implicit", UserField: "safety_identifier", ToolResultMedia: "reject"},
 	"moonshotai": {InstructionRole: "system", MaxTokensField: "max_completion_tokens", StreamUsage: "include", ThinkingFormat: "kimi", ThinkingReplay: "native", ToolResultName: "omit", StrictTools: "omit", CacheControl: "openai_implicit", UserField: "safety_identifier", ReasoningEfforts: []string{"low", "high", "max"}, ToolResultMedia: "images"},
+	// ─── Open-model inference hosts (lm15-contract changes/2026-09-26-inference-hosts-live.md) ───
+	// One policy for the four, each knob receipted live 2026-09-26: the
+	// reasoning_effort dial (Fireworks refuses the `reasoning` object);
+	// reasoning replayed as reasoning_content (a planted code word was
+	// recalled through it; Fireworks refuses `reasoning`); max_completion_tokens
+	// and stream usage honoured; caching automatic, so a key or long
+	// retention is dropped with a record. Per-model rules, each pinned by a case.
+	//
+	// DeepInfra: 422 on media in a tool row; a forced tool choice goes only to
+	// the 14 models a survey showed honour it (research/providers/deepinfra/
+	// tool_choice_survey.py), refused elsewhere (MAP-8, ratified 2026-09-26).
+	"deepinfra": inferenceHost("reject", "reject", deepinfraOverrides()),
+	// Together, gpt-oss: a forced tool choice answers 500 (retryable: refused
+	// before the wire); xhigh/max/unknown words run at medium (clamped,
+	// recorded); `none` accepted and reasoning still billed (lowest level
+	// instead). GLM-5.3 ignores `none`. Media in tool rows: open cell.
+	"together": inferenceHost("reject", "", []ModelOverride{
+		{Prefix: "openai/gpt-oss", Knobs: map[string]string{"forced_tool_choice": "reject", "reasoning_efforts": "low,medium,high", "reasoning_off": "lowest"}},
+		{Prefix: "zai-org/GLM-5.3", Knobs: map[string]string{"reasoning_off": "lowest"}},
+	}),
+	"fireworks": inferenceHost("images", "", nil), // MAP-10: image read (GLM-5.3-Flash)
+	"parasail":  inferenceHost("images", "", nil), // MAP-10: image read (Qwen3-VL-8B)
+}
+
+// DeepInfraForcedToolChoice lists the DeepInfra models measured to honour a
+// forced tool choice (survey of 24, 2026-09-26); each id is a prefix, so a
+// suffixed variant (-0731, -Turbo) inherits its entry.
+var DeepInfraForcedToolChoice = []string{
+	"deepseek-ai/DeepSeek-V3.2",
+	"deepseek-ai/DeepSeek-V4-Flash",
+	"deepseek-ai/DeepSeek-V4.1-Flash",
+	"zai-org/GLM-5.3-Flash",
+	"moonshotai/Kimi-K2.6",
+	"meta-llama/Llama-4-Scout-17B-16E-Instruct",
+	"Qwen/Qwen3.6-27B",
+	"Qwen/Qwen3-Next-80B-A3B-Instruct",
+	"nvidia/NVIDIA-Nemotron-3.5-Lightning",
+	"ibm-granite/granite-4.2-8b",
+	"XiaomiMiMo/MiMo-V2.6-Flash",
+	"tencent/Hy3",
+	"google/gemini-3.1-flash-lite",
+	"anthropic/claude-haiku-4-5",
+}
+
+func deepinfraOverrides() []ModelOverride {
+	out := []ModelOverride{{Prefix: "openai/gpt-oss", Knobs: map[string]string{"reasoning_off": "lowest"}}}
+	for _, model := range DeepInfraForcedToolChoice {
+		out = append(out, ModelOverride{Prefix: model, Knobs: map[string]string{"forced_tool_choice": "send"}})
+	}
+	return out
+}
+
+func inferenceHost(toolResultMedia, forcedToolChoice string, overrides []ModelOverride) OpenAIChatCompat {
+	return OpenAIChatCompat{InstructionRole: "system", MaxTokensField: "max_completion_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ThinkingReplay: "native", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ForcedToolChoice: forcedToolChoice, ToolResultMedia: toolResultMedia, ModelOverrides: overrides}
 }
 
 // OpenAIChatPresetBaseURLs are the addresses the Chat presets name.
@@ -350,6 +416,12 @@ var OpenAIChatPresetBaseURLs = map[string]string{
 	"zai":        "https://api.z.ai/api/paas/v4",
 	"meta":       "https://api.meta.ai/v1",
 	"moonshotai": "https://api.moonshot.ai/v1",
+	// The open-model inference hosts, each its documented OpenAI-compatible
+	// root (DeepInfra: the /v1/openai root, not /v1).
+	"deepinfra": "https://api.deepinfra.com/v1/openai",
+	"together":  "https://api.together.ai/v1",
+	"fireworks": "https://api.fireworks.ai/inference/v1",
+	"parasail":  "https://api.parasail.io/v1",
 }
 
 // OpenAIChatPreset returns the named Chat preset.
@@ -388,6 +460,7 @@ func MergeOpenAIChatCompat(base OpenAIChatCompat, override *OpenAIChatCompat) Op
 	ov(&out.ForcedToolChoice, override.ForcedToolChoice)
 	ov(&out.JSONSchema, override.JSONSchema)
 	ov(&out.TokenScoring, override.TokenScoring)
+	ov(&out.ReasoningOff, override.ReasoningOff)
 	if override.ReasoningEfforts != nil {
 		out.ReasoningEfforts = override.ReasoningEfforts
 	}

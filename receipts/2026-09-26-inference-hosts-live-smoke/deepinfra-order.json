@@ -1,0 +1,129 @@
+{
+  "binding": "deepinfra",
+  "check": "order",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "deepseek-ai/DeepSeek-V4.1-Flash",
+          "messages": [
+            {
+              "role": "user",
+              "content": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer in JSON."
+            }
+          ],
+          "max_completion_tokens": 2000,
+          "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+              "name": "worked_answer",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reasoning": {
+                    "type": "string",
+                    "description": "Work the problem out step by step before answering."
+                  },
+                  "answer": {
+                    "type": "string",
+                    "description": "The final answer only."
+                  }
+                },
+                "required": [
+                  "reasoning",
+                  "answer"
+                ],
+                "additionalProperties": false
+              },
+              "strict": true
+            }
+          }
+        },
+        "headers": {
+          "authorization": "<redacted>",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.deepinfra.com/v1/openai/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "connection": "keep-alive",
+        "content-length": "690",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 14:57:06 GMT",
+        "server": "uvicorn",
+        "x-request-id": "RhKqf1b6jtusxWgAGfpxtu4B",
+        "x-robots-tag": "noindex"
+      },
+      "body": {
+        "service_tier": "default",
+        "id": "chatcmpl-RhKqf1b6jtusxWgAGfpxtu4B",
+        "object": "chat.completion",
+        "created": 1790434626,
+        "model": "deepseek-ai/DeepSeek-V4.1-Flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "{\"reasoning\": \"Let ball cost x. Bat costs x + 1.00. Total: x + (x + 1.00) = 1.10. So 2x + 1.00 = 1.10, 2x = 0.10, x = 0.05.\", \"answer\": \"$0.05\"}",
+              "reasoning_content": null,
+              "name": null,
+              "tool_calls": null
+            },
+            "finish_reason": "stop",
+            "logprobs": null
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 40,
+          "total_tokens": 117,
+          "completion_tokens": 77,
+          "estimated_cost": 3.794e-05,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": null
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        }
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "chatcmpl-RhKqf1b6jtusxWgAGfpxtu4B",
+        "model": "deepseek-ai/DeepSeek-V4.1-Flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "{\"reasoning\": \"Let ball cost x. Bat costs x + 1.00. Total: x + (x + 1.00) = 1.10. So 2x + 1.00 = 1.10, 2x = 0.10, x = 0.05.\", \"answer\": \"$0.05\"}"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 40,
+          "output_tokens": 77,
+          "total_tokens": 117,
+          "cache_read_tokens": 0,
+          "reasoning_tokens": 0
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "deepinfra:deepseek-ai/DeepSeek-V4.1-Flash",
+  "notes": [
+    "the model's JSON keys, in the order written: [reasoning answer]; answer \"$0.05\""
+  ],
+  "port": "lm15-go 1.1.0-rc.1",
+  "problems": null,
+  "timestamp": "2026-09-26T14:57:06Z",
+  "verdict": "ok"
+}

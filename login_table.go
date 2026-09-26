@@ -36,7 +36,8 @@ var serviceLabels = map[string]string{
 	"moonshotai-responses": "Moonshot AI", "kimi-code": "Moonshot AI", "deepseek": "DeepSeek",
 	"deepseek-anthropic": "DeepSeek", "groq": "Groq", "openrouter": "OpenRouter", "xai": "xAI",
 	"zai": "Z.AI", "typesafe": "TypeSafe", "ollama": "Local", "vllm": "Local", "sglang": "Local",
-	"github-copilot": "GitHub",
+	"github-copilot": "GitHub", "deepinfra": "DeepInfra", "together": "Together AI", "fireworks": "Fireworks AI",
+	"parasail": "Parasail",
 }
 
 func recipeMethod(id, label, kind, flow string, fields []MethodField, note string) LoginMethod {

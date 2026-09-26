@@ -1,0 +1,131 @@
+{
+  "binding": "together",
+  "check": "order",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+          "messages": [
+            {
+              "role": "user",
+              "content": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer in JSON."
+            }
+          ],
+          "max_completion_tokens": 1000,
+          "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+              "name": "worked_answer",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reasoning": {
+                    "type": "string",
+                    "description": "Work the problem out step by step before answering."
+                  },
+                  "answer": {
+                    "type": "string",
+                    "description": "The final answer only."
+                  }
+                },
+                "required": [
+                  "reasoning",
+                  "answer"
+                ],
+                "additionalProperties": false
+              },
+              "strict": true
+            }
+          }
+        },
+        "headers": {
+          "authorization": "<redacted>",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.together.ai/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a4131e98dc16a2bc-YUL",
+        "connection": "keep-alive",
+        "content-length": "994",
+        "content-type": "application/json; charset=utf-8",
+        "date": "Sat, 26 Sep 2026 14:57:12 GMT",
+        "etag": "W/\"3e2-5ltwcoRArnlAFLQlkKyvB0ys5vY\"",
+        "server": "cloudflare",
+        "strict-transport-security": "max-age=2592000; includeSubDomains",
+        "x-amzn-trace-id": "ff5d8d65-b685-4713-a0cc-5a46ad81b55f-noamzn",
+        "x-api-call-end": "2026-09-26T14:57:12.187Z",
+        "x-api-call-start": "2026-09-26T14:57:10.586Z",
+        "x-api-received": "2026-09-26T14:57:10.563Z",
+        "x-content-type-options": "nosniff",
+        "x-inference-version": "v2",
+        "x-request-id": "p2qaUru-4YNCb4-a4131e98dc16a2bc"
+      },
+      "body": {
+        "id": "p2qaUru-4YNCb4-a4131e98dc16a2bc",
+        "object": "chat.completion",
+        "created": 1790434630,
+        "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        "prompt": [],
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "seed": 12537936940068153000,
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "role": "assistant",
+              "content": "{\"reasoning\": \"Let's denote the cost of the ball as x. Since the bat costs $1.00 more than the ball, the cost of the bat is x + $1.00. The total cost of the bat and the ball together is $1.10. So, we can set up the equation: x + (x + $1.00) = $1.10.\", \"answer\": \"To find the cost of the ball, we solve the equation: 2x + $1.00 = $1.10. Subtract $1.00 from both sides: 2x = $0.10. Divide both sides by 2: x = $0.05. Therefore, the ball costs $0.05.\"}",
+              "tool_calls": []
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 71,
+          "completion_tokens": 159,
+          "total_tokens": 230,
+          "cached_tokens": 0
+        }
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "p2qaUru-4YNCb4-a4131e98dc16a2bc",
+        "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "{\"reasoning\": \"Let's denote the cost of the ball as x. Since the bat costs $1.00 more than the ball, the cost of the bat is x + $1.00. The total cost of the bat and the ball together is $1.10. So, we can set up the equation: x + (x + $1.00) = $1.10.\", \"answer\": \"To find the cost of the ball, we solve the equation: 2x + $1.00 = $1.10. Subtract $1.00 from both sides: 2x = $0.10. Divide both sides by 2: x = $0.05. Therefore, the ball costs $0.05.\"}"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 71,
+          "output_tokens": 159,
+          "total_tokens": 230,
+          "cache_read_tokens": 0
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
+  "notes": [
+    "the model's JSON keys, in the order written: [reasoning answer]; answer \"To find the cost of the ball, we solve the equation: 2x + $1.00 = $1.10. Subtract $1.00 from both sides: 2x = $0.10. Divide both sides by 2: x = $0.05. Therefore, the ball costs $0.05.\""
+  ],
+  "port": "lm15-go 1.1.0-rc.1",
+  "problems": null,
+  "timestamp": "2026-09-26T14:57:12Z",
+  "verdict": "ok"
+}

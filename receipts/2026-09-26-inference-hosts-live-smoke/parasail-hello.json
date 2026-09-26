@@ -1,0 +1,181 @@
+{
+  "binding": "parasail",
+  "check": "hello",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "meta-llama/Llama-3.3-70B-Instruct",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Reply with exactly the two words: hello world"
+            }
+          ],
+          "max_completion_tokens": 1000
+        },
+        "headers": {
+          "authorization": "<redacted>",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.parasail.io/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "cache-control": "no-cache, no-store, max-age=0, must-revalidate",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 14:57:19 GMT",
+        "expires": "0",
+        "pragma": "no-cache",
+        "strict-transport-security": "max-age=31536000 ; includeSubDomains",
+        "vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "x-parasail-request-id": "b6d87aacd0d99e00df0d68a096bead56",
+        "x-parasail-tier": "tier-1",
+        "x-request-id": "b6d87aacd0d99e00df0d68a096bead56",
+        "x-xss-protection": "0"
+      },
+      "body": {
+        "id": "chatcmpl-b6d87aacd0d99e00df0d68a096bead56",
+        "object": "chat.completion",
+        "created": 1790434640,
+        "model": "meta-llama/Llama-3.3-70B-Instruct",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "hello world",
+              "refusal": null,
+              "annotations": null,
+              "audio": null,
+              "function_call": null,
+              "reasoning": null
+            },
+            "logprobs": null,
+            "finish_reason": "stop",
+            "stop_reason": null,
+            "token_ids": null,
+            "routed_experts": null
+          }
+        ],
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "prompt_tokens": 44,
+          "total_tokens": 47,
+          "completion_tokens": 3,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "created_cache_tokens": 32,
+            "multimodal_tokens": null
+          },
+          "completion_tokens_details": null
+        },
+        "prompt_logprobs": null,
+        "prompt_token_ids": null,
+        "prompt_text": null,
+        "kv_transfer_params": null,
+        "ec_transfer_params": null,
+        "metrics": null
+      }
+    },
+    {
+      "sent": {
+        "body": {
+          "model": "meta-llama/Llama-3.3-70B-Instruct",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Reply with exactly the two words: hello world"
+            }
+          ],
+          "stream": true,
+          "stream_options": {
+            "include_usage": true
+          },
+          "max_completion_tokens": 1000
+        },
+        "headers": {
+          "authorization": "<redacted>",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.parasail.io/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "cache-control": "no-cache, no-store, max-age=0, must-revalidate",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 14:57:21 GMT",
+        "expires": "0",
+        "pragma": "no-cache",
+        "strict-transport-security": "max-age=31536000 ; includeSubDomains",
+        "vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "x-parasail-request-id": "5195f2742c13d0bde7f63381b2e4c8c4",
+        "x-parasail-tier": "tier-1",
+        "x-request-id": "5195f2742c13d0bde7f63381b2e4c8c4",
+        "x-xss-protection": "0"
+      },
+      "body": "data: {\"id\":\"chatcmpl-5195f2742c13d0bde7f63381b2e4c8c4\",\"object\":\"chat.completion.chunk\",\"created\":1790434641,\"model\":\"meta-llama/Llama-3.3-70B-Instruct\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"logprobs\":null,\"finish_reason\":null}],\"prompt_token_ids\":null,\"prompt_text\":null}\n\ndata: {\"id\":\"chatcmpl-5195f2742c13d0bde7f63381b2e4c8c4\",\"object\":\"chat.completion.chunk\",\"created\":1790434641,\"model\":\"meta-llama/Llama-3.3-70B-Instruct\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hello\"},\"logprobs\":null,\"finish_reason\":null,\"token_ids\":null}]}\n\ndata: {\"id\":\"chatcmpl-5195f2742c13d0bde7f63381b2e4c8c4\",\"object\":\"chat.completion.chunk\",\"created\":1790434641,\"model\":\"meta-llama/Llama-3.3-70B-Instruct\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\" world\"},\"logprobs\":null,\"finish_reason\":\"stop\",\"stop_reason\":null,\"token_ids\":null}]}\n\ndata: {\"id\":\"chatcmpl-5195f2742c13d0bde7f63381b2e4c8c4\",\"object\":\"chat.completion.chunk\",\"created\":1790434641,\"model\":\"meta-llama/Llama-3.3-70B-Instruct\",\"choices\":[],\"usage\":{\"prompt_tokens\":44,\"total_tokens\":47,\"completion_tokens\":3,\"prompt_tokens_details\":{\"cached_tokens\":16,\"created_cache_tokens\":16}}}\n\ndata: [DONE]\n\n"
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "chatcmpl-b6d87aacd0d99e00df0d68a096bead56",
+        "model": "meta-llama/Llama-3.3-70B-Instruct",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 44,
+          "output_tokens": 3,
+          "total_tokens": 47,
+          "cache_read_tokens": 0
+        }
+      }
+    },
+    {
+      "response": {
+        "model": "meta-llama/Llama-3.3-70B-Instruct",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 44,
+          "output_tokens": 3,
+          "total_tokens": 47,
+          "cache_read_tokens": 16
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "parasail:meta-llama/Llama-3.3-70B-Instruct",
+  "notes": [
+    "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+  ],
+  "port": "lm15-go 1.1.0-rc.1",
+  "problems": null,
+  "timestamp": "2026-09-26T14:57:22Z",
+  "verdict": "ok"
+}

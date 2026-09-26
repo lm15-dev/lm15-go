@@ -1,0 +1,143 @@
+{
+  "binding": "fireworks",
+  "check": "order",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "accounts/fireworks/models/deepseek-v4p1-flash",
+          "messages": [
+            {
+              "role": "user",
+              "content": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer in JSON."
+            }
+          ],
+          "max_completion_tokens": 2000,
+          "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+              "name": "worked_answer",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reasoning": {
+                    "type": "string",
+                    "description": "Work the problem out step by step before answering."
+                  },
+                  "answer": {
+                    "type": "string",
+                    "description": "The final answer only."
+                  }
+                },
+                "required": [
+                  "reasoning",
+                  "answer"
+                ],
+                "additionalProperties": false
+              },
+              "strict": true
+            }
+          }
+        },
+        "headers": {
+          "authorization": "<redacted>",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.fireworks.ai/inference/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "connection": "keep-alive",
+        "content-length": "925",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 14:57:17 GMT",
+        "fireworks-cached-prompt-tokens": "0",
+        "fireworks-prompt-tokens": "150",
+        "fireworks-sampling-options": "{\"max_tokens\": 2000, \"temperature\": 1.0, \"top_k\": 0, \"top_p\": 1.0, \"min_p\": 0.0, \"typical_p\": 1.0, \"frequency_penalty\": 0.0, \"presence_penalty\": 0.0, \"repetition_penalty\": 1.0, \"mirostat_target\": null, \"mirostat_lr\": 0.1, \"cycle_multiplier\": 0.0, \"cycle_base\": 0.0, \"cycle_allowed_length\": 0, \"cycle_sequence_breakers\": []}",
+        "fireworks-server-processing-time": "1.889",
+        "fireworks-server-time-to-first-token": "0.313",
+        "fireworks-speculation-prompt-matched-tokens": "0",
+        "server": "istio-envoy",
+        "vary": "Origin",
+        "x-ratelimit-limit-tokens-cache-adjusted-prompt": "1800000",
+        "x-ratelimit-limit-tokens-generated": "72000",
+        "x-ratelimit-limit-tokens-prompt": "7200000",
+        "x-ratelimit-limit-tokens-uncached-prompt": "1800000",
+        "x-ratelimit-over-limit": "no",
+        "x-ratelimit-remaining-tokens-prompt": "7199850",
+        "x-request-id": "chatcmpl-59a48a00f69940a38d836e3500d796d7"
+      },
+      "body": {
+        "id": "chatcmpl-59a48a00f69940a38d836e3500d796d7",
+        "object": "chat.completion",
+        "created": 1790434636,
+        "model": "accounts/fireworks/models/deepseek-v4p1-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "{\"reasoning\":\"Let the ball cost x dollars. The bat costs x + 1.00 dollars. Together: x + (x + 1.00) = 1.10. So 2x + 1.00 = 1.10, giving 2x = 0.10, and x = 0.05. Therefore, the ball costs $0.05.\",\"answer\":\"$0.05\"}",
+              "reasoning_content": "We need answer classic. Need comply JSON schema with reasoning and answer. Ball cost x, bat x+1, total 2x+1=1.10 => x=0.05. Final answer in JSON. Need ensure answer string maybe \"$0.05\". Include reasoning.",
+              "tools": null
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 150,
+          "total_tokens": 301,
+          "completion_tokens": 151,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 58
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 58
+          }
+        }
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "chatcmpl-59a48a00f69940a38d836e3500d796d7",
+        "model": "accounts/fireworks/models/deepseek-v4p1-flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "We need answer classic. Need comply JSON schema with reasoning and answer. Ball cost x, bat x+1, total 2x+1=1.10 => x=0.05. Final answer in JSON. Need ensure answer string maybe \"$0.05\". Include reasoning."
+            },
+            {
+              "type": "text",
+              "text": "{\"reasoning\":\"Let the ball cost x dollars. The bat costs x + 1.00 dollars. Together: x + (x + 1.00) = 1.10. So 2x + 1.00 = 1.10, giving 2x = 0.10, and x = 0.05. Therefore, the ball costs $0.05.\",\"answer\":\"$0.05\"}"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 150,
+          "output_tokens": 151,
+          "total_tokens": 301,
+          "cache_read_tokens": 0,
+          "reasoning_tokens": 58
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "fireworks:accounts/fireworks/models/deepseek-v4p1-flash",
+  "notes": [
+    "the model's JSON keys, in the order written: [reasoning answer]; answer \"$0.05\""
+  ],
+  "port": "lm15-go 1.1.0-rc.1",
+  "problems": null,
+  "timestamp": "2026-09-26T14:57:17Z",
+  "verdict": "ok"
+}

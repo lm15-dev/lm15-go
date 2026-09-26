@@ -1,0 +1,171 @@
+{
+  "binding": "together",
+  "check": "hello",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Reply with exactly the two words: hello world"
+            }
+          ],
+          "max_completion_tokens": 1000
+        },
+        "headers": {
+          "authorization": "<redacted>",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.together.ai/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a4131e93ed90a2bc-YUL",
+        "connection": "keep-alive",
+        "content-length": "543",
+        "content-type": "application/json; charset=utf-8",
+        "date": "Sat, 26 Sep 2026 14:57:10 GMT",
+        "etag": "W/\"21f-axphukcE8eEj+/Psh3NKGe7huEA\"",
+        "server": "cloudflare",
+        "strict-transport-security": "max-age=2592000; includeSubDomains",
+        "x-amzn-trace-id": "b1bddc6b-1912-44cb-80fe-812e660008bd-noamzn",
+        "x-api-call-end": "2026-09-26T14:57:10.083Z",
+        "x-api-call-start": "2026-09-26T14:57:09.965Z",
+        "x-api-received": "2026-09-26T14:57:09.943Z",
+        "x-content-type-options": "nosniff",
+        "x-inference-version": "v2",
+        "x-request-id": "p2qaUgE-fdNmn-a4131e93ed90a2bc"
+      },
+      "body": {
+        "id": "p2qaUgE-fdNmn-a4131e93ed90a2bc",
+        "object": "chat.completion",
+        "created": 1790434629,
+        "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        "prompt": [],
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "seed": 7055150856296220000,
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "role": "assistant",
+              "content": "hello world",
+              "tool_calls": []
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 44,
+          "completion_tokens": 3,
+          "total_tokens": 47,
+          "cached_tokens": 0
+        }
+      }
+    },
+    {
+      "sent": {
+        "body": {
+          "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Reply with exactly the two words: hello world"
+            }
+          ],
+          "stream": true,
+          "stream_options": {
+            "include_usage": true
+          },
+          "max_completion_tokens": 1000
+        },
+        "headers": {
+          "authorization": "<redacted>",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.together.ai/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "access-control-allow-origin": "*",
+        "alt-svc": "h3=\":443\"; ma=86400",
+        "cache-control": "no-cache, no-transform",
+        "cf-cache-status": "DYNAMIC",
+        "cf-ray": "a4131e9688dca2bc-YUL",
+        "connection": "keep-alive",
+        "content-type": "text/event-stream;charset=utf-8",
+        "date": "Sat, 26 Sep 2026 14:57:10 GMT",
+        "server": "cloudflare",
+        "strict-transport-security": "max-age=2592000; includeSubDomains",
+        "x-amzn-trace-id": "ffadaa06-d5ca-45b2-8662-bae6bc2d9a7c-noamzn",
+        "x-api-call-start": "2026-09-26T14:57:10.263Z",
+        "x-api-received": "2026-09-26T14:57:10.247Z",
+        "x-content-type-options": "nosniff",
+        "x-inference-version": "v2",
+        "x-request-id": "p2qaUmU-fdNmn-a4131e9688dca2bc"
+      },
+      "body": "data: {\"id\":\"p2qaUmU-fdNmn-a4131e9688dca2bc\",\"object\":\"chat.completion.chunk\",\"created\":1790434630,\"choices\":[{\"index\":0,\"text\":\"hello\",\"logprobs\":null,\"finish_reason\":null,\"seed\":null,\"delta\":{\"token_id\":15339,\"role\":\"assistant\",\"content\":\"hello\"}}],\"model\":\"meta-llama/Llama-3.3-70B-Instruct-Turbo\",\"usage\":null}\n\ndata: {\"id\":\"p2qaUmU-fdNmn-a4131e9688dca2bc\",\"object\":\"chat.completion.chunk\",\"created\":1790434630,\"choices\":[{\"index\":0,\"text\":\" world\",\"logprobs\":null,\"finish_reason\":null,\"seed\":null,\"delta\":{\"token_id\":1917,\"role\":\"assistant\",\"content\":\" world\"}}],\"model\":\"meta-llama/Llama-3.3-70B-Instruct-Turbo\",\"usage\":null}\n\ndata: {\"id\":\"p2qaUmU-fdNmn-a4131e9688dca2bc\",\"object\":\"chat.completion.chunk\",\"created\":1790434630,\"choices\":[{\"index\":0,\"text\":\"\",\"logprobs\":null,\"finish_reason\":\"stop\",\"seed\":5874020680663148000,\"delta\":{\"token_id\":128009,\"role\":\"assistant\",\"content\":\"\"}}],\"model\":\"meta-llama/Llama-3.3-70B-Instruct-Turbo\",\"usage\":{\"prompt_tokens\":44,\"completion_tokens\":3,\"total_tokens\":47,\"cached_tokens\":0}}\n\ndata: [DONE]\n\n"
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "p2qaUgE-fdNmn-a4131e93ed90a2bc",
+        "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 44,
+          "output_tokens": 3,
+          "total_tokens": 47,
+          "cache_read_tokens": 0
+        }
+      }
+    },
+    {
+      "response": {
+        "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 44,
+          "output_tokens": 3,
+          "total_tokens": 47,
+          "cache_read_tokens": 0
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "together:meta-llama/Llama-3.3-70B-Instruct-Turbo",
+  "notes": [
+    "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+  ],
+  "port": "lm15-go 1.1.0-rc.1",
+  "problems": null,
+  "timestamp": "2026-09-26T14:57:10Z",
+  "verdict": "ok"
+}

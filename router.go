@@ -1229,6 +1229,7 @@ var LitellmProviderPrefixes = map[string]string{
 	"openai": "openai-chat", "anthropic": "anthropic", "gemini": "gemini", "groq": "groq", "openrouter": "openrouter",
 	"deepseek": "deepseek", "xai": "xai", "ollama": "ollama", "ollama_chat": "ollama", "hosted_vllm": "vllm",
 	"moonshot": "moonshotai", "azure": "azure-chat",
+	"deepinfra": "deepinfra", "together_ai": "together", "fireworks_ai": "fireworks", "parasail": "parasail",
 }
 
 var clientKeywords = map[string]string{

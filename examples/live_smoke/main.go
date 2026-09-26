@@ -191,6 +191,12 @@ var apiKeyBindings = []binding{
 	{name: "zai", envKey: "ZAI_API_KEY", model: "zai:glm-5.3-flash", tokens: 2000},
 	{name: "meta", envKey: "META_API_KEY", model: "meta:muse-spark-1.3", tokens: 2000},
 	{name: "moonshotai", envKey: "MOONSHOTAI_API_KEY", model: "moonshotai:kimi-k3", tokens: 2000},
+	// Open-model inference hosts (lm15-contract changes/2026-09-26-inference-hosts-live.md);
+	// each model honours json_schema and tool calls on its host (live 2026-09-26).
+	{name: "deepinfra", envKey: "DEEPINFRA_API_KEY", model: "deepinfra:deepseek-ai/DeepSeek-V4.1-Flash", tokens: 2000},
+	{name: "together", envKey: "TOGETHER_API_KEY", model: "together:meta-llama/Llama-3.3-70B-Instruct-Turbo", tokens: 1000},
+	{name: "fireworks", envKey: "FIREWORKS_API_KEY", model: "fireworks:accounts/fireworks/models/deepseek-v4p1-flash", tokens: 2000},
+	{name: "parasail", envKey: "PARASAIL_API_KEY", model: "parasail:meta-llama/Llama-3.3-70B-Instruct", tokens: 1000},
 	{name: "typesafe", envKey: "TYPESAFE_API_KEY", model: "typesafe:jev-latest", judgment: true},
 }
 

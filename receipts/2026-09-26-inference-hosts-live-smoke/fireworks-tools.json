@@ -1,0 +1,307 @@
+{
+  "binding": "fireworks",
+  "check": "tools",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "accounts/fireworks/models/deepseek-v4p1-flash",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Use the tool: what is the forecast for Montreal on 2026-10-01? Then answer in one sentence."
+            }
+          ],
+          "max_completion_tokens": 2000,
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "get_forecast",
+                "description": "Weather forecast for a city on a date.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "string",
+                      "description": "City name"
+                    },
+                    "date": {
+                      "type": "string",
+                      "description": "YYYY-MM-DD"
+                    }
+                  },
+                  "required": [
+                    "location",
+                    "date"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          ]
+        },
+        "headers": {
+          "authorization": "<redacted>",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.fireworks.ai/inference/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "connection": "keep-alive",
+        "content-length": "780",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 14:57:18 GMT",
+        "fireworks-cached-prompt-tokens": "0",
+        "fireworks-prompt-tokens": "350",
+        "fireworks-sampling-options": "{\"max_tokens\": 2000, \"temperature\": 1.0, \"top_k\": 0, \"top_p\": 1.0, \"min_p\": 0.0, \"typical_p\": 1.0, \"frequency_penalty\": 0.0, \"presence_penalty\": 0.0, \"repetition_penalty\": 1.0, \"mirostat_target\": null, \"mirostat_lr\": 0.1, \"cycle_multiplier\": 0.0, \"cycle_base\": 0.0, \"cycle_allowed_length\": 0, \"cycle_sequence_breakers\": []}",
+        "fireworks-server-processing-time": "0.690",
+        "fireworks-server-time-to-first-token": "0.165",
+        "fireworks-speculation-prompt-matched-tokens": "0",
+        "server": "istio-envoy",
+        "vary": "Origin",
+        "x-ratelimit-limit-tokens-cache-adjusted-prompt": "1800000",
+        "x-ratelimit-limit-tokens-generated": "72000",
+        "x-ratelimit-limit-tokens-prompt": "7200000",
+        "x-ratelimit-limit-tokens-uncached-prompt": "1800000",
+        "x-ratelimit-over-limit": "no",
+        "x-ratelimit-remaining-tokens-prompt": "7199650",
+        "x-request-id": "chatcmpl-6f508f66f83f4557b851b68662b45c78"
+      },
+      "body": {
+        "id": "chatcmpl-6f508f66f83f4557b851b68662b45c78",
+        "object": "chat.completion",
+        "created": 1790434638,
+        "model": "accounts/fireworks/models/deepseek-v4p1-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "",
+              "reasoning_content": "The user wants me to call the tool with location Montreal and date 2026-10-01.",
+              "tool_calls": [
+                {
+                  "index": 0,
+                  "id": "chatcmpl-tool-b51e100a9149f8fc",
+                  "type": "function",
+                  "function": {
+                    "name": "get_forecast",
+                    "arguments": "{\"location\": \"Montreal\", \"date\": \"2026-10-01\"}"
+                  },
+                  "name": null
+                }
+              ],
+              "tools": null
+            },
+            "finish_reason": "tool_calls"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 350,
+          "total_tokens": 434,
+          "completion_tokens": 84,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 21
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 21
+          }
+        }
+      }
+    },
+    {
+      "sent": {
+        "body": {
+          "model": "accounts/fireworks/models/deepseek-v4p1-flash",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Use the tool: what is the forecast for Montreal on 2026-10-01? Then answer in one sentence."
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "reasoning_content": "The user wants me to call the tool with location Montreal and date 2026-10-01.",
+              "tool_calls": [
+                {
+                  "id": "chatcmpl-tool-b51e100a9149f8fc",
+                  "type": "function",
+                  "function": {
+                    "name": "get_forecast",
+                    "arguments": "{\"location\":\"Montreal\",\"date\":\"2026-10-01\"}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "tool_call_id": "chatcmpl-tool-b51e100a9149f8fc",
+              "content": "{\"forecast\": \"sunny\", \"high_c\": 14}"
+            }
+          ],
+          "max_completion_tokens": 2000,
+          "tools": [
+            {
+              "type": "function",
+              "function": {
+                "name": "get_forecast",
+                "description": "Weather forecast for a city on a date.",
+                "parameters": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "type": "string",
+                      "description": "City name"
+                    },
+                    "date": {
+                      "type": "string",
+                      "description": "YYYY-MM-DD"
+                    }
+                  },
+                  "required": [
+                    "location",
+                    "date"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          ]
+        },
+        "headers": {
+          "authorization": "<redacted>",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.fireworks.ai/inference/v1/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "connection": "keep-alive",
+        "content-length": "567",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 14:57:19 GMT",
+        "fireworks-cached-prompt-tokens": "220",
+        "fireworks-prompt-tokens": "459",
+        "fireworks-sampling-options": "{\"max_tokens\": 2000, \"temperature\": 1.0, \"top_k\": 0, \"top_p\": 1.0, \"min_p\": 0.0, \"typical_p\": 1.0, \"frequency_penalty\": 0.0, \"presence_penalty\": 0.0, \"repetition_penalty\": 1.0, \"mirostat_target\": null, \"mirostat_lr\": 0.1, \"cycle_multiplier\": 0.0, \"cycle_base\": 0.0, \"cycle_allowed_length\": 0, \"cycle_sequence_breakers\": []}",
+        "fireworks-server-processing-time": "0.393",
+        "fireworks-server-time-to-first-token": "0.275",
+        "fireworks-speculation-prompt-matched-tokens": "0",
+        "server": "istio-envoy",
+        "vary": "Origin",
+        "x-ratelimit-limit-tokens-cache-adjusted-prompt": "1800000",
+        "x-ratelimit-limit-tokens-generated": "72000",
+        "x-ratelimit-limit-tokens-prompt": "7200000",
+        "x-ratelimit-limit-tokens-uncached-prompt": "1800000",
+        "x-ratelimit-over-limit": "no",
+        "x-ratelimit-remaining-tokens-prompt": "7199541",
+        "x-request-id": "chatcmpl-353ac971e8a845fd8f70bdc1a60f8553"
+      },
+      "body": {
+        "id": "chatcmpl-353ac971e8a845fd8f70bdc1a60f8553",
+        "object": "chat.completion",
+        "created": 1790434639,
+        "model": "accounts/fireworks/models/deepseek-v4p1-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.",
+              "reasoning_content": "",
+              "tools": null
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 459,
+          "total_tokens": 484,
+          "completion_tokens": 25,
+          "prompt_tokens_details": {
+            "cached_tokens": 220
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          },
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        }
+      }
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "chatcmpl-6f508f66f83f4557b851b68662b45c78",
+        "model": "accounts/fireworks/models/deepseek-v4p1-flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "thinking",
+              "text": "The user wants me to call the tool with location Montreal and date 2026-10-01."
+            },
+            {
+              "type": "tool_call",
+              "id": "chatcmpl-tool-b51e100a9149f8fc",
+              "name": "get_forecast",
+              "input": {
+                "location": "Montreal",
+                "date": "2026-10-01"
+              }
+            }
+          ]
+        },
+        "finish_reason": "tool_call",
+        "usage": {
+          "input_tokens": 350,
+          "output_tokens": 84,
+          "total_tokens": 434,
+          "cache_read_tokens": 0,
+          "reasoning_tokens": 21
+        }
+      }
+    },
+    {
+      "response": {
+        "id": "chatcmpl-353ac971e8a845fd8f70bdc1a60f8553",
+        "model": "accounts/fireworks/models/deepseek-v4p1-flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C."
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 459,
+          "output_tokens": 25,
+          "total_tokens": 484,
+          "cache_read_tokens": 220,
+          "reasoning_tokens": 0
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "fireworks:accounts/fireworks/models/deepseek-v4p1-flash",
+  "notes": [
+    "call get_forecast({\"location\":\"Montreal\",\"date\":\"2026-10-01\"})",
+    "final \"The forecast for Montreal on 2026-10-01 is sunny with a high of 14°C.\""
+  ],
+  "port": "lm15-go 1.1.0-rc.1",
+  "problems": null,
+  "timestamp": "2026-09-26T14:57:19Z",
+  "verdict": "ok"
+}

@@ -1,0 +1,161 @@
+{
+  "binding": "deepinfra",
+  "check": "hello",
+  "exchanges": [
+    {
+      "sent": {
+        "body": {
+          "model": "deepseek-ai/DeepSeek-V4.1-Flash",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Reply with exactly the two words: hello world"
+            }
+          ],
+          "max_completion_tokens": 2000
+        },
+        "headers": {
+          "authorization": "<redacted>",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.deepinfra.com/v1/openai/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "connection": "keep-alive",
+        "content-length": "546",
+        "content-type": "application/json",
+        "date": "Sat, 26 Sep 2026 14:57:05 GMT",
+        "server": "uvicorn",
+        "x-request-id": "RoNLaym9VN69XW53yhuTrtPY",
+        "x-robots-tag": "noindex"
+      },
+      "body": {
+        "service_tier": "default",
+        "id": "chatcmpl-RoNLaym9VN69XW53yhuTrtPY",
+        "object": "chat.completion",
+        "created": 1790434625,
+        "model": "deepseek-ai/DeepSeek-V4.1-Flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "hello world",
+              "reasoning_content": null,
+              "name": null,
+              "tool_calls": null
+            },
+            "finish_reason": "stop",
+            "logprobs": null
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 13,
+          "total_tokens": 16,
+          "completion_tokens": 3,
+          "estimated_cost": 3.08e-06,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": null
+          },
+          "completion_tokens_details": {
+            "reasoning_tokens": 0
+          }
+        }
+      }
+    },
+    {
+      "sent": {
+        "body": {
+          "model": "deepseek-ai/DeepSeek-V4.1-Flash",
+          "messages": [
+            {
+              "role": "user",
+              "content": "Reply with exactly the two words: hello world"
+            }
+          ],
+          "stream": true,
+          "stream_options": {
+            "include_usage": true
+          },
+          "max_completion_tokens": 2000
+        },
+        "headers": {
+          "authorization": "<redacted>",
+          "content-type": "application/json"
+        },
+        "method": "POST",
+        "url": "https://api.deepinfra.com/v1/openai/chat/completions"
+      },
+      "status": 200,
+      "response_headers": {
+        "cache-control": "no-store",
+        "connection": "keep-alive",
+        "content-type": "text/event-stream; charset=utf-8",
+        "date": "Sat, 26 Sep 2026 14:57:05 GMT",
+        "server": "uvicorn",
+        "x-request-id": "R0cwoSrYr3ao4qv1XVb4rIZZ",
+        "x-robots-tag": "noindex"
+      },
+      "body": "data: {\"service_tier\":null,\"id\":\"chatcmpl-R0cwoSrYr3ao4qv1XVb4rIZZ\",\"object\":\"chat.completion.chunk\",\"created\":1790434625,\"model\":\"deepseek-ai/DeepSeek-V4.1-Flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":null,\"tool_calls\":null},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"service_tier\":\"default\",\"id\":\"chatcmpl-R0cwoSrYr3ao4qv1XVb4rIZZ\",\"object\":\"chat.completion.chunk\",\"created\":1790434625,\"model\":\"deepseek-ai/DeepSeek-V4.1-Flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\",\"reasoning_content\":null,\"tool_calls\":null},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"service_tier\":\"default\",\"id\":\"chatcmpl-R0cwoSrYr3ao4qv1XVb4rIZZ\",\"object\":\"chat.completion.chunk\",\"created\":1790434625,\"model\":\"deepseek-ai/DeepSeek-V4.1-Flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":null,\"content\":\"hello\",\"reasoning_content\":null,\"tool_calls\":null},\"logprobs\":null,\"finish_reason\":null}],\"usage\":null}\n\ndata: {\"service_tier\":\"default\",\"id\":\"chatcmpl-R0cwoSrYr3ao4qv1XVb4rIZZ\",\"object\":\"chat.completion.chunk\",\"created\":1790434625,\"model\":\"deepseek-ai/DeepSeek-V4.1-Flash\",\"choices\":[{\"index\":0,\"delta\":{\"role\":null,\"content\":\" world\",\"reasoning_content\":null,\"tool_calls\":null},\"logprobs\":null,\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":13,\"total_tokens\":16,\"completion_tokens\":3,\"estimated_cost\":null,\"prompt_tokens_details\":null,\"completion_tokens_details\":{\"reasoning_tokens\":0}}}\n\ndata: {\"service_tier\":\"default\",\"id\":\"chatcmpl-R0cwoSrYr3ao4qv1XVb4rIZZ\",\"object\":\"chat.completion.chunk\",\"created\":1790434625,\"model\":\"deepseek-ai/DeepSeek-V4.1-Flash\",\"choices\":[],\"usage\":{\"prompt_tokens\":13,\"total_tokens\":16,\"completion_tokens\":3,\"estimated_cost\":3.08e-6,\"prompt_tokens_details\":{\"cached_tokens\":0,\"cache_write_tokens\":null},\"completion_tokens_details\":{\"reasoning_tokens\":0}}}\n\ndata: [DONE]\n\n"
+    }
+  ],
+  "lm15": [
+    {
+      "response": {
+        "id": "chatcmpl-RoNLaym9VN69XW53yhuTrtPY",
+        "model": "deepseek-ai/DeepSeek-V4.1-Flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 13,
+          "output_tokens": 3,
+          "total_tokens": 16,
+          "cache_read_tokens": 0,
+          "reasoning_tokens": 0
+        }
+      }
+    },
+    {
+      "response": {
+        "model": "deepseek-ai/DeepSeek-V4.1-Flash",
+        "message": {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "hello world"
+            }
+          ]
+        },
+        "finish_reason": "stop",
+        "usage": {
+          "input_tokens": 13,
+          "output_tokens": 3,
+          "total_tokens": 16,
+          "cache_read_tokens": 0,
+          "reasoning_tokens": 0
+        }
+      }
+    }
+  ],
+  "managed": false,
+  "model": "deepinfra:deepseek-ai/DeepSeek-V4.1-Flash",
+  "notes": [
+    "complete \"hello world\" finish=stop; stream \"hello world\" finish=stop in 2 chunks"
+  ],
+  "port": "lm15-go 1.1.0-rc.1",
+  "problems": null,
+  "timestamp": "2026-09-26T14:57:06Z",
+  "verdict": "ok"
+}

@@ -3,6 +3,7 @@ package fslock
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -33,5 +34,14 @@ func TestRealPathAllowMissing(t *testing.T) {
 	os.Symlink(loop, loop)
 	if _, err := RealPathAllowMissing(filepath.Join(loop, "x")); err == nil {
 		t.Fatal("a symlink loop must fail")
+	}
+}
+
+func TestRealPathRefusesMissingNonASCIIOnWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("Windows compares names by its upcase table; elsewhere bytes are the identity")
+	}
+	if _, err := RealPathAllowMissing(filepath.Join(t.TempDir(), "Σίσυφος", "credentials.json")); err == nil {
+		t.Fatal("a missing non-ASCII component must be refused, as every other SDK refuses it")
 	}
 }

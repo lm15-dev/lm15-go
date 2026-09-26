@@ -109,6 +109,13 @@ func RealPathAllowMissing(target string) (string, error) {
 		info, err := os.Lstat(candidate)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
+				// Windows compares names with the filesystem's upcase
+				// table, not Unicode case folding: with no on-disk spelling
+				// to canonicalize, a non-ASCII name could hash apart from
+				// the same file named by another SDK. Refuse, as they do.
+				if runtime.GOOS == "windows" && !isASCII(name) {
+					return "", errors.New("fslock: a missing non-ASCII Windows credential path component is unsupported")
+				}
 				resolved = candidate
 				continue
 			}
@@ -129,8 +136,29 @@ func RealPathAllowMissing(target string) (string, error) {
 			continue
 		}
 		resolved = candidate
+		if runtime.GOOS == "windows" {
+			// One file, one identity: an existing component is spelled as
+			// the filesystem stores it (long name for an 8.3 short name
+			// such as RUNNER~1, stored case), as every other SDK's realpath
+			// spells it. EvalSymlinks normalizes on Windows; the walk has
+			// already expanded every link, so it changes the spelling only.
+			long, err := filepath.EvalSymlinks(candidate)
+			if err != nil {
+				return "", err
+			}
+			resolved = stripWindowsVerbatim(long)
+		}
 	}
 	return resolved, nil
+}
+
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			return false
+		}
+	}
+	return true
 }
 
 // splitPath separates a path into the base it starts from (the root for an

@@ -27,6 +27,17 @@ retracted, `go get` installs `main` as a pseudo-version; a module pinned to
 |---|---|---|---|
 | `v1.1.0-rc.1` | 2026-09-26 | `3763eec` | The first release. 1,583 of 1,583 contract checks. |
 | `v1.1.0-rc.2` | 2026-09-26 | `fe5cdf9` | DeepInfra, Together AI, Fireworks AI, Parasail; the Google Cloud pass. 1,788 of 1,788 contract checks. |
+| `v1.1.0-rc.3` | 2026-09-30 | `57e33d1` | The Claude Code release as a setting (`client_version`, `LM15_CLAUDE_CODE_VERSION`), its refusal guided; Claude's output ceiling as the default `max_tokens`; `input_audio` formats in ingest. 1,838 of 1,838 contract checks. |
+
+### `v1.1.0-rc.3`: what was checked
+
+- `go vet ./...`, `go test ./...`, `gofmt`, the wasm build (CI on Linux,
+  macOS and Windows).
+- The contract at the pin: 1,838 of 1,838 checks, including the
+  claude-code cases that now compare `user-agent`.
+- Live, 2026-09-30: `claude-code:claude-opus-5-5` through the router with
+  no settings (the default release, 2.1.285, and the default `max_tokens`,
+  128000): HTTP 200, `stop`, the `defaulted` record carried.
 
 ### `v1.1.0-rc.2`: what was checked
 

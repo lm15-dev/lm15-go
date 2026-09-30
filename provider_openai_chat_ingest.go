@@ -41,7 +41,15 @@ var ingestConfigKeys = map[string]bool{
 }
 
 var ingestGroqBuiltinInverse = map[string]string{"browser_search": "web_search", "code_interpreter": "code_execution"}
-var ingestAudioMediaTypes = map[string]string{"wav": "audio/wav", "mp3": "audio/mpeg"}
+
+// MAP-12 rule 4 (amended 2026-09-29): OpenAI's server takes wav and mp3,
+// Gemini's any audio type, and DSPy writes the MIME subtype (mpeg for .mp3).
+// Each format reads as its true media type; a builder with no audio slot
+// raises at send (MAP-10).
+var ingestAudioMediaTypes = map[string]string{
+	"wav": "audio/wav", "mp3": "audio/mpeg", "mpeg": "audio/mpeg", "ogg": "audio/ogg", "opus": "audio/opus",
+	"flac": "audio/flac", "aac": "audio/aac", "aiff": "audio/aiff", "webm": "audio/webm",
+}
 var ingestClientObjectKeys = []string{"provider_specific_fields", "thinking_blocks", "images"}
 
 func ingestUnsupported(provider, what, why string) *Error {
@@ -216,7 +224,7 @@ func ingestContentBlocks(provider string, content any, role, where string) ([]Pa
 			}
 			mediaType, ok := ingestAudioMediaTypes[format]
 			if !ok {
-				return nil, false, valueErrorf("%s.input_audio.format must be one of [mp3 wav]", blockWhere)
+				return nil, false, valueErrorf("%s.input_audio.format must be one of %v", blockWhere, sortedMapKeys(ingestAudioMediaTypes))
 			}
 			data, err := ingestStr(spec.Get("data"), blockWhere+".input_audio.data")
 			if err != nil {

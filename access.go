@@ -19,9 +19,17 @@ var AnthropicAPI = AccessPolicy{
 	AuthScheme: []string{"x-api-key"},
 }
 
-// Claude Code constants.
+// Claude Code constants. DefaultClaudeCodeVersion is the Claude Code release
+// the claude-code door says it is (user-agent: claude-cli/<version>).
+// Anthropic's server reads it: a model can require a newer release
+// (claude-opus-5-5 refuses anything before 2.1.280, live 2026-09-23 and
+// 2026-09-30). The latest release when last receipted (lm15-contract
+// changes/2026-09-30-claude-code-client-version.md); callers move it without
+// a release through the client_version setting or LM15_CLAUDE_CODE_VERSION.
 const (
-	DefaultClaudeCodeVersion      = "2.1.170"
+	DefaultClaudeCodeVersion      = "2.1.285"
+	ClaudeCodeVersionEnv          = "LM15_CLAUDE_CODE_VERSION"
+	CodexClientVersionEnv         = "LM15_CODEX_CLIENT_VERSION"
 	DefaultClaudeCodeSystemPrompt = "You are Claude Code, Anthropic's official CLI for Claude."
 	ClaudeCodeLoginHint           = "Log in again: run `claude` and use /login (Claude subscription auth)"
 	OpenAICodexLoginHint          = "Log in again: run `codex login` (ChatGPT subscription auth)"
@@ -41,9 +49,11 @@ var ClaudeCode = AccessPolicy{
 		{"x-app", "cli"},
 		{"user-agent", "claude-cli/" + DefaultClaudeCodeVersion},
 	},
-	LoginHint:    ClaudeCodeLoginHint,
-	Backend:      "claude-code",
-	SystemPrefix: DefaultClaudeCodeSystemPrompt,
+	LoginHint:       ClaudeCodeLoginHint,
+	Backend:         "claude-code",
+	BackendOptions:  map[string]string{"client_version": DefaultClaudeCodeVersion},
+	BackendSettings: []HostSetting{{Name: "client_version", Env: []string{ClaudeCodeVersionEnv}}},
+	SystemPrefix:    DefaultClaudeCodeSystemPrompt,
 }
 
 // OpenAIAPI is the OpenAI Responses API on an API key.
@@ -75,11 +85,12 @@ var OpenAICodex = AccessPolicy{
 		{"OpenAI-Beta", "responses=experimental"},
 		{"originator", DefaultCodexOriginator},
 	},
-	LoginHint:      OpenAICodexLoginHint,
-	Backend:        CodexBackend,
-	BackendOptions: map[string]string{"client_version": DefaultCodexClientVersion},
-	SystemPrefix:   DefaultCodexInstructions,
-	BaseURL:        DefaultCodexBaseURL,
+	LoginHint:       OpenAICodexLoginHint,
+	Backend:         CodexBackend,
+	BackendOptions:  map[string]string{"client_version": DefaultCodexClientVersion},
+	BackendSettings: []HostSetting{{Name: "client_version", Env: []string{CodexClientVersionEnv}}},
+	SystemPrefix:    DefaultCodexInstructions,
+	BaseURL:         DefaultCodexBaseURL,
 }
 
 // OpenAIChatAPI is the OpenAI Chat Completions dialect on an API key.

@@ -28,7 +28,13 @@ func TestEveryDialectSendsSchemaAndToolPropertiesInTheirOrder(t *testing.T) {
 
 	checked := map[string]bool{}
 	for _, provider := range ProviderIDs() {
-		lm, err := AdapterForProvider(provider, "test-key", "", settings, clock)
+		// Host settings go to a cloud door only: a door that reads none
+		// refuses a settings entry (AUTH-10, amended 2026-09-30).
+		var given map[string]string
+		if def, _ := LookupProvider(provider); def.Hosted() {
+			given = settings
+		}
+		lm, err := AdapterForProvider(provider, "test-key", "", given, clock)
 		if err != nil {
 			continue // a door that needs a credential of another kind
 		}

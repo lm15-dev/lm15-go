@@ -2,6 +2,7 @@ package lm15
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -187,6 +188,12 @@ type AccessPolicy struct {
 	BackendOptions     map[string]string
 	SystemPrefix       string
 	BaseURL            string
+	// BackendSettings are the BackendOptions a caller may set on a door
+	// without a host (AUTH-10, amended 2026-09-30): each names a
+	// BackendOptions key and the env variables the router consults for it;
+	// its default is the table's BackendOptions value (Default stays "").
+	// The subscription doors declare client_version.
+	BackendSettings []HostSetting
 }
 
 // EffectiveCredentialPolicy returns CredentialPolicy or "key".
@@ -261,6 +268,18 @@ func (p AccessPolicy) Validate() error {
 	if p.CloudChain() && p.Host == nil && p.Provider != "vertex-express" {
 		return valueErrorf("%s: a cloud chain policy needs a host", p.Provider)
 	}
+	for _, s := range p.BackendSettings {
+		// One authority for the value a door sends by default: the table's option.
+		if s.Default != "" {
+			return valueErrorf("%s: backend setting %q takes its default from BackendOptions", p.Provider, s.Name)
+		}
+		if _, ok := p.BackendOptions[s.Name]; !ok {
+			return valueErrorf("%s: backend setting %q has no BackendOptions default", p.Provider, s.Name)
+		}
+	}
+	if len(p.BackendSettings) > 0 && p.Host != nil {
+		return valueErrorf("%s: a door with a host declares its settings on the host", p.Provider)
+	}
 	return nil
 }
 
@@ -296,3 +315,101 @@ func (p AccessPolicy) WithBackendOptions(options map[string]string) AccessPolicy
 
 // ProviderManifest is the earlier name: an adapter's manifest is its policy.
 type ProviderManifest = AccessPolicy
+
+// ResolveBackendSettings is the door's backend settings (AUTH-10, amended
+// 2026-09-30): the caller's value, then env (when non-nil — the router passes
+// the environment, an adapter built by hand does not), then the table's
+// BackendOptions value. sources, when non-nil, receives each origin
+// (explicit, env:<VAR>, default). A name the door does not declare is a
+// configuration error that lists the names it does: a setting nothing reads
+// would otherwise be dropped with nothing said.
+func (p AccessPolicy) ResolveBackendSettings(given map[string]string, env func(string) string, sources map[string]string) (map[string]string, error) {
+	known := make([]string, 0, len(p.BackendSettings))
+	for _, s := range p.BackendSettings {
+		known = append(known, s.Name)
+	}
+	var unknown []string
+	for name := range given {
+		if !inVocab(name, known) {
+			unknown = append(unknown, name)
+		}
+	}
+	if len(unknown) > 0 {
+		sort.Strings(unknown)
+		quoted := make([]string, len(unknown))
+		for i, n := range unknown {
+			quoted[i] = "'" + n + "'"
+		}
+		hint, fix := "this door takes no settings", "Remove the settings entry for "+p.Provider
+		if len(known) > 0 {
+			hint = "known: " + strings.Join(known, ", ")
+			fix = "Pass only " + strings.Join(known, ", ") + " for " + p.Provider
+		}
+		return nil, NotConfiguredErrorf(p.Provider, nil, fix, "%s: unknown setting(s) %s; %s", p.Provider, strings.Join(quoted, ", "), hint)
+	}
+	out := map[string]string{}
+	for _, s := range p.BackendSettings {
+		value, origin := given[s.Name], "explicit"
+		if value == "" && env != nil {
+			for _, name := range s.Env {
+				if v := env(name); v != "" {
+					value, origin = v, "env:"+name
+					break
+				}
+			}
+		}
+		if value == "" {
+			value, origin = p.BackendOptions[s.Name], "default"
+		}
+		out[s.Name] = value
+		if sources != nil {
+			sources[s.Name] = origin
+		}
+	}
+	return out, nil
+}
+
+// WithBackendSettings returns the policy with these resolved backend
+// settings in BackendOptions. client_version on the claude-code backend is
+// also the version the user-agent header claims (claude-cli/<client_version>);
+// on chatgpt-codex it is the /models query parameter.
+func (p AccessPolicy) WithBackendSettings(values map[string]string) AccessPolicy {
+	changed := false
+	for k, v := range values {
+		if p.BackendOptions[k] != v {
+			changed = true
+		}
+	}
+	if !changed {
+		return p
+	}
+	options := make(map[string]string, len(p.BackendOptions)+len(values))
+	for k, v := range p.BackendOptions {
+		options[k] = v
+	}
+	for k, v := range values {
+		options[k] = v
+	}
+	p.BackendOptions = options
+	if version, ok := values["client_version"]; ok && p.EffectiveBackend() == "claude-code" {
+		p = p.WithHeaders([][2]string{{"user-agent", "claude-cli/" + version}})
+	}
+	return p
+}
+
+var claudeCodeFloor = regexp.MustCompile(`Claude Code (\S+) does not support this model; version (\S+) or newer is required`)
+
+// ClaudeCodeVersionGuidance is the claude-code door's minimum-version
+// refusal with what an lm15 caller changes (AUTH-10 backend settings): the
+// server says "run 'claude update'", which does not move the version lm15
+// claims. Any other message is returned unchanged.
+func ClaudeCodeVersionGuidance(message string) string {
+	m := claudeCodeFloor.FindStringSubmatch(message)
+	if m == nil || strings.Contains(message, "\n\n  To fix:") {
+		return message
+	}
+	required := m[2]
+	return message + "\n\n  To fix:\n" +
+		"    - lm15 sends this version itself; updating Claude Code does not change it\n" +
+		"    - Set the claude-code setting client_version to " + required + " or newer (or " + ClaudeCodeVersionEnv + "=" + required + ")\n"
+}

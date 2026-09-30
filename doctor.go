@@ -226,6 +226,31 @@ func entrySource(provider, entry string) string {
 
 // ExplainAuth walks the AUTH-1 chain for a provider and reports every rung.
 func ExplainAuth(provider string, opts ExplainOptions) (AuthReport, error) {
+	report, err := explainChain(provider, opts)
+	if err != nil {
+		return report, err
+	}
+	def := Providers[report.Provider]
+	// A door without a host prints its backend settings the way a cloud door
+	// prints its host settings (AUTH-7; AUTH-10 amended 2026-09-30): the
+	// Claude Code release the claude-code door claims, and its origin.
+	if def.Access.Host == nil && (len(def.Access.BackendSettings) > 0 || opts.Settings != nil) {
+		env := RouterConfig{Env: opts.Env}.env()
+		sources := map[string]string{}
+		values, err := def.Access.ResolveBackendSettings(opts.Settings, func(name string) string { return env[name] }, sources)
+		if err != nil {
+			return AuthReport{}, err
+		}
+		report.Settings, report.SettingSources = nil, nil
+		for _, s := range def.Access.BackendSettings {
+			report.Settings = append(report.Settings, [2]string{s.Name, values[s.Name]})
+			report.SettingSources = append(report.SettingSources, [2]string{s.Name, sources[s.Name]})
+		}
+	}
+	return report, nil
+}
+
+func explainChain(provider string, opts ExplainOptions) (AuthReport, error) {
 	canonical := CanonicalProvider(provider)
 	def, ok := Providers[canonical]
 	if !ok {

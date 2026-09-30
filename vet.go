@@ -185,7 +185,10 @@ func AdapterForProvider(provider string, credential CredentialLike, baseURL stri
 			opts = append(opts, WithCompatPreset(def.Compat))
 		}
 	}
-	if def.Hosted() && settings != nil {
+	if settings != nil {
+		// A cloud door's host settings, or a door's backend settings
+		// (client_version on the subscription doors; AUTH-10 amended
+		// 2026-09-30). Exactly these; no environment.
 		opts = append(opts, WithSettings(settings))
 	}
 	if clock != nil {

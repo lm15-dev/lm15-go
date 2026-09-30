@@ -374,6 +374,19 @@ func (c *lmCore) bindAccess(self dialect, manifest AccessPolicy, o *lmOptions, d
 	if err := policy.Validate(); err != nil {
 		return err
 	}
+	hostSettingsGiven := o.settings
+	if policy.Host == nil {
+		// A door without a host: its settings are its backend settings
+		// (AUTH-10, amended 2026-09-30), explicit values and the table's
+		// defaults only — the router fills env fallbacks. A name the door
+		// does not declare raises instead of being dropped.
+		resolved, err := policy.ResolveBackendSettings(o.settings, nil, nil)
+		if err != nil {
+			return err
+		}
+		policy = policy.WithBackendSettings(resolved)
+		hostSettingsGiven = nil
+	}
 	c.access = policy
 	c.provider = policy.Provider
 	c.defaultBaseURL = defaultBaseURL
@@ -417,7 +430,7 @@ func (c *lmCore) bindAccess(self dialect, manifest AccessPolicy, o *lmOptions, d
 	if policy.Host != nil && o.baseURL != "" && o.baseURL != defaultBaseURL {
 		endpoint = o.baseURL
 	}
-	settings, err := resolveSettingsWithEndpoint(policy.Host, o.settings, nil, policy.Provider, nil, endpoint)
+	settings, err := resolveSettingsWithEndpoint(policy.Host, hostSettingsGiven, nil, policy.Provider, nil, endpoint)
 	if err != nil {
 		return err
 	}

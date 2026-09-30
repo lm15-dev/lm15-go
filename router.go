@@ -670,6 +670,28 @@ func Resolve(model string, config RouterConfig) (Resolution, error) {
 }
 
 // buildLM constructs the provider LM for a resolution (AUTH-1 chain).
+// backendSettingsOf is a door-without-a-host's backend settings (AUTH-10,
+// amended 2026-09-30) from the config's entry, then the environment, then the
+// table's default — client_version on the subscription doors. nil when the
+// door declares none and the config gives none; a settings entry for a door
+// that reads none raises (NotConfiguredError), because nothing would read it.
+func backendSettingsOf(config RouterConfig, provider string, def ProviderDefinition) (map[string]string, error) {
+	if def.Hosted() {
+		return nil, nil
+	}
+	var given map[string]string
+	for key, s := range config.Settings {
+		if config.providerID(CanonicalProvider(key)) == provider {
+			given = s
+		}
+	}
+	if given == nil && len(def.Access.BackendSettings) == 0 {
+		return nil, nil
+	}
+	env := config.env()
+	return def.Access.ResolveBackendSettings(given, func(name string) string { return env[name] }, nil)
+}
+
 func buildLM(res Resolution, config RouterConfig, transport Transport) (LM, error) {
 	def, _ := config.lookup(res.Provider)
 	var opts []Option
@@ -687,6 +709,13 @@ func buildLM(res Resolution, config RouterConfig, transport Transport) (LM, erro
 	}
 	if baseURL != "" {
 		opts = append(opts, WithBaseURL(baseURL))
+	}
+	door, err := backendSettingsOf(config, res.Provider, def)
+	if err != nil {
+		return nil, err
+	}
+	if door != nil {
+		opts = append(opts, WithSettings(door))
 	}
 	policy := def.CredentialPolicy()
 	if config.Auth != nil {
@@ -980,6 +1009,14 @@ func buildPlanningLM(res Resolution, config RouterConfig, transport Transport) (
 	}
 	if def.ID == "openai-codex" {
 		opts = append(opts, WithAccountID(PlanningKey))
+	}
+	// A door's backend settings are the call's, env included: the plan is the call's bytes.
+	door, err := backendSettingsOf(config, res.Provider, def)
+	if err != nil {
+		return nil, err
+	}
+	if door != nil {
+		opts = append(opts, WithSettings(door))
 	}
 	if def.Bound() {
 		opts = append(opts, WithAccess(def.Access))

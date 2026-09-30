@@ -84,11 +84,31 @@ func NewClaudeCodeLM(opts ...Option) (*AnthropicLM, error) {
 	if err != nil {
 		return nil, err
 	}
-	policy := ClaudeCode
-	if o.claudeCodeVersion != "" && o.claudeCodeVersion != DefaultClaudeCodeVersion {
-		policy = policy.WithHeaders([][2]string{{"user-agent", "claude-cli/" + o.claudeCodeVersion}})
+	// WithClaudeCodeVersion is the client_version backend setting under its
+	// own name (AUTH-10); two different answers are a configuration error.
+	if o.claudeCodeVersion != "" {
+		merged, err := mergeClientVersion(o.settings, o.claudeCodeVersion, "WithClaudeCodeVersion")
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, WithSettings(merged))
 	}
-	return NewAnthropicLM(append([]Option{WithAccess(policy)}, opts...)...)
+	return NewAnthropicLM(append([]Option{WithAccess(ClaudeCode)}, opts...)...)
+}
+
+// mergeClientVersion is settings with the client_version a named option
+// gave; two different answers are a configuration error.
+func mergeClientVersion(settings map[string]string, version, option string) (map[string]string, error) {
+	if current, ok := settings["client_version"]; ok && current != version {
+		return nil, valueErrorf("%s(%q) and settings client_version=%q disagree; pass one", option, version, current)
+	}
+	merged := map[string]string{"client_version": version}
+	for k, v := range settings {
+		if k != "client_version" {
+			merged[k] = v
+		}
+	}
+	return merged, nil
 }
 
 var anthropicErrorTypeMap = map[string]ErrorKind{
@@ -148,6 +168,10 @@ func (l *AnthropicLM) normalizeError(status int, body string) *Error {
 			errType = firstStr(obj.Get("type"), obj.Get("code"))
 		}
 		requestID = wireStr(obj.Get("request_id"))
+	}
+	if l.access.EffectiveBackend() == "claude-code" {
+		// AUTH-10 backend settings: the minimum-version refusal names the setting to change.
+		msg = ClaudeCodeVersionGuidance(msg)
 	}
 	switch {
 	case anthropicContextLengthMessage(msg):
@@ -398,26 +422,36 @@ func anthropicResponseFormat(provider string, f JSONObject) (JSONObject, error) 
 	return JSONObject{{"format", JSONObject{{"type", "json_schema"}, {"schema", f.Get("schema")}}}}, nil
 }
 
-// Output ceilings by model class, for the max_tokens the Messages API
-// requires and the caller did not set (MAP-13 defaulted, decision
-// 2026-09-14 §4.8). The 3.x classes have documented lower ceilings and a
-// value above them is a 400; everything else gets 16384 — loud and
-// actionable if a model's ceiling is lower, never a silent truncation.
-var anthropicDefaultMaxTokensByClass = [][2]any{
+// The max_tokens the Messages API requires and the caller did not set
+// (MAP-13 defaulted; MAP-7 rule 6, amended 2026-09-30): a Claude model's own
+// output ceiling, the value OpenAI and Gemini apply when their field is
+// omitted — 128000 for the 4.6 generation and every later Claude (and any
+// Claude name this table has not met: a lower real ceiling is a loud 400,
+// never a silent truncation), 64000 for the 4.5 generation; the retired 3.x
+// values stay. From Anthropic's Models API max_tokens (receipts 2026-09-01,
+// 2026-09-30). A model name that is not Claude's (DeepSeek, Kimi, Muse on an
+// Anthropic-dialect server) keeps 16384: those servers publish their own.
+var claudeOutputCeilings = []struct {
+	marker  string
+	ceiling int
+}{
 	{"claude-3-haiku", 4096}, {"claude-3-opus", 4096}, {"claude-3-sonnet", 4096},
 	{"claude-3-5-", 8192}, {"claude-3.5-", 8192},
+	{"claude-haiku-4-5", 64000}, {"claude-sonnet-4-5", 64000}, {"claude-opus-4-5", 64000},
+	{"claude", 128000},
 }
 
 const anthropicDefaultMaxTokens = 16384
 
-func anthropicDefaultMaxTokensFor(model string) int {
+// claudeOutputCeiling is a Claude model's output ceiling by name; 0 for any other.
+func claudeOutputCeiling(model string) int {
 	lowered := strings.ToLower(model)
-	for _, row := range anthropicDefaultMaxTokensByClass {
-		if strings.Contains(lowered, row[0].(string)) {
-			return row[1].(int)
+	for _, row := range claudeOutputCeilings {
+		if strings.Contains(lowered, row.marker) {
+			return row.ceiling
 		}
 	}
-	return anthropicDefaultMaxTokens
+	return 0
 }
 
 func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSONObject, error) {
@@ -532,7 +566,8 @@ func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSO
 			if r.ThinkingBudget != nil {
 				// MAP-13: effort carries the intent (MAP-7 rule 5); the
 				// budget has no honoured field on this class.
-				why := req.Model + " takes thinking.type 'adaptive' with output_config.effort; budget_tokens is rejected by the API (live 2026-09-02)"
+				why := req.Model + " takes thinking.type 'adaptive' with output_config.effort; budget_tokens is rejected by the API (live 2026-09-02). " +
+					"Thinking is bounded only by max_tokens, which covers thinking and answer together: lower the effort or raise max_tokens"
 				if deepseekThinking {
 					why = "this server ignores budget_tokens; effort is the dial"
 				} else if alwaysAdaptive {
@@ -562,13 +597,29 @@ func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSO
 	}
 	// Manual class: max_tokens includes thinking, so the wire ceiling is the
 	// budget plus the visible cap. The Messages API requires the field: when
-	// the caller set none, the class default is used and recorded (MAP-13).
+	// the caller set none, a Claude model gets its output ceiling as the WIRE
+	// value (on the manual class the visible part is what the budget leaves),
+	// any other model 16384 visible; the default is recorded (MAP-13, MAP-7
+	// rule 6).
 	var maxTokens int
 	if cfg.MaxTokens != nil {
 		maxTokens = *cfg.MaxTokens
 	} else {
-		maxTokens = anthropicDefaultMaxTokensFor(req.Model)
-		if err := scope.defaulted("config.max_tokens", "the Messages API requires max_tokens and none was set; the class default was used", maxTokens); err != nil {
+		ceiling := claudeOutputCeiling(req.Model)
+		why := "the Messages API requires max_tokens and none was set; the model's output ceiling was used"
+		switch {
+		case ceiling == 0:
+			maxTokens = anthropicDefaultMaxTokens
+			why = "the Messages API requires max_tokens and none was set; 16384 was used (this server's ceiling is its own)"
+		case thinkingBudget == nil:
+			maxTokens = ceiling
+		case *thinkingBudget < ceiling:
+			maxTokens = ceiling - *thinkingBudget
+		default:
+			// The caller's budget alone reaches the ceiling: the server's 400 names the limit.
+			maxTokens = anthropicDefaultMaxTokens
+		}
+		if err := scope.defaulted("config.max_tokens", why, maxTokens); err != nil {
 			return nil, err
 		}
 	}

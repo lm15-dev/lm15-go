@@ -86,8 +86,14 @@ func NewOpenAICodexLM(opts ...Option) (*OpenAILM, error) {
 	if o.codexOriginator != "" && o.codexOriginator != DefaultCodexOriginator {
 		policy = policy.WithHeaders([][2]string{{"originator", o.codexOriginator}})
 	}
-	if o.codexClientVersion != "" && o.codexClientVersion != DefaultCodexClientVersion {
-		policy = policy.WithBackendOptions(map[string]string{"client_version": o.codexClientVersion})
+	// WithCodexClientVersion is the client_version backend setting under its
+	// own name (AUTH-10); two different answers are a configuration error.
+	if o.codexClientVersion != "" {
+		merged, err := mergeClientVersion(o.settings, o.codexClientVersion, "WithCodexClientVersion")
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, WithSettings(merged))
 	}
 	return NewOpenAILM(append([]Option{WithAccess(policy)}, opts...)...)
 }

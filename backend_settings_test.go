@@ -42,6 +42,10 @@ func scratchHome(t *testing.T) string {
 	if err := os.WriteFile(codex, []byte(`{"tokens": {"access_token": "tok", "refresh_token": "r", "account_id": "acct"}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	// The stored-login reader uses the process's home (os.UserHomeDir), never the
+	// machine's real login: CI has none, and a developer's must not decide the test.
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	return home
 }
 

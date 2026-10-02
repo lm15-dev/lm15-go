@@ -93,68 +93,26 @@ func (d ProviderDefinition) CredentialPolicy() string { return d.Access.Effectiv
 // CanonicalProvider maps the permanent underscore alias to the hyphenated form.
 func CanonicalProvider(name string) string { return strings.ReplaceAll(name, "_", "-") }
 
-func owned(id, dialect string, access AccessPolicy, console, note string) ProviderDefinition {
-	return ProviderDefinition{ID: id, Dialect: dialect, Access: access, ConsoleURL: console, Note: note, AdapterOwned: true}
-}
-
-func chatBound(access AccessPolicy, compat, placeholder, console, note string) ProviderDefinition {
-	if compat == "" {
-		compat = access.Provider
+// definitionOf is a generated table row as a definition: every row but an
+// adapter-owned one has its access policy bound by the router.
+func definitionOf(r tableRow, declared bool) ProviderDefinition {
+	return ProviderDefinition{
+		ID: r.ID, Dialect: r.Dialect, Access: r.Access, Compat: r.Compat, CompatValue: r.CompatValue,
+		PlaceholderKey: r.PlaceholderKey, ConsoleURL: r.ConsoleURL, Note: r.Note,
+		AdapterOwned: r.Kind == "adapter-owned", Aliases: r.Aliases, Declared: declared,
 	}
-	return ProviderDefinition{ID: access.Provider, Dialect: DialectOpenAIChat, Access: access, Compat: compat, PlaceholderKey: placeholder, ConsoleURL: console, Note: note}
 }
 
-func responsesBound(access AccessPolicy, compat, console, note string) ProviderDefinition {
-	return ProviderDefinition{ID: access.Provider, Dialect: DialectOpenAIResponses, Access: access, Compat: compat, ConsoleURL: console, Note: note}
-}
-
-func anthropicBound(access AccessPolicy, compat, console, note string) ProviderDefinition {
-	return ProviderDefinition{ID: access.Provider, Dialect: DialectAnthropic, Access: access, Compat: compat, ConsoleURL: console, Note: note}
-}
-
-func hosted(access AccessPolicy, dialect, compat, console, note string) ProviderDefinition {
-	return ProviderDefinition{ID: access.Provider, Dialect: dialect, Access: access, Compat: compat, ConsoleURL: console, Note: note}
-}
-
-// providerDefinitions is the declaration order (presentation order).
-var providerDefinitions = []ProviderDefinition{
-	owned("openai", DialectOpenAIResponses, OpenAIAPI, "https://platform.openai.com/api-keys", "OpenAI Responses API"),
-	owned("openai-chat", DialectOpenAIChat, OpenAIChatAPI, "https://platform.openai.com/api-keys", "OpenAI Chat Completions dialect (the de-facto standard other servers speak)"),
-	owned("anthropic", DialectAnthropic, AnthropicAPI, "https://console.anthropic.com", "Anthropic Messages API"),
-	owned("gemini", DialectGemini, GeminiAPI, "https://aistudio.google.com/apikey", "Google Gemini API"),
-	owned("xai", DialectOpenAIChat, Xai, "https://console.x.ai", "xAI Grok (Chat Completions dialect; XAI_API_KEY or subscription OAuth)"),
-	owned("claude-code", DialectAnthropic, ClaudeCode, "", "Claude subscription through the local `claude` CLI login"),
-	owned("openai-codex", DialectOpenAIResponses, OpenAICodex, "", "ChatGPT subscription through the local `codex` CLI login"),
-	owned("typesafe", DialectTypeSafe, TypeSafeAPI, "https://console.typesafe.ai/keys", "TypeSafe System One (Jev): judgments over declared keys with probabilities; no text generation"),
-	chatBound(Groq, "", "", "https://console.groq.com/keys", "Groq Cloud (Chat Completions dialect)"),
-	chatBound(OpenRouter, "", "", "https://openrouter.ai/keys", "OpenRouter (Chat Completions dialect)"),
-	chatBound(DeepSeek, "", "", "https://platform.deepseek.com/api_keys", "DeepSeek (Chat Completions dialect; thinking mode on by default)"),
-	anthropicBound(DeepSeekAnthropic, "deepseek", "https://platform.deepseek.com/api_keys", "DeepSeek over the Anthropic Messages wire (same key as `deepseek`; no model listing)"),
-	chatBound(Zai, "", "", "https://z.ai/manage-apikey/apikey-list", "Z.AI GLM (Chat Completions dialect; general endpoint, not the Coding Plan)"),
-	chatBound(Moonshotai, "", "", "https://platform.kimi.ai/console/api-keys", "Moonshot AI Kimi (Chat Completions dialect; kimi-k3 takes reasoning effort low|high|max, kimi-k2.6 takes effort off; Moonshot's docs call the key MOONSHOT_API_KEY — read after MOONSHOTAI_API_KEY)"),
-	responsesBound(MoonshotaiResponses, "moonshotai", "https://platform.kimi.ai/console/api-keys", "Moonshot AI Kimi over the Responses wire (same key as `moonshotai`; kimi-k3 only; stateless — reasoning replays as summary text; web_search built-in)"),
-	anthropicBound(MoonshotaiAnthropic, "moonshotai", "https://platform.kimi.ai/console/api-keys", "Moonshot AI Kimi over the Anthropic Messages wire (same key as `moonshotai`, bearer token; kimi-k3 only)"),
-	chatBound(DeepInfra, "", "", "https://deepinfra.com/dash/api_keys", "DeepInfra open-model inference (Chat Completions dialect; models are vendor/name ids)"),
-	chatBound(Together, "", "", "https://api.together.ai/settings/projects/~current/api-keys", "Together AI open-model inference (Chat Completions dialect; gpt-oss refuses a forced tool choice client-side — Together answers it with HTTP 500)"),
-	chatBound(Fireworks, "", "", "https://app.fireworks.ai/settings/users/api-keys", "Fireworks AI open-model inference (Chat Completions dialect; models are accounts/fireworks/models/<name> ids)"),
-	chatBound(Parasail, "", "", "https://www.saas.parasail.io/keys", "Parasail open-model inference (Chat Completions dialect; serverless models)"),
-	responsesBound(Meta, "meta", "https://dev.meta.ai/", "Meta Model API — Muse Spark over the Responses wire (reasoning replay, web_search), plus Files, Images (muse-image-1.0) and Models; Meta's docs call the key MODEL_API_KEY — export it as META_API_KEY"),
-	chatBound(MetaChat, "meta", "", "https://dev.meta.ai/", "Meta Model API over the Chat Completions wire (same key as `meta`; no cross-turn reasoning)"),
-	anthropicBound(MetaAnthropic, "meta", "https://dev.meta.ai/", "Meta Model API over the Anthropic Messages wire (same key as `meta`; bearer token)"),
-	hosted(Azure, DialectOpenAIResponses, "", "https://portal.azure.com/", "Azure OpenAI v1 Responses wire ({resource}.openai.azure.com; model = deployment name; api-key or Entra token)"),
-	hosted(AzureChat, DialectOpenAIChat, "openai", "https://portal.azure.com/", "Azure OpenAI v1 Chat Completions wire (same resource; also Foundry-sold models such as DeepSeek and Grok)"),
-	hosted(AzureAnthropic, DialectAnthropic, "", "https://ai.azure.com/", "Claude in Microsoft Foundry ({resource}.services.ai.azure.com/anthropic; api-key, x-api-key or Entra token)"),
-	hosted(AwsAnthropic, DialectAnthropic, "", "https://console.aws.amazon.com/", "Claude Platform on AWS (Anthropic-operated; SigV4 or ANTHROPIC_AWS_API_KEY; needs AWS_REGION and ANTHROPIC_AWS_WORKSPACE_ID)"),
-	hosted(BedrockAnthropic, DialectAnthropic, "", "https://console.aws.amazon.com/bedrock/", "Claude in Amazon Bedrock (bedrock-mantle, Opus 4.7 and later; SigV4 or AWS_BEARER_TOKEN_BEDROCK; needs AWS_REGION)"),
-	hosted(BedrockChat, DialectOpenAIChat, "bedrock", "https://console.aws.amazon.com/bedrock/", "Amazon Bedrock over the OpenAI Chat Completions wire (bedrock-runtime /openai/v1; SigV4 or AWS_BEARER_TOKEN_BEDROCK)"),
-	hosted(BedrockMantleChat, DialectOpenAIChat, "bedrock-mantle", "https://console.aws.amazon.com/bedrock/", "Amazon Bedrock Chat Completions on bedrock-mantle (un-versioned ids, GET /v1/models; SigV4 or AWS_BEARER_TOKEN_BEDROCK)"),
-	hosted(Vertex, DialectGemini, "", "https://console.cloud.google.com/vertex-ai", "Gemini on Google Cloud (Agent Platform); ADC chain; needs GOOGLE_CLOUD_PROJECT, GOOGLE_CLOUD_LOCATION defaults to global"),
-	hosted(VertexExpress, DialectGemini, "", "https://console.cloud.google.com/vertex-ai/studio", "Agent Platform express mode: GOOGLE_API_KEY as ?key=, no project or location"),
-	hosted(VertexAnthropic, DialectAnthropic, "", "https://console.cloud.google.com/vertex-ai/model-garden", "Claude on Google Cloud (rawPredict; model in the path, anthropic_version in the body)"),
-	chatBound(Ollama, "", "ollama", "", "local ollama server (keyless)"),
-	chatBound(VLLM, "", "EMPTY", "", "local vLLM server (keyless)"),
-	chatBound(SGLang, "", "EMPTY", "", "local SGLang server (keyless)"),
-}
+// providerDefinitions is the declaration order (presentation order): the
+// reference's rows (lm15-contract tables/providers.json, generated into
+// tables_generated.go). A provider is added there, never here.
+var providerDefinitions = func() []ProviderDefinition {
+	out := make([]ProviderDefinition, 0, len(tableProviders))
+	for _, r := range tableProviders {
+		out = append(out, definitionOf(r, false))
+	}
+	return out
+}()
 
 // Providers maps every provider id to its definition.
 var Providers = func() map[string]ProviderDefinition {

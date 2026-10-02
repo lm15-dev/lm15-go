@@ -24,34 +24,35 @@ var VetHandlers map[string]func(JSONObject) (JSONObject, error)
 
 func init() {
 	VetHandlers = map[string]func(JSONObject) (JSONObject, error){
-		"capabilities":          vetCapabilities,
-		"build_request":         vetBuildRequest,
-		"ingest_openai_chat":    vetIngestOpenAIChat,
-		"parse_response":        vetParseResponse,
-		"replay_stream":         vetReplayStream,
-		"normalize_error":       vetNormalizeError,
-		"serde_roundtrip":       vetSerdeRoundtrip,
-		"validate":              vetValidate,
-		"surface_dump":          func(JSONObject) (JSONObject, error) { return SurfaceDump(), nil },
-		"explain_auth":          vetExplainAuth,
-		"resolve_model":         vetResolveModel,
-		"token_exchange_build":  vetTokenExchangeBuild,
-		"token_exchange_parse":  vetTokenExchangeParse,
-		"sigv4_sign":            vetSigV4Sign,
-		"build_models_request":  vetBuildModelsRequest,
-		"parse_models_response": vetParseModelsResponse,
-		"replay_live":           vetReplayLive,
-		"generation_build":      vetGenerationBuild,
-		"generation_parse":      vetGenerationParse,
-		"file_op_build":         vetFileOpBuild,
-		"file_op_parse":         vetFileOpParse,
-		"video_op_build":        vetVideoOpBuild,
-		"video_op_parse":        vetVideoOpParse,
-		"batch_op_build":        vetBatchOpBuild,
-		"batch_op_parse":        vetBatchOpParse,
-		"cache_op_build":        vetCacheOpBuild,
-		"cache_op_parse":        vetCacheOpParse,
-		"managed_run":           vetManagedRun,
+		"capabilities":              vetCapabilities,
+		"build_request":             vetBuildRequest,
+		"ingest_openai_chat":        vetIngestOpenAIChat,
+		"parse_response":            vetParseResponse,
+		"replay_stream":             vetReplayStream,
+		"normalize_error":           vetNormalizeError,
+		"serde_roundtrip":           vetSerdeRoundtrip,
+		"validate":                  vetValidate,
+		"surface_dump":              func(JSONObject) (JSONObject, error) { return SurfaceDump(), nil },
+		"explain_auth":              vetExplainAuth,
+		"resolve_model":             vetResolveModel,
+		"resolve_openai_chat_model": vetResolveOpenAIChatModel,
+		"token_exchange_build":      vetTokenExchangeBuild,
+		"token_exchange_parse":      vetTokenExchangeParse,
+		"sigv4_sign":                vetSigV4Sign,
+		"build_models_request":      vetBuildModelsRequest,
+		"parse_models_response":     vetParseModelsResponse,
+		"replay_live":               vetReplayLive,
+		"generation_build":          vetGenerationBuild,
+		"generation_parse":          vetGenerationParse,
+		"file_op_build":             vetFileOpBuild,
+		"file_op_parse":             vetFileOpParse,
+		"video_op_build":            vetVideoOpBuild,
+		"video_op_parse":            vetVideoOpParse,
+		"batch_op_build":            vetBatchOpBuild,
+		"batch_op_parse":            vetBatchOpParse,
+		"cache_op_build":            vetCacheOpBuild,
+		"cache_op_parse":            vetCacheOpParse,
+		"managed_run":               vetManagedRun,
 	}
 }
 
@@ -527,6 +528,24 @@ func vetResolveModel(msg JSONObject) (JSONObject, error) {
 		}
 	}
 	res, err := Resolve(wireStr(msg.Get("model")), RouterConfig{Registry: registry, Env: env})
+	if err != nil {
+		return nil, err
+	}
+	return JSONObject{{"provider", res.Provider}, {"model", res.Model}, {"source", res.Source}}, nil
+}
+
+// vetResolveOpenAIChatModel is PROTOCOL.md resolve_openai_chat_model: the
+// router's OpenAI-SDK / litellm door over harness-supplied inputs only.
+func vetResolveOpenAIChatModel(msg JSONObject) (JSONObject, error) {
+	env := map[string]string{}
+	for k, v := range wireObj(msg.Get("env")).All() {
+		env[k] = wireStr(v)
+	}
+	router, err := NewRouterWithConfig(RouterConfig{Env: env})
+	if err != nil {
+		return nil, err
+	}
+	res, err := router.ResolveOpenAIChat(wireStr(msg.Get("model")))
 	if err != nil {
 		return nil, err
 	}

@@ -117,12 +117,8 @@ const (
 	openrouterKeyURL       = "https://openrouter.ai/api/v1/auth/keys"
 )
 
-var copilotHeaders = [][2]string{
-	{"User-Agent", "GitHubCopilotChat/0.35.0"},
-	{"Editor-Version", "vscode/1.107.0"},
-	{"Editor-Plugin-Version", "copilot-chat/0.35.0"},
-	{"Copilot-Integration-Id", "vscode-chat"},
-}
+// copilotHeaders are the github-copilot declared provider's static headers (the generated table).
+var copilotHeaders = tableAccess("github-copilot").Headers
 
 func pkcePair() (string, string) {
 	verifier := randomBase64URL(64) // 86 characters, the reference's generate_pkce

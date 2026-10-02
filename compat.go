@@ -108,34 +108,10 @@ func mergeJSON(a, b JSONObject) JSONObject {
 	return out
 }
 
-var openaiResponsesPresets = map[string]OpenAIResponsesCompat{
-	"openai":     {DeveloperRole: "developer", MaxOutputTokensField: "max_output_tokens", ReasoningFormat: "responses_reasoning", ToolResultName: "omit", StrictTools: "omit", CacheControl: "openai"},
-	"openrouter": {DeveloperRole: "developer", MaxOutputTokensField: "max_tokens", ReasoningFormat: "openrouter", ToolResultName: "omit", StrictTools: "omit", CacheControl: "openai", ToolResultMedia: "reject"},
-	"ollama":     {DeveloperRole: "system", MaxOutputTokensField: "max_tokens", ReasoningFormat: "none", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "reject"},
-	"vllm":       {DeveloperRole: "system", MaxOutputTokensField: "max_tokens", ReasoningFormat: "reasoning_effort", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "reject"},
-	"sglang":     {DeveloperRole: "system", MaxOutputTokensField: "max_tokens", ReasoningFormat: "reasoning_effort", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "reject"},
-	"qwen":       {DeveloperRole: "system", MaxOutputTokensField: "max_tokens", ReasoningFormat: "qwen", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "reject"},
-	"deepseek":   {DeveloperRole: "system", MaxOutputTokensField: "max_tokens", ReasoningFormat: "deepseek", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "reject"},
-	"zai":        {DeveloperRole: "system", MaxOutputTokensField: "max_tokens", ReasoningFormat: "zai", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "reject"},
-	"meta":       {DeveloperRole: "developer", MaxOutputTokensField: "max_output_tokens", ReasoningFormat: "responses_reasoning", ToolResultName: "omit", StrictTools: "omit", CacheControl: "openai_implicit", CommentaryPhase: "tag", EditImageField: "indexed", BuiltinTools: "verbatim", ToolResultMedia: "native"},
-	"moonshotai": {DeveloperRole: "developer", MaxOutputTokensField: "max_output_tokens", ReasoningFormat: "responses_reasoning", ToolResultName: "omit", StrictTools: "omit", CacheControl: "openai_implicit", BuiltinTools: "verbatim", ToolResultMedia: "images"},
-}
+var openaiResponsesPresets = tableOpenAIResponsesPresets
 
 // OpenAIResponsesPresetBaseURLs are the addresses the Responses presets name.
-var OpenAIResponsesPresetBaseURLs = map[string]string{
-	"openai":     "https://api.openai.com/v1",
-	"ollama":     "http://localhost:11434/v1",
-	"lmstudio":   "http://localhost:1234/v1",
-	"vllm":       "http://localhost:8000/v1",
-	"sglang":     "http://localhost:30000/v1",
-	"openrouter": "https://openrouter.ai/api/v1",
-	"meta":       "https://api.meta.ai/v1",
-	"moonshotai": "https://api.moonshot.ai/v1",
-}
-
-func init() {
-	openaiResponsesPresets["lmstudio"] = openaiResponsesPresets["ollama"]
-}
+var OpenAIResponsesPresetBaseURLs = tableOpenAIResponsesPresetBaseURLs
 
 // OpenAIResponsesPreset returns the named Responses preset.
 func OpenAIResponsesPreset(name string) (OpenAIResponsesCompat, error) {
@@ -313,116 +289,27 @@ func ResolveOpenAIChatCompat(p OpenAIChatCompat) ResolvedOpenAIChatCompat {
 	}
 }
 
-var openaiChatPresets = map[string]OpenAIChatCompat{
-	"openai": {InstructionRole: "system", MaxTokensField: "max_completion_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ToolResultName: "omit", StrictTools: "omit", CacheControl: "openai", ToolResultMedia: "reject"},
-	// ollama: reasoning_effort on the wire, mapped to Ollama's `think` by
-	// openai/openai.go thinkFromReasoningEffort (research/tool-result-content/
-	// sources/ollama.txt:536-560): none → think:false, minimal → low,
-	// low|medium|high|max verbatim, xhigh → max; an unknown word is a 400.
-	"ollama": {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ReasoningEfforts: []string{"minimal", "low", "medium", "high", "xhigh", "max"}, ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "reject"},
-	// LM Studio: its own policy (HYPOTHESIS, no receipt): lmstudio.ai lists
-	// max_tokens and no reasoning dial, so thinking_format="none" — under
-	// MAP-13 a set dial is dropped and recorded, never refused on this
-	// unverified line.
-	"lmstudio":   {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "none", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "reject"},
-	"groq":       {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ToolResultName: "omit", StrictTools: "omit", BuiltinTools: "groq", CacheControl: "none", ToolResultMedia: "reject"},
-	"openrouter": {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "openrouter", ToolResultName: "omit", StrictTools: "omit", CacheControl: "openai", ToolResultMedia: "reject"},
-	"xai":        {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "deepseek", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "images"},
-	// vllm: MAP-14 §4, receipts/2026-09-17-judgments/vllm-0.29-lfm-trie.json
-	// (honoured) and vllm-0.25.1-qwen-trie-negative.json (silently absent).
-	"vllm":     {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "reject", TokenScoring: "logprob_token_ids"},
-	"sglang":   {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ToolResultMedia: "reject"},
-	"deepseek": {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "deepseek", ThinkingReplay: "native", AssistantReasoningContent: "include_empty", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", UserField: "user_id", ToolResultMedia: "reject"},
-	"qwen":     {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "qwen", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none"},
-	"bedrock": {InstructionRole: "system", MaxTokensField: "max_completion_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", UserField: "user", ForcedToolChoice: "send", JSONSchema: "send",
-		ModelOverrides: []ModelOverride{
-			{Prefix: "openai.gpt-oss", Knobs: map[string]string{"forced_tool_choice": "reject", "json_schema": "reject"}},
-			{Prefix: "google.gemma", Knobs: map[string]string{"forced_tool_choice": "reject"}},
-		}, ToolResultMedia: "reject"},
-	"bedrock_mantle": {InstructionRole: "system", MaxTokensField: "max_completion_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", UserField: "user", ForcedToolChoice: "send", JSONSchema: "send",
-		ModelOverrides: []ModelOverride{
-			{Prefix: "openai.gpt-oss", Knobs: map[string]string{"forced_tool_choice": "reject", "json_schema": "reject"}},
-		}},
-	"zai":        {InstructionRole: "system", MaxTokensField: "max_tokens", StreamUsage: "include", ThinkingFormat: "deepseek", ThinkingReplay: "native", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", UserField: "user_id", ForcedToolChoice: "reject", JSONSchema: "reject", ToolResultMedia: "images"},
-	"meta":       {InstructionRole: "developer", MaxTokensField: "max_completion_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ToolResultName: "omit", StrictTools: "omit", CacheControl: "openai_implicit", UserField: "safety_identifier", ToolResultMedia: "reject"},
-	"moonshotai": {InstructionRole: "system", MaxTokensField: "max_completion_tokens", StreamUsage: "include", ThinkingFormat: "kimi", ThinkingReplay: "native", ToolResultName: "omit", StrictTools: "omit", CacheControl: "openai_implicit", UserField: "safety_identifier", ReasoningEfforts: []string{"low", "high", "max"}, ToolResultMedia: "images"},
-	// ─── Open-model inference hosts (lm15-contract changes/2026-09-26-inference-hosts-live.md) ───
-	// One policy for the four, each knob receipted live 2026-09-26: the
-	// reasoning_effort dial (Fireworks refuses the `reasoning` object);
-	// reasoning replayed as reasoning_content (a planted code word was
-	// recalled through it; Fireworks refuses `reasoning`); max_completion_tokens
-	// and stream usage honoured; caching automatic, so a key or long
-	// retention is dropped with a record. Per-model rules, each pinned by a case.
-	//
-	// DeepInfra: 422 on media in a tool row; a forced tool choice goes only to
-	// the 14 models a survey showed honour it (research/providers/deepinfra/
-	// tool_choice_survey.py), refused elsewhere (MAP-8, ratified 2026-09-26).
-	"deepinfra": inferenceHost("reject", "reject", deepinfraOverrides()),
-	// Together, gpt-oss: a forced tool choice answers 500 (retryable: refused
-	// before the wire); xhigh/max/unknown words run at medium (clamped,
-	// recorded); `none` accepted and reasoning still billed (lowest level
-	// instead). GLM-5.3 ignores `none`. Media in tool rows: open cell.
-	"together": inferenceHost("reject", "", []ModelOverride{
-		{Prefix: "openai/gpt-oss", Knobs: map[string]string{"forced_tool_choice": "reject", "reasoning_efforts": "low,medium,high", "reasoning_off": "lowest"}},
-		{Prefix: "zai-org/GLM-5.3", Knobs: map[string]string{"reasoning_off": "lowest"}},
-	}),
-	"fireworks": inferenceHost("images", "", nil), // MAP-10: image read (GLM-5.3-Flash)
-	"parasail":  inferenceHost("images", "", nil), // MAP-10: image read (Qwen3-VL-8B)
-}
+// The server presets and their roots: generated from lm15-contract
+// tables/providers.json (tables_generated.go); the receipt behind each knob is
+// cited at the reference table (lm15-python lm15/compat.py).
+var openaiChatPresets = tableOpenAIChatPresets
 
 // DeepInfraForcedToolChoice lists the DeepInfra models measured to honour a
 // forced tool choice (survey of 24, 2026-09-26); each id is a prefix, so a
-// suffixed variant (-0731, -Turbo) inherits its entry.
-var DeepInfraForcedToolChoice = []string{
-	"deepseek-ai/DeepSeek-V3.2",
-	"deepseek-ai/DeepSeek-V4-Flash",
-	"deepseek-ai/DeepSeek-V4.1-Flash",
-	"zai-org/GLM-5.3-Flash",
-	"moonshotai/Kimi-K2.6",
-	"meta-llama/Llama-4-Scout-17B-16E-Instruct",
-	"Qwen/Qwen3.6-27B",
-	"Qwen/Qwen3-Next-80B-A3B-Instruct",
-	"nvidia/NVIDIA-Nemotron-3.5-Lightning",
-	"ibm-granite/granite-4.2-8b",
-	"XiaomiMiMo/MiMo-V2.6-Flash",
-	"tencent/Hy3",
-	"google/gemini-3.1-flash-lite",
-	"anthropic/claude-haiku-4-5",
-}
-
-func deepinfraOverrides() []ModelOverride {
-	out := []ModelOverride{{Prefix: "openai/gpt-oss", Knobs: map[string]string{"reasoning_off": "lowest"}}}
-	for _, model := range DeepInfraForcedToolChoice {
-		out = append(out, ModelOverride{Prefix: model, Knobs: map[string]string{"forced_tool_choice": "send"}})
+// suffixed variant (-0731, -Turbo) inherits its entry. Read from the
+// generated deepinfra preset's model overrides.
+var DeepInfraForcedToolChoice = func() []string {
+	var out []string
+	for _, o := range tableOpenAIChatPresets["deepinfra"].ModelOverrides {
+		if o.Knobs["forced_tool_choice"] == "send" {
+			out = append(out, o.Prefix)
+		}
 	}
 	return out
-}
-
-func inferenceHost(toolResultMedia, forcedToolChoice string, overrides []ModelOverride) OpenAIChatCompat {
-	return OpenAIChatCompat{InstructionRole: "system", MaxTokensField: "max_completion_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort", ThinkingReplay: "native", ToolResultName: "omit", StrictTools: "omit", CacheControl: "none", ForcedToolChoice: forcedToolChoice, ToolResultMedia: toolResultMedia, ModelOverrides: overrides}
-}
+}()
 
 // OpenAIChatPresetBaseURLs are the addresses the Chat presets name.
-var OpenAIChatPresetBaseURLs = map[string]string{
-	"openai":     "https://api.openai.com/v1",
-	"ollama":     "http://localhost:11434/v1",
-	"lmstudio":   "http://localhost:1234/v1",
-	"groq":       "https://api.groq.com/openai/v1",
-	"openrouter": "https://openrouter.ai/api/v1",
-	"xai":        "https://api.x.ai/v1",
-	"vllm":       "http://localhost:8000/v1",
-	"sglang":     "http://localhost:30000/v1",
-	"deepseek":   "https://api.deepseek.com",
-	"zai":        "https://api.z.ai/api/paas/v4",
-	"meta":       "https://api.meta.ai/v1",
-	"moonshotai": "https://api.moonshot.ai/v1",
-	// The open-model inference hosts, each its documented OpenAI-compatible
-	// root (DeepInfra: the /v1/openai root, not /v1).
-	"deepinfra": "https://api.deepinfra.com/v1/openai",
-	"together":  "https://api.together.ai/v1",
-	"fireworks": "https://api.fireworks.ai/inference/v1",
-	"parasail":  "https://api.parasail.io/v1",
-}
+var OpenAIChatPresetBaseURLs = tableOpenAIChatPresetBaseURLs
 
 // OpenAIChatPreset returns the named Chat preset.
 func OpenAIChatPreset(name string) (OpenAIChatCompat, error) {
@@ -520,20 +407,10 @@ func ResolveAnthropicCompat(p AnthropicCompat) ResolvedAnthropicCompat {
 	}
 }
 
-var anthropicPresets = map[string]AnthropicCompat{
-	"anthropic":  {},
-	"deepseek":   {ThinkingFormat: "deepseek", CacheControl: "none", StructuredOutput: "reject", ParallelToolCalls: "reject", ModelPrefixes: []string{"deepseek-"}, ToolResultMedia: "reject"},
-	"meta":       {ThinkingFormat: "adaptive", CacheControl: "none", StructuredOutput: "send", ParallelToolCalls: "send", ToolResultMedia: "native"},
-	"moonshotai": {ThinkingFormat: "effort", ThinkingReplay: "unsigned", CacheControl: "none", StructuredOutput: "send", ParallelToolCalls: "reject", SamplingParams: "reject", ReasoningEfforts: []string{"low", "high", "max"}, ModelPrefixes: []string{"kimi-"}, ToolResultMedia: "images"},
-}
+var anthropicPresets = tableAnthropicPresets
 
 // AnthropicPresetBaseURLs are the addresses the Anthropic presets name.
-var AnthropicPresetBaseURLs = map[string]string{
-	"anthropic":  "https://api.anthropic.com/v1",
-	"deepseek":   "https://api.deepseek.com/anthropic/v1",
-	"meta":       "https://api.meta.ai/v1",
-	"moonshotai": "https://api.moonshot.ai/anthropic/v1",
-}
+var AnthropicPresetBaseURLs = tableAnthropicPresetBaseURLs
 
 // AnthropicPreset returns the named Anthropic preset.
 func AnthropicPreset(name string) (AnthropicCompat, error) {
@@ -546,16 +423,7 @@ func AnthropicPreset(name string) (AnthropicCompat, error) {
 
 // ─── Shared ──────────────────────────────────────────────────────────
 
-var presetAliases = map[string]string{
-	"openai_chat":      "openai",
-	"chat":             "openai",
-	"chat_completions": "openai",
-	"responses":        "openai",
-	"openai_responses": "openai",
-	"lm_studio":        "lmstudio",
-	"dashscope_qwen":   "qwen",
-	"z_ai":             "zai",
-}
+var presetAliases = tablePresetAliases
 
 func presetKey(name string) string {
 	key := strings.ToLower(name)

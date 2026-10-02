@@ -26,13 +26,7 @@ const typesafeDefaultBaseURL = "https://api.typesafe.ai"
 
 // TypeSafeAPI is the typesafe access policy: bearer key, complete and
 // models only (D11: no stream).
-var TypeSafeAPI = AccessPolicy{
-	Provider:   "typesafe",
-	Supports:   EndpointSupport{Complete: true, Models: true},
-	AuthModes:  []string{"bearer"},
-	EnvKeys:    []string{"TYPESAFE_API_KEY"},
-	AuthScheme: []string{"bearer"},
-}
+var TypeSafeAPI = tableAccess("typesafe")
 
 // TypeSafeLM is the TypeSafe System One dialect (POST /v1/systemone).
 type TypeSafeLM struct {

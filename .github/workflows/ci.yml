@@ -62,6 +62,8 @@ jobs:
           [[ "$PIN" =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid CONTRACT_PIN'; exit 1; }
           git clone --no-checkout https://github.com/lm15-dev/lm15-contract.git ../lm15-contract
           git -C ../lm15-contract checkout --detach "$PIN"
+      - name: Generated provider tables are current for the pinned contract
+        run: python3 tools/gen_tables.py --check
       - run: go build -o bin/lm15-vet ./cmd/lm15-vet
       - name: Contract harness (every direction, at the pin)
         run: python3 ../lm15-contract/harness/check.py --shim go --direction all

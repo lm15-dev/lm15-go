@@ -7,17 +7,27 @@ import (
 	"strings"
 )
 
-// The access policies (spec/auth.md AUTH-10; reference lm15/access.py).
-// Ports copy the table as data and consult it at the same named points.
+// The access policies (spec/auth.md AUTH-10; reference lm15/access.py),
+// generated from lm15-contract tables/providers.json into
+// tables_generated.go. The named variables are the package's public names;
+// a provider added to the table needs none (the registry iterates the rows).
+
+// tableAccess is the generated table's access policy for provider, registry
+// and managed-login declared rows alike; a name the table lacks is a
+// build-time bug, so it panics at package initialization.
+func tableAccess(provider string) AccessPolicy {
+	for _, rows := range [][]tableRow{tableProviders, tableDeclaredLogin} {
+		for _, r := range rows {
+			if r.ID == provider {
+				return r.Access
+			}
+		}
+	}
+	panic("lm15: no access policy for " + provider + " in tables_generated.go")
+}
 
 // AnthropicAPI is the Anthropic Messages API on an API key.
-var AnthropicAPI = AccessPolicy{
-	Provider:   "anthropic",
-	Supports:   EndpointSupport{Complete: true, Stream: true, Files: true, Batches: true, Models: true},
-	AuthModes:  []string{"x-api-key"},
-	EnvKeys:    []string{"ANTHROPIC_API_KEY"},
-	AuthScheme: []string{"x-api-key"},
-}
+var AnthropicAPI = tableAccess("anthropic")
 
 // Claude Code constants. DefaultClaudeCodeVersion is the Claude Code release
 // the claude-code door says it is (user-agent: claude-cli/<version>).
@@ -37,34 +47,10 @@ const (
 )
 
 // ClaudeCode is the Anthropic dialect on a local Claude Code login.
-var ClaudeCode = AccessPolicy{
-	Provider:         "claude-code",
-	Supports:         EndpointSupport{Complete: true, Stream: true, Models: true},
-	CredentialPolicy: "oauth",
-	AuthModes:        []string{"claude-code-oauth", "bearer-oauth"},
-	AuthScheme:       []string{"bearer"},
-	Headers: [][2]string{
-		{"anthropic-dangerous-direct-browser-access", "true"},
-		{"anthropic-beta", "claude-code-20250219,oauth-2025-04-20"},
-		{"x-app", "cli"},
-		{"user-agent", "claude-cli/" + DefaultClaudeCodeVersion},
-	},
-	LoginHint:       ClaudeCodeLoginHint,
-	Backend:         "claude-code",
-	BackendOptions:  map[string]string{"client_version": DefaultClaudeCodeVersion},
-	BackendSettings: []HostSetting{{Name: "client_version", Env: []string{ClaudeCodeVersionEnv}}},
-	SystemPrefix:    DefaultClaudeCodeSystemPrompt,
-}
+var ClaudeCode = tableAccess("claude-code")
 
 // OpenAIAPI is the OpenAI Responses API on an API key.
-var OpenAIAPI = AccessPolicy{
-	Provider: "openai",
-	Supports: EndpointSupport{Complete: true, Stream: true, Live: true, Files: true, Batches: true,
-		Images: true, Speech: true, Video: true, ResponsesAPI: true, Models: true},
-	AuthModes:          []string{"bearer"},
-	EnvKeys:            []string{"OPENAI_API_KEY"},
-	EnterpriseVariants: []string{"azure-openai"},
-}
+var OpenAIAPI = tableAccess("openai")
 
 // Codex constants.
 const (
@@ -76,397 +62,108 @@ const (
 )
 
 // OpenAICodex is the Responses dialect on a local Codex CLI login.
-var OpenAICodex = AccessPolicy{
-	Provider:         "openai-codex",
-	Supports:         EndpointSupport{Complete: true, Stream: true, Models: true},
-	CredentialPolicy: "oauth",
-	AuthModes:        []string{"chatgpt-oauth", "bearer-oauth"},
-	Headers: [][2]string{
-		{"OpenAI-Beta", "responses=experimental"},
-		{"originator", DefaultCodexOriginator},
-	},
-	LoginHint:       OpenAICodexLoginHint,
-	Backend:         CodexBackend,
-	BackendOptions:  map[string]string{"client_version": DefaultCodexClientVersion},
-	BackendSettings: []HostSetting{{Name: "client_version", Env: []string{CodexClientVersionEnv}}},
-	SystemPrefix:    DefaultCodexInstructions,
-	BaseURL:         DefaultCodexBaseURL,
-}
+var OpenAICodex = tableAccess("openai-codex")
 
 // OpenAIChatAPI is the OpenAI Chat Completions dialect on an API key.
-var OpenAIChatAPI = AccessPolicy{
-	Provider:  "openai-chat",
-	Supports:  EndpointSupport{Complete: true, Stream: true, Models: true},
-	AuthModes: []string{"bearer"},
-	EnvKeys:   []string{"OPENAI_API_KEY"},
-}
+var OpenAIChatAPI = tableAccess("openai-chat")
 
 // DefaultXaiBaseURL is api.x.ai.
 const DefaultXaiBaseURL = "https://api.x.ai/v1"
 
 // Xai is xAI Grok: Chat Completions dialect with subscription OAuth fallback.
-var Xai = AccessPolicy{
-	Provider:         "xai",
-	Supports:         EndpointSupport{Complete: true, Stream: true, Models: true, Images: true, Video: true},
-	CredentialPolicy: "oauth-unless-explicit",
-	AuthModes:        []string{"bearer", "xai-oauth"},
-	EnvKeys:          []string{"XAI_API_KEY"},
-	LoginHint:        XaiLoginHint,
-	BaseURL:          DefaultXaiBaseURL,
-}
+var Xai = tableAccess("xai")
 
 // GeminiAPI is the Google Gemini API on an API key.
-var GeminiAPI = AccessPolicy{
-	Provider: "gemini",
-	Supports: EndpointSupport{Complete: true, Stream: true, Live: true, Files: true, Batches: true,
-		Images: true, Speech: true, Video: true, Models: true, Caches: true},
-	AuthModes:  []string{"query-api-key", "x-goog-api-key"},
-	EnvKeys:    []string{"GEMINI_API_KEY", "GOOGLE_API_KEY"},
-	AuthScheme: []string{"x-api-key"}, // the dialect renders it as x-goog-api-key
-}
-
-var metaEnvKeys = []string{"META_API_KEY"}
-var moonshotEnvKeys = []string{"MOONSHOTAI_API_KEY", "MOONSHOT_API_KEY"}
+var GeminiAPI = tableAccess("gemini")
 
 // Meta is the Meta Model API over the Responses wire.
-var Meta = AccessPolicy{
-	Provider:  "meta",
-	Supports:  EndpointSupport{Complete: true, Stream: true, Files: true, Images: true, ResponsesAPI: true, Models: true},
-	AuthModes: []string{"bearer"},
-	EnvKeys:   metaEnvKeys,
-	BaseURL:   OpenAIResponsesPresetBaseURLs["meta"],
-}
+var Meta = tableAccess("meta")
 
 // ─── Open-model inference hosts (changes/2026-09-26-inference-hosts-live.md) ───
 // A bearer key each, the provider's own documented variable; batch, files
 // and media endpoints they also sell are not registered.
 
 // DeepInfra is DeepInfra open-model inference (Chat Completions dialect).
-var DeepInfra = AccessPolicy{
-	Provider:  "deepinfra",
-	Supports:  EndpointSupport{Complete: true, Stream: true, Models: true},
-	AuthModes: []string{"bearer"},
-	EnvKeys:   []string{"DEEPINFRA_API_KEY"},
-	BaseURL:   OpenAIChatPresetBaseURLs["deepinfra"],
-}
+var DeepInfra = tableAccess("deepinfra")
 
 // Together is Together AI open-model inference (Chat Completions dialect).
-var Together = AccessPolicy{
-	Provider:  "together",
-	Supports:  EndpointSupport{Complete: true, Stream: true, Models: true},
-	AuthModes: []string{"bearer"},
-	EnvKeys:   []string{"TOGETHER_API_KEY"},
-	BaseURL:   OpenAIChatPresetBaseURLs["together"],
-}
+var Together = tableAccess("together")
 
 // Fireworks is Fireworks AI open-model inference (Chat Completions dialect).
-var Fireworks = AccessPolicy{
-	Provider:  "fireworks",
-	Supports:  EndpointSupport{Complete: true, Stream: true, Models: true},
-	AuthModes: []string{"bearer"},
-	EnvKeys:   []string{"FIREWORKS_API_KEY"},
-	BaseURL:   OpenAIChatPresetBaseURLs["fireworks"],
-}
+var Fireworks = tableAccess("fireworks")
 
 // Parasail is Parasail open-model inference (Chat Completions dialect).
-var Parasail = AccessPolicy{
-	Provider:  "parasail",
-	Supports:  EndpointSupport{Complete: true, Stream: true, Models: true},
-	AuthModes: []string{"bearer"},
-	EnvKeys:   []string{"PARASAIL_API_KEY"},
-	BaseURL:   OpenAIChatPresetBaseURLs["parasail"],
-}
+var Parasail = tableAccess("parasail")
 
 // Groq is Groq Cloud (Chat Completions dialect).
-var Groq = AccessPolicy{
-	Provider:  "groq",
-	Supports:  EndpointSupport{Complete: true, Stream: true, Models: true},
-	AuthModes: []string{"bearer"},
-	EnvKeys:   []string{"GROQ_API_KEY"},
-	BaseURL:   OpenAIChatPresetBaseURLs["groq"],
-}
+var Groq = tableAccess("groq")
 
 // OpenRouter is OpenRouter (Chat Completions dialect).
-var OpenRouter = AccessPolicy{
-	Provider:  "openrouter",
-	Supports:  EndpointSupport{Complete: true, Stream: true, Models: true},
-	AuthModes: []string{"bearer"},
-	EnvKeys:   []string{"OPENROUTER_API_KEY"},
-	BaseURL:   OpenAIChatPresetBaseURLs["openrouter"],
-}
+var OpenRouter = tableAccess("openrouter")
 
 // DeepSeek is DeepSeek (Chat Completions dialect).
-var DeepSeek = AccessPolicy{
-	Provider:  "deepseek",
-	Supports:  EndpointSupport{Complete: true, Stream: true, Models: true},
-	AuthModes: []string{"bearer"},
-	EnvKeys:   []string{"DEEPSEEK_API_KEY"},
-	BaseURL:   OpenAIChatPresetBaseURLs["deepseek"],
-}
+var DeepSeek = tableAccess("deepseek")
 
 // Zai is Z.AI (Chat Completions dialect).
-var Zai = AccessPolicy{
-	Provider:  "zai",
-	Supports:  EndpointSupport{Complete: true, Stream: true, Models: true},
-	AuthModes: []string{"bearer"},
-	EnvKeys:   []string{"ZAI_API_KEY"},
-	BaseURL:   OpenAIChatPresetBaseURLs["zai"],
-}
+var Zai = tableAccess("zai")
 
 // Moonshotai is Moonshot AI Kimi (Chat Completions dialect).
-var Moonshotai = AccessPolicy{
-	Provider:  "moonshotai",
-	Supports:  EndpointSupport{Complete: true, Stream: true, Models: true},
-	AuthModes: []string{"bearer"},
-	EnvKeys:   moonshotEnvKeys,
-	BaseURL:   OpenAIChatPresetBaseURLs["moonshotai"],
-}
+var Moonshotai = tableAccess("moonshotai")
 
 // MoonshotaiResponses is Moonshot's Responses wire.
-var MoonshotaiResponses = AccessPolicy{
-	Provider:  "moonshotai-responses",
-	Supports:  EndpointSupport{Complete: true, Stream: true, ResponsesAPI: true, Models: true},
-	AuthModes: []string{"bearer"},
-	EnvKeys:   moonshotEnvKeys,
-	BaseURL:   OpenAIResponsesPresetBaseURLs["moonshotai"],
-}
+var MoonshotaiResponses = tableAccess("moonshotai-responses")
 
 // MetaChat is Meta's Chat Completions wire.
-var MetaChat = AccessPolicy{
-	Provider:  "meta-chat",
-	Supports:  EndpointSupport{Complete: true, Stream: true, Models: true},
-	AuthModes: []string{"bearer"},
-	EnvKeys:   metaEnvKeys,
-	BaseURL:   OpenAIChatPresetBaseURLs["meta"],
-}
+var MetaChat = tableAccess("meta-chat")
 
 // DeepSeekAnthropic is DeepSeek over the Anthropic Messages wire.
-var DeepSeekAnthropic = AccessPolicy{
-	Provider:   "deepseek-anthropic",
-	Supports:   EndpointSupport{Complete: true, Stream: true},
-	AuthModes:  []string{"x-api-key"},
-	EnvKeys:    []string{"DEEPSEEK_API_KEY"},
-	AuthScheme: []string{"x-api-key"},
-	BaseURL:    AnthropicPresetBaseURLs["deepseek"],
-}
+var DeepSeekAnthropic = tableAccess("deepseek-anthropic")
 
 // MetaAnthropic is Meta over the Anthropic Messages wire.
-var MetaAnthropic = AccessPolicy{
-	Provider:   "meta-anthropic",
-	Supports:   EndpointSupport{Complete: true, Stream: true, Models: true},
-	AuthModes:  []string{"bearer"},
-	EnvKeys:    metaEnvKeys,
-	AuthScheme: []string{"bearer"},
-	BaseURL:    AnthropicPresetBaseURLs["meta"],
-}
+var MetaAnthropic = tableAccess("meta-anthropic")
 
 // MoonshotaiAnthropic is Moonshot over the Anthropic Messages wire.
-var MoonshotaiAnthropic = AccessPolicy{
-	Provider:   "moonshotai-anthropic",
-	Supports:   EndpointSupport{Complete: true, Stream: true},
-	AuthModes:  []string{"bearer"},
-	EnvKeys:    moonshotEnvKeys,
-	AuthScheme: []string{"bearer"},
-	BaseURL:    AnthropicPresetBaseURLs["moonshotai"],
-}
-
-// Cloud host settings (AUTH-10).
-var (
-	awsRegionSetting      = HostSetting{Name: "region", Env: []string{"AWS_REGION", "AWS_DEFAULT_REGION"}}
-	awsWorkspace          = HostSetting{Name: "workspace", Env: []string{"ANTHROPIC_AWS_WORKSPACE_ID"}}
-	gcpProject            = HostSetting{Name: "project", Env: []string{"GOOGLE_CLOUD_PROJECT", "GCLOUD_PROJECT"}}
-	gcpLocation           = HostSetting{Name: "location", Env: []string{"GOOGLE_CLOUD_LOCATION"}, Default: "global"}
-	azureOpenAIRes        = HostSetting{Name: "resource", Env: []string{"AZURE_OPENAI_RESOURCE"}}
-	azureFoundryRes       = HostSetting{Name: "resource", Env: []string{"ANTHROPIC_FOUNDRY_RESOURCE"}}
-	azureAuthoritySetting = HostSetting{Name: "authority_host", Env: []string{"AZURE_AUTHORITY_HOST"}, Default: "https://login.microsoftonline.com"}
-	azureScopeSetting     = HostSetting{Name: "scope", Default: "https://ai.azure.com/.default"}
-	vertexBase            = "https://{location_host}/v1/projects/{project}/locations/{location}"
-
-	// Endpoint overrides (AUTH-10, amended 2026-09-19): the vendor's own
-	// variables naming a full URL root for a door, consulted by the router
-	// after an explicit base_urls entry and before the {resource} /
-	// {region} template. AWS: AWS_ENDPOINT_URL_<SERVICE_ID> then the
-	// generic AWS_ENDPOINT_URL (the service id is the SigV4 service name
-	// upper-cased with - → _, the SDK's rule). Azure OpenAI:
-	// AZURE_OPENAI_ENDPOINT. Foundry Claude: ANTHROPIC_FOUNDRY_BASE_URL.
-	// Vertex: no vendor variable is cited; base_urls only.
-	awsEndpoint          = []string{"AWS_ENDPOINT_URL_BEDROCK_RUNTIME", "AWS_ENDPOINT_URL"}
-	awsMantleEndpoint    = []string{"AWS_ENDPOINT_URL_BEDROCK_MANTLE", "AWS_ENDPOINT_URL"}
-	awsAnthropicEndpoint = []string{"AWS_ENDPOINT_URL_AWS_EXTERNAL_ANTHROPIC", "AWS_ENDPOINT_URL"}
-	azureOpenAIEndpoint  = []string{"AZURE_OPENAI_ENDPOINT"}
-	azureFoundryEndpoint = []string{"ANTHROPIC_FOUNDRY_BASE_URL"}
-)
+var MoonshotaiAnthropic = tableAccess("moonshotai-anthropic")
 
 // AwsAnthropic is Claude Platform on AWS.
-var AwsAnthropic = AccessPolicy{
-	Provider:         "aws-anthropic",
-	Supports:         EndpointSupport{Complete: true, Stream: true},
-	CredentialPolicy: "aws-chain",
-	AuthModes:        []string{"sigv4", "x-api-key"},
-	EnvKeys:          []string{"ANTHROPIC_AWS_API_KEY"},
-	AuthScheme:       []string{"sigv4", "x-api-key"},
-	Backend:          "aws-external-anthropic",
-	Host: &HostSpec{
-		BaseURL:         "https://aws-external-anthropic.{region}.api.aws/v1",
-		Settings:        []HostSetting{awsRegionSetting, awsWorkspace},
-		RequiredHeaders: [][2]string{{"anthropic-workspace-id", "workspace"}},
-		SigV4Service:    "aws-external-anthropic",
-		EndpointEnv:     awsAnthropicEndpoint,
-	},
-}
+var AwsAnthropic = tableAccess("aws-anthropic")
 
 // BedrockAnthropic is Claude in Amazon Bedrock (mantle).
-var BedrockAnthropic = AccessPolicy{
-	Provider:         "bedrock-anthropic",
-	Supports:         EndpointSupport{Complete: true, Stream: true},
-	CredentialPolicy: "aws-chain",
-	AuthModes:        []string{"sigv4", "x-api-key"},
-	EnvKeys:          []string{"AWS_BEARER_TOKEN_BEDROCK"},
-	AuthScheme:       []string{"sigv4", "x-api-key"},
-	Backend:          "bedrock-mantle",
-	Host: &HostSpec{
-		BaseURL:      "https://bedrock-mantle.{region}.api.aws/anthropic/v1",
-		Settings:     []HostSetting{awsRegionSetting},
-		SigV4Service: "bedrock-mantle",
-		EndpointEnv:  awsMantleEndpoint,
-	},
-}
+var BedrockAnthropic = tableAccess("bedrock-anthropic")
 
 // BedrockChat is Bedrock's Chat Completions door on bedrock-runtime.
-var BedrockChat = AccessPolicy{
-	Provider:         "bedrock-chat",
-	Supports:         EndpointSupport{Complete: true, Stream: true},
-	CredentialPolicy: "aws-chain",
-	AuthModes:        []string{"sigv4", "bearer"},
-	EnvKeys:          []string{"AWS_BEARER_TOKEN_BEDROCK"},
-	AuthScheme:       []string{"sigv4", "bearer"},
-	Backend:          "bedrock-runtime",
-	Host: &HostSpec{
-		BaseURL:      "https://bedrock-runtime.{region}.amazonaws.com/openai/v1",
-		Settings:     []HostSetting{awsRegionSetting},
-		SigV4Service: "bedrock",
-		EndpointEnv:  awsEndpoint,
-	},
-}
+var BedrockChat = tableAccess("bedrock-chat")
 
 // BedrockMantleChat is Bedrock Chat Completions on bedrock-mantle.
-var BedrockMantleChat = AccessPolicy{
-	Provider:         "bedrock-mantle-chat",
-	Supports:         EndpointSupport{Complete: true, Stream: true, Models: true},
-	CredentialPolicy: "aws-chain",
-	AuthModes:        []string{"sigv4", "bearer"},
-	EnvKeys:          []string{"AWS_BEARER_TOKEN_BEDROCK"},
-	AuthScheme:       []string{"sigv4", "bearer"},
-	Backend:          "bedrock-mantle",
-	Host: &HostSpec{
-		BaseURL:      "https://bedrock-mantle.{region}.api.aws/v1",
-		Settings:     []HostSetting{awsRegionSetting},
-		SigV4Service: "bedrock-mantle",
-		EndpointEnv:  awsMantleEndpoint,
-	},
-}
+var BedrockMantleChat = tableAccess("bedrock-mantle-chat")
 
 // Azure is Azure OpenAI v1 (Responses wire).
-var Azure = AccessPolicy{
-	Provider: "azure",
-	Supports: EndpointSupport{Complete: true, Stream: true, Live: true, Files: true, Batches: true, Speech: true,
-		ResponsesAPI: true, Models: true},
-	CredentialPolicy: "azure-chain",
-	AuthModes:        []string{"api-key", "entra-oauth"},
-	EnvKeys:          []string{"AZURE_OPENAI_API_KEY"},
-	AuthScheme:       []string{"api-key", "bearer"},
-	Backend:          "azure-openai",
-	Host: &HostSpec{
-		BaseURL:     "https://{resource}.openai.azure.com/openai/v1",
-		Settings:    []HostSetting{azureOpenAIRes, azureAuthoritySetting, azureScopeSetting},
-		EndpointEnv: azureOpenAIEndpoint,
-	},
-}
+var Azure = tableAccess("azure")
 
 // AzureChat is Azure OpenAI v1 (Chat Completions wire).
-var AzureChat = AccessPolicy{
-	Provider:         "azure-chat",
-	Supports:         EndpointSupport{Complete: true, Stream: true, Models: true},
-	CredentialPolicy: "azure-chain",
-	AuthModes:        []string{"api-key", "entra-oauth"},
-	EnvKeys:          []string{"AZURE_OPENAI_API_KEY"},
-	AuthScheme:       []string{"api-key", "bearer"},
-	Backend:          "azure-openai",
-	Host: &HostSpec{
-		BaseURL:     "https://{resource}.openai.azure.com/openai/v1",
-		Settings:    []HostSetting{azureOpenAIRes, azureAuthoritySetting, azureScopeSetting},
-		EndpointEnv: azureOpenAIEndpoint,
-	},
-}
+var AzureChat = tableAccess("azure-chat")
 
 // AzureAnthropic is Claude in Microsoft Foundry.
-var AzureAnthropic = AccessPolicy{
-	Provider:         "azure-anthropic",
-	Supports:         EndpointSupport{Complete: true, Stream: true},
-	CredentialPolicy: "azure-chain",
-	AuthModes:        []string{"x-api-key", "entra-oauth"},
-	EnvKeys:          []string{"ANTHROPIC_FOUNDRY_API_KEY"},
-	AuthScheme:       []string{"x-api-key", "bearer"},
-	Backend:          "azure-foundry",
-	Host: &HostSpec{
-		BaseURL:     "https://{resource}.services.ai.azure.com/anthropic/v1",
-		Settings:    []HostSetting{azureFoundryRes, azureAuthoritySetting, azureScopeSetting},
-		EndpointEnv: azureFoundryEndpoint,
-	},
-}
+var AzureAnthropic = tableAccess("azure-anthropic")
 
 // Vertex is Gemini on Google Cloud. API keys (amended 2026-09-26): a Vertex
 // API key in x-goog-api-key on the project-scoped hosts; key first, a
 // token-shaped string still bearer (AuthHeaderFor). No env key:
 // GOOGLE_API_KEY belongs to the Gemini API and vertex-express, and reading
 // it here would silently replace the ADC identity.
-var Vertex = AccessPolicy{
-	Provider:         "vertex",
-	Supports:         EndpointSupport{Complete: true, Stream: true},
-	CredentialPolicy: "gcp-chain",
-	AuthModes:        []string{"x-goog-api-key", "google-oauth"},
-	AuthScheme:       []string{"x-api-key", "bearer"},
-	Backend:          "vertex",
-	Host:             &HostSpec{BaseURL: vertexBase + "/publishers/google", Settings: []HostSetting{gcpProject, gcpLocation}},
-}
+var Vertex = tableAccess("vertex")
 
 // VertexExpress is Vertex express mode (API key).
-var VertexExpress = AccessPolicy{
-	Provider:         "vertex-express",
-	Supports:         EndpointSupport{Complete: true, Stream: true},
-	CredentialPolicy: "key",
-	AuthModes:        []string{"query-api-key"},
-	EnvKeys:          []string{"GOOGLE_API_KEY"},
-	AuthScheme:       []string{"query-key"},
-	Backend:          "vertex-express",
-	Host:             &HostSpec{BaseURL: "https://aiplatform.googleapis.com/v1/publishers/google"},
-}
+var VertexExpress = tableAccess("vertex-express")
 
 // VertexAnthropic is Claude on Google Cloud (rawPredict).
-var VertexAnthropic = AccessPolicy{
-	Provider:         "vertex-anthropic",
-	Supports:         EndpointSupport{Complete: true, Stream: true},
-	CredentialPolicy: "gcp-chain",
-	AuthModes:        []string{"google-oauth"},
-	AuthScheme:       []string{"bearer"},
-	Backend:          "vertex",
-	Host: &HostSpec{
-		BaseURL:  vertexBase,
-		Settings: []HostSetting{gcpProject, gcpLocation},
-		Paths: map[string]string{
-			"messages":        "/publishers/anthropic/models/{model}:rawPredict",
-			"messages/stream": "/publishers/anthropic/models/{model}:streamRawPredict",
-		},
-		ModelIn:            "path",
-		AnthropicVersionIn: "body:vertex-2023-10-16",
-	},
-}
+var VertexAnthropic = tableAccess("vertex-anthropic")
 
 // Keyless local servers.
 var (
-	Ollama = AccessPolicy{Provider: "ollama", Supports: EndpointSupport{Complete: true, Stream: true, Models: true}, AuthModes: []string{"bearer"}, BaseURL: OpenAIChatPresetBaseURLs["ollama"]}
-	VLLM   = AccessPolicy{Provider: "vllm", Supports: EndpointSupport{Complete: true, Stream: true, Models: true}, AuthModes: []string{"bearer"}, BaseURL: OpenAIChatPresetBaseURLs["vllm"]}
-	SGLang = AccessPolicy{Provider: "sglang", Supports: EndpointSupport{Complete: true, Stream: true, Models: true}, AuthModes: []string{"bearer"}, BaseURL: OpenAIChatPresetBaseURLs["sglang"]}
+	Ollama = tableAccess("ollama")
+	VLLM   = tableAccess("vllm")
+	SGLang = tableAccess("sglang")
 )
 
 // ─── Scheme selection (AUTH-2) ───────────────────────────────────────

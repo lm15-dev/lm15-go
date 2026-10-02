@@ -26,19 +26,7 @@ var ExternalSources = [][3]string{
 	{"pi-xai", "xai", "your Pi agent xAI login (~/.pi/agent/auth.json)"},
 }
 
-var serviceLabels = map[string]string{
-	"anthropic": "Anthropic", "claude-code": "Anthropic", "openai": "OpenAI", "openai-chat": "OpenAI",
-	"openai-codex": "OpenAI", "gemini": "Google", "vertex": "Google Cloud", "vertex-anthropic": "Google Cloud",
-	"vertex-express": "Google Cloud", "azure": "Microsoft Azure", "azure-chat": "Microsoft Azure",
-	"azure-anthropic": "Microsoft Azure", "aws-anthropic": "AWS", "bedrock-anthropic": "AWS",
-	"bedrock-chat": "AWS", "bedrock-mantle-chat": "AWS", "meta": "Meta", "meta-chat": "Meta",
-	"meta-anthropic": "Meta", "moonshotai": "Moonshot AI", "moonshotai-anthropic": "Moonshot AI",
-	"moonshotai-responses": "Moonshot AI", "kimi-code": "Moonshot AI", "deepseek": "DeepSeek",
-	"deepseek-anthropic": "DeepSeek", "groq": "Groq", "openrouter": "OpenRouter", "xai": "xAI",
-	"zai": "Z.AI", "typesafe": "TypeSafe", "ollama": "Local", "vllm": "Local", "sglang": "Local",
-	"github-copilot": "GitHub", "deepinfra": "DeepInfra", "together": "Together AI", "fireworks": "Fireworks AI",
-	"parasail": "Parasail",
-}
+var serviceLabels = tableServiceLabels
 
 func recipeMethod(id, label, kind, flow string, fields []MethodField, note string) LoginMethod {
 	return LoginMethod{ID: id, Label: label, Kind: kind, Flow: flow, Availability: "supported", Fields: fields, Delivery: []string{}, BillingNote: note}

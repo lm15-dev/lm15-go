@@ -23,22 +23,10 @@ type RouteRule struct {
 	Note     string
 }
 
-// DefaultRules is the complete built-in knowledge of the router; first match wins.
-var DefaultRules = []RouteRule{
-	{"claude-", "anthropic", "Anthropic Claude family"},
-	{"gpt-", "openai", "OpenAI GPT family (Responses API; use openai-chat: for Chat Completions)"},
-	{"o1", "openai", "OpenAI o1 reasoning family"},
-	{"o3", "openai", "OpenAI o3 reasoning family"},
-	{"o4", "openai", "OpenAI o4 reasoning family"},
-	{"gemini-", "gemini", "Google Gemini family"},
-	{"gemma-", "gemini", "Google Gemma open models, served by the Gemini API (live /models listing 2026-09-01)"},
-	{"nano-banana", "gemini", "Google image models on the Gemini API (live /models listing 2026-09-01)"},
-	{"grok-", "xai", "xAI Grok family (XAI_API_KEY or subscription OAuth)"},
-	{"sora-", "openai", "OpenAI Sora video generation"},
-	{"veo-", "gemini", "Google Veo video generation"},
-	{"chat-latest", "openai", "OpenAI rolling chat alias (live /models listing 2026-09-01)"},
-	{"jev-", "typesafe", "TypeSafe Jev (live /v1/models listing 2026-09-17: jev-latest, jev-preview; versioned ids jev-1.13.0 accepted)"},
-}
+// DefaultRules is the complete built-in knowledge of the router; first match
+// wins. Generated from the reference's table (tables_generated.go); pinned by
+// lm15-contract router/resolution.json.
+var DefaultRules = tableDefaultRules
 
 // Resolution is the complete answer to "how did you route this string".
 type Resolution struct {
@@ -967,20 +955,13 @@ func mergeHeaders(static [][2]string, extra map[string]string) [][2]string {
 // the account's Copilot host). No contract wire receipt, so no registry row
 // (a row is a support claim, AUTH-26); a router routes them only with a
 // managed Auth.
-var DeclaredLoginProviders = []ProviderDefinition{
-	{
-		ID: "kimi-code", Dialect: DialectAnthropic, Declared: true,
-		Access: AccessPolicy{Provider: "kimi-code", Supports: EndpointSupport{Complete: true, Stream: true}, AuthModes: []string{"bearer"}, AuthScheme: []string{"bearer"}, BaseURL: "https://api.kimi.com/coding"},
-		Note:   "Kimi Code subscription over the Anthropic Messages wire (managed login only; no lm15 wire receipt yet)",
-	},
-	{
-		ID: "github-copilot", Dialect: DialectOpenAIChat, Declared: true,
-		Access: AccessPolicy{Provider: "github-copilot", Supports: EndpointSupport{Complete: true, Stream: true, Models: true}, AuthModes: []string{"bearer"}, AuthScheme: []string{"bearer"},
-			Headers: copilotHeaders, BaseURL: copilotDefaultAPIBase},
-		CompatValue: &OpenAIChatCompat{InstructionRole: "system", MaxTokensField: "max_completion_tokens", StreamUsage: "include", ThinkingFormat: "reasoning_effort"},
-		Note:        "GitHub Copilot over the Chat Completions wire (managed login only; the account's host comes from the token; no lm15 wire receipt yet)",
-	},
-}
+var DeclaredLoginProviders = func() []ProviderDefinition {
+	out := make([]ProviderDefinition, 0, len(tableDeclaredLogin))
+	for _, r := range tableDeclaredLogin {
+		out = append(out, definitionOf(r, true))
+	}
+	return out
+}()
 
 // PlanningKey is the placeholder credential a planning LM carries.
 const PlanningKey = "lm15-planning"
@@ -1262,12 +1243,7 @@ func (r *LMRouter) Cache(ctx context.Context, prefix *Request, ttlSeconds *int, 
 // ─── The OpenAI-shaped door (api-family § Ingest) ────────────────────
 
 // LitellmProviderPrefixes maps litellm's `<provider>/` prefixes to lm15 doors.
-var LitellmProviderPrefixes = map[string]string{
-	"openai": "openai-chat", "anthropic": "anthropic", "gemini": "gemini", "groq": "groq", "openrouter": "openrouter",
-	"deepseek": "deepseek", "xai": "xai", "ollama": "ollama", "ollama_chat": "ollama", "hosted_vllm": "vllm",
-	"moonshot": "moonshotai", "azure": "azure-chat",
-	"deepinfra": "deepinfra", "together_ai": "together", "fireworks_ai": "fireworks", "parasail": "parasail",
-}
+var LitellmProviderPrefixes = tableLitellmPrefixes
 
 var clientKeywords = map[string]string{
 	"api_key":  "LMRouter(RouterConfig(api_keys={provider: key})) or the environment",

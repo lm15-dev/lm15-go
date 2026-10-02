@@ -95,7 +95,7 @@ func (l *OpenAILM) liveSessionUpdatePayload(config *LiveConfig) (JSONObject, err
 		var tools []any
 		for _, t := range config.Tools {
 			if ft, ok := t.(FunctionTool); ok {
-				tools = append(tools, JSONObject{{"type", "function"}, {"name", ft.Name}, {"description", nilIfEmpty(ft.Description)}, {"parameters", ft.EffectiveParameters()}})
+				tools = append(tools, toolDeclaration(JSONObject{{"type", "function"}, {"name", ft.Name}}, ft.Description, KV("parameters", ft.EffectiveParameters())))
 			}
 		}
 		session.Set("tools", tools)

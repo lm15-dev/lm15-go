@@ -261,7 +261,7 @@ func geminiFunctionDeclaration(ft FunctionTool) JSONObject {
 	if !geminiOpenAPISchema(params) {
 		field = "parametersJsonSchema"
 	}
-	return JSONObject{{"name", ft.Name}, {"description", nilIfEmpty(ft.Description)}, {field, params}}
+	return toolDeclaration(JSONObject{{"name", ft.Name}}, ft.Description, KV(field, params))
 }
 
 func geminiResponseFormat(f JSONObject) JSONObject {

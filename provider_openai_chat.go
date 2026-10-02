@@ -537,7 +537,7 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool, scope *adaptScope) (JS
 		for _, t := range req.Tools {
 			switch x := t.(type) {
 			case FunctionTool:
-				fn := JSONObject{{"name", x.Name}, {"description", nilIfEmpty(x.Description)}, {"parameters", x.EffectiveParameters()}}
+				fn := toolDeclaration(JSONObject{{"name", x.Name}}, x.Description, KV("parameters", x.EffectiveParameters()))
 				if compat.StrictTools == "include" {
 					fn.Set("strict", false)
 				}

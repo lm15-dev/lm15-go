@@ -703,7 +703,7 @@ func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSO
 			sent = append(sent, t.ToolName())
 			switch x := t.(type) {
 			case FunctionTool:
-				tools = append(tools, JSONObject{{"name", x.Name}, {"description", nilIfEmpty(x.Description)}, {"input_schema", x.EffectiveParameters()}})
+				tools = append(tools, toolDeclaration(JSONObject{{"name", x.Name}}, x.Description, KV("input_schema", x.EffectiveParameters())))
 			case BuiltinTool:
 				wt := x.Name
 				if mapped, ok := anthropicBuiltinMap[x.Name]; ok {

@@ -768,7 +768,7 @@ func (l *OpenAILM) payload(req *Request, stream bool, scope *adaptScope) (JSONOb
 		for _, t := range req.Tools {
 			switch x := t.(type) {
 			case FunctionTool:
-				tp := JSONObject{{"type", "function"}, {"name", x.Name}, {"description", nilIfEmpty(x.Description)}, {"parameters", x.EffectiveParameters()}}
+				tp := toolDeclaration(JSONObject{{"type", "function"}, {"name", x.Name}}, x.Description, KV("parameters", x.EffectiveParameters()))
 				if compat.StrictTools == "include" {
 					tp.Set("strict", false)
 				}
@@ -893,6 +893,22 @@ func (l *OpenAILM) payload(req *Request, stream bool, scope *adaptScope) (JSONOb
 		payload.Delete("max_tokens")
 	}
 	return payload, nil
+}
+
+// toolDeclaration is MAP-17: a function tool's wire declaration, head
+// members (the dialect's type tag, the name), then the description when
+// the tool has one, then the tail (the schema). A tool without a
+// description carries no description key: it is never sent as null
+// (Anthropic and Groq refuse null with a 400; lm15-contract
+// receipts/2026-10-02-tool-description). "" is the same value as absent in
+// canonical JSON (omit-empty), so it is left off too.
+func toolDeclaration(head JSONObject, description string, tail ...Member) JSONObject {
+	out := make(JSONObject, 0, len(head)+1+len(tail))
+	out = append(out, head...)
+	if description != "" {
+		out = append(out, KV("description", description))
+	}
+	return append(out, tail...)
 }
 
 func nilIfEmpty(s string) any {

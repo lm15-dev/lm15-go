@@ -16,16 +16,18 @@ type Event struct {
 	Data string
 }
 
-// Limits bound a single line and a single event (defaults 64 KiB / 1 MiB).
+// Limits optionally bound a single line and a single event. Zero means no
+// bound, and that is the default (lm15-contract INV-056): a provider sends
+// whole objects as one line (OpenAI Responses repeats the full response,
+// system prompt included, in response.completed; Gemini sends a 4K image as
+// one 29.7 MB line), a non-streamed reply has no limit either, and a stream
+// is accumulated into the whole reply anyway.
 type Limits struct {
 	MaxLineBytes  int
 	MaxEventBytes int
 }
 
-// DefaultLimits are the reference's limits.
-var DefaultLimits = Limits{MaxLineBytes: 64 * 1024, MaxEventBytes: 1024 * 1024}
-
-// ErrLimit is returned when a line or event exceeds its limit.
+// ErrLimit is returned when a line or event exceeds a limit the caller set.
 var ErrLimit = errors.New("sse: limit exceeded")
 
 // Parser reads events from lines.
@@ -36,25 +38,26 @@ type Parser struct {
 	eventLen  int
 }
 
-// NewParser creates a parser with the given limits (zero = defaults).
+// NewParser creates a parser with the given limits (zero = no limit).
 func NewParser(limits Limits) *Parser {
-	if limits.MaxLineBytes == 0 {
-		limits.MaxLineBytes = DefaultLimits.MaxLineBytes
-	}
-	if limits.MaxEventBytes == 0 {
-		limits.MaxEventBytes = DefaultLimits.MaxEventBytes
-	}
 	return &Parser{limits: limits}
+}
+
+func (p *Parser) lineTooLong(n int) error {
+	if p.limits.MaxLineBytes > 0 && n > p.limits.MaxLineBytes {
+		return fmt.Errorf("%w: SSE line exceeds limit (%d > %d)", ErrLimit, n, p.limits.MaxLineBytes)
+	}
+	return nil
 }
 
 // Feed consumes one raw line (with or without its terminator) and returns
 // the completed event, if this line closed one.
 func (p *Parser) Feed(raw []byte) (Event, bool, error) {
-	if len(raw) > p.limits.MaxLineBytes {
-		return Event{}, false, fmt.Errorf("%w: SSE line exceeds limit (%d > %d)", ErrLimit, len(raw), p.limits.MaxLineBytes)
+	if err := p.lineTooLong(len(raw)); err != nil {
+		return Event{}, false, err
 	}
 	p.eventLen += len(raw)
-	if p.eventLen > p.limits.MaxEventBytes {
+	if p.limits.MaxEventBytes > 0 && p.eventLen > p.limits.MaxEventBytes {
 		return Event{}, false, fmt.Errorf("%w: SSE event exceeds limit (%d > %d)", ErrLimit, p.eventLen, p.limits.MaxEventBytes)
 	}
 	line := strings.TrimRight(string(raw), "\r\n")
@@ -136,7 +139,7 @@ func NewReader(r io.Reader, limits Limits) *Reader {
 // Next returns the next event; io.EOF when the body is exhausted.
 func (r *Reader) Next() (Event, error) {
 	for !r.done {
-		line, err := r.scanner.ReadBytes('\n')
+		line, err := r.readLine()
 		if len(line) > 0 {
 			ev, ok, ferr := r.parser.Feed(line)
 			if ferr != nil {
@@ -157,4 +160,25 @@ func (r *Reader) Next() (Event, error) {
 		return ev, nil
 	}
 	return Event{}, io.EOF
+}
+
+// readLine reads through the next '\n' (kept), or to the end of the body.
+// Linear in the line's length, like bufio.Reader.ReadBytes; unlike it, a
+// line limit the caller set is enforced while the line is still arriving,
+// so an unterminated line never grows past it.
+func (r *Reader) readLine() ([]byte, error) {
+	var full []byte
+	for {
+		frag, err := r.scanner.ReadSlice('\n')
+		if err == nil || err != bufio.ErrBufferFull {
+			if full == nil {
+				return append([]byte(nil), frag...), err
+			}
+			return append(full, frag...), err
+		}
+		full = append(full, frag...)
+		if lerr := r.parser.lineTooLong(len(full)); lerr != nil {
+			return nil, lerr
+		}
+	}
 }

@@ -28,6 +28,20 @@ retracted, `go get` installs `main` as a pseudo-version; a module pinned to
 | `v1.1.0-rc.1` | 2026-09-26 | `3763eec` | The first release. 1,583 of 1,583 contract checks. |
 | `v1.1.0-rc.2` | 2026-09-26 | `fe5cdf9` | DeepInfra, Together AI, Fireworks AI, Parasail; the Google Cloud pass. 1,788 of 1,788 contract checks. |
 | `v1.1.0-rc.3` | 2026-09-30 | `57e33d1` | The Claude Code release as a setting (`client_version`, `LM15_CLAUDE_CODE_VERSION`), its refusal guided; Claude's output ceiling as the default `max_tokens`; `input_audio` formats in ingest. 1,838 of 1,838 contract checks. |
+| `v1.1.0-rc.4` | 2026-10-06 | `0f3ea82` | Long streamed replies: no default SSE line or event limit (INV-056); a tool with no description is left off the wire (MAP-17). 1,901 of 1,901 contract checks. |
+
+### `v1.1.0-rc.4`: what was checked
+
+- `go vet ./...`, `go test ./...`, `gofmt`, the wasm build (CI on Linux,
+  macOS and Windows); first tests for `internal/sse`.
+- The contract at the pin: 1,901 of 1,901 checks, including the live case
+  `openai.streaming_long_line` (three 1.1 MB lines).
+- Over real HTTP from a local server, in 16 KiB chunks: the pinned body, and a
+  Gemini-shaped stream with one 30,000,000-character image line (image intact
+  by SHA-256, 0.29 s).
+- Live, 2026-10-06: `openai:gpt-4.1-mini` streamed through the router with a
+  74 KB system prompt (its echo lines are 75 KB): "OK", 18,244 input tokens.
+  `v1.1.0-rc.3` refuses the same stream.
 
 ### `v1.1.0-rc.3`: what was checked
 

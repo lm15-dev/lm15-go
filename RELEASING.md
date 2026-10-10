@@ -29,6 +29,7 @@ retracted, `go get` installs `main` as a pseudo-version; a module pinned to
 | `v1.1.0-rc.2` | 2026-09-26 | `fe5cdf9` | DeepInfra, Together AI, Fireworks AI, Parasail; the Google Cloud pass. 1,788 of 1,788 contract checks. |
 | `v1.1.0-rc.3` | 2026-09-30 | `57e33d1` | The Claude Code release as a setting (`client_version`, `LM15_CLAUDE_CODE_VERSION`), its refusal guided; Claude's output ceiling as the default `max_tokens`; `input_audio` formats in ingest. 1,838 of 1,838 contract checks. |
 | `v1.1.0-rc.4` | 2026-10-06 | `0f3ea82` | Long streamed replies: no default SSE line or event limit (INV-056); a tool with no description is left off the wire (MAP-17). 1,901 of 1,901 contract checks. |
+| `v1.1.0-rc.5` | 2026-10-10 | `880f72c` | A refused key is `KindAuth` on Gemini and xAI, which answer it with HTTP 400 (MAP-18); a key passed as a named credential is never repeated in the refusal (AUTH-1, AUTH-5). 1,904 of 1,904 contract checks. |
 
 ### `v1.1.0-rc.4`: what was checked
 

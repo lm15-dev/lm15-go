@@ -283,10 +283,40 @@ type Reasoning struct {
 // IsOff reports effort == "off".
 func (r Reasoning) IsOff() bool { return r.Effort == EffortOff }
 
+// ReasoningBudget is a Reasoning given only a thinking budget: Effort is
+// filled from MAP-7 rule 3's table read the other way (amended 2026-10-10).
+func ReasoningBudget(tokens int) *Reasoning {
+	return &Reasoning{Effort: EffortForBudget(tokens), ThinkingBudget: &tokens}
+}
+
+// EffortForBudget is the highest effort whose MAP-7 rule 3 budget is at or
+// below budget ("minimal" below 1024): the grading table read the other way.
+func EffortForBudget(budget int) string {
+	level := "minimal"
+	for _, effort := range ReasoningEfforts {
+		if b, ok := EffortThinkingBudgets[effort]; ok && b <= budget {
+			level = effort
+		}
+	}
+	return level
+}
+
 // Validate checks INV-026.
 func (r Reasoning) Validate() error {
+	if r.Effort == "" && r.ThinkingBudget == nil {
+		return valueErrorf("Reasoning needs Effort (one of %s) or ThinkingBudget; leave Config.Reasoning nil to let the model decide", strings.Join(ReasoningEfforts, ", "))
+	}
+	if r.ThinkingBudget != nil && *r.ThinkingBudget == 0 {
+		return valueErrorf("thinking_budget must be > 0; to turn thinking off, use Reasoning{Effort: \"off\"} with no budget")
+	}
+	if r.Effort == "none" {
+		return valueErrorf("unsupported reasoning effort: none (lm15 spells \"none\" as Effort: \"off\")")
+	}
+	if r.Effort == "" && *r.ThinkingBudget > 0 {
+		r.Effort = EffortForBudget(*r.ThinkingBudget) // checked as filled; Config.Validate stores it
+	}
 	if !inVocab(r.Effort, ReasoningEfforts) {
-		return valueErrorf("unsupported reasoning effort: %s", r.Effort)
+		return valueErrorf("unsupported reasoning effort: %s (one of %s)", r.Effort, strings.Join(ReasoningEfforts, ", "))
 	}
 	if r.Summary != "" && !inVocab(r.Summary, ReasoningSummaries) {
 		return valueErrorf("unsupported reasoning summary: %s", r.Summary)
@@ -457,6 +487,10 @@ func (c Config) Validate() error {
 	if c.Reasoning != nil {
 		if err := c.Reasoning.Validate(); err != nil {
 			return err
+		}
+		if c.Reasoning.Effort == "" && c.Reasoning.ThinkingBudget != nil {
+			// A budget alone: fill Effort once, so every adapter reads one word (MAP-7 rule 3, amended 2026-10-10).
+			c.Reasoning.Effort = EffortForBudget(*c.Reasoning.ThinkingBudget)
 		}
 	}
 	if c.Cache != nil {
@@ -825,16 +859,33 @@ func (r *Response) Text() *string {
 		return t
 	}
 	var texts []string
+	var data []DataPart
+	other := false
 	for _, p := range r.Message.Parts {
 		switch x := p.(type) {
 		case TextPart:
 			texts = append(texts, x.Text)
+		case DataPart:
+			data = append(data, x)
 		case CitationPart, ThinkingPart:
 		default:
-			return nil
+			other = true
 		}
 	}
+	if other {
+		return nil
+	}
 	if len(texts) == 0 {
+		// A structured answer that came back as a DataPart (MAP-14) reads as
+		// its compact JSON, so Text, ParseJSON and JSON work whichever form the
+		// wire gave it (types.md §Response, amended 2026-10-10).
+		if len(data) == 1 {
+			s := DataPartText(data[0])
+			return &s
+		}
+		return nil
+	}
+	if len(data) > 0 {
 		return nil
 	}
 	s := strings.Join(texts, "\n")

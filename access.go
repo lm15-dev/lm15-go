@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
@@ -385,11 +386,16 @@ func loadCredential(policy AccessPolicy, explicit CredentialProvider, credential
 			}), Source: "stored"}, nil
 		}
 	}
-	hint := "pass api_key="
 	if len(policy.EnvKeys) > 0 {
-		hint = "set " + strings.Join(policy.EnvKeys, " or ") + " or pass api_key="
+		// An adapter built by hand reads no environment (only the router does),
+		// so "set the variable" would not help: say what does.
+		hint := policy.LoginHint
+		if hint == "" {
+			hint = fmt.Sprintf("pass WithAPIKey(os.Getenv(%q)), or use the router (NewRouterWithConfig), which reads %s", policy.EnvKeys[0], strings.Join(policy.EnvKeys, " or "))
+		}
+		return LoadedCredential{}, NotConfiguredErrorf(policy.Provider, nil, hint, "%s: no API key given. An adapter built by hand reads no environment variable, so %s is not used here even when it is set", policy.Provider, policy.EnvKeys[0])
 	}
-	return LoadedCredential{}, NotConfiguredErrorf(policy.Provider, policy.EnvKeys, policy.LoginHint, "%s: no credential given; %s", policy.Provider, hint)
+	return LoadedCredential{}, NotConfiguredErrorf(policy.Provider, policy.EnvKeys, policy.LoginHint, "%s: no credential given; pass api_key=", policy.Provider)
 }
 
 // HasStoredCredential is the offline probe (files, never the network) for

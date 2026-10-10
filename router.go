@@ -255,7 +255,7 @@ func (c RouterConfig) Validate() error {
 	}
 	for key, name := range c.Credentials {
 		if !inVocab(name, NamedCredentials) {
-			return NotConfiguredErrorf("", nil, "", "RouterConfig.Credentials{%q: %q}: not a named credential; one of %s. A credential VALUE (a key, a token, a provider) goes in APIKeys.", key, name, strings.Join(NamedCredentials, ", "))
+			return NotConfiguredErrorf("", nil, "", "RouterConfig.Credentials{%q: ...}: the value is not a named credential (one of %s), so it is not shown, because it may be a key (AUTH-5). A credential VALUE (a key, a token, a provider) goes in APIKeys.", key, strings.Join(NamedCredentials, ", "))
 		}
 	}
 	if c.Timeouts != nil {

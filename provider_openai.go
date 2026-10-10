@@ -489,6 +489,8 @@ func openaiNormalizeError(c *lmCore, status int, body string) *Error {
 		providerCode = errType
 	}
 	switch {
+	case IsPinnedAuthFailure(providerCode, msg, nil): // MAP-18
+		return c.providerError(KindAuth, msg, status, providerCode, "")
 	case code == "context_length_exceeded":
 		return c.providerError(KindContextLength, msg, status, providerCode, "")
 	case openaiModelErrorCodes[code] || (status == 404 && isModelErrorMessage(msg, code, errType)) || IsPinnedModelNotFound(providerCode, msg): // MAP-15

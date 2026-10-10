@@ -2081,11 +2081,7 @@ func gcpTyped(rung Rung, name string) Rung {
 // chain order. An unknown name fails here, at construction.
 func NamedRungsFor(policy AccessPolicy, name string) ([]Rung, error) {
 	if !inVocab(name, NamedCredentials) {
-		quoted := make([]string, 0, len(NamedCredentials))
-		for _, n := range NamedCredentials {
-			quoted = append(quoted, strconv.Quote(n))
-		}
-		return nil, NotConfiguredErrorf(policy.Provider, nil, "", "%s: unknown named credential %q; one of %s", policy.Provider, name, strings.Join(quoted, ", "))
+		return nil, namedCredentialRefusal(policy.Provider, name, true)
 	}
 	all, err := ChainFor(policy)
 	if err != nil {

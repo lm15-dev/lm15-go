@@ -316,8 +316,10 @@ func LoadCredential(policy AccessPolicy, explicit CredentialProvider, credential
 // credential: two answers to "who am I" is a configuration error.
 func LoadCredentialNamed(policy AccessPolicy, explicit CredentialProvider, credentialsPath string, named string) (LoadedCredential, error) {
 	if named != "" {
-		if !policy.CloudChain() {
-			return LoadedCredential{}, NotConfiguredErrorf(policy.Provider, nil, "", "%s: credential=%q names a cloud identity, and this door is not a cloud door; pass api_key= instead", policy.Provider, named)
+		if !policy.CloudChain() || !inVocab(named, NamedCredentials) {
+			// AUTH-1/AUTH-5 (amended 2026-10-10): never repeat a value that is
+			// not one of the names; it is usually a key in the wrong option.
+			return LoadedCredential{}, namedCredentialRefusal(policy.Provider, named, policy.CloudChain())
 		}
 		if explicit != nil {
 			return LoadedCredential{}, NotConfiguredErrorf(policy.Provider, nil, "", "%s: both api_key= and credential=%q were given; a door has one identity — pass the credential value, or name the identity, not both", policy.Provider, named)

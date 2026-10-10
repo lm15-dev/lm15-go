@@ -268,7 +268,7 @@ func explainChain(provider string, opts ExplainOptions) (AuthReport, error) {
 		return explainCloud(canonical, def, config, opts)
 	}
 	if opts.Credential != "" {
-		return AuthReport{}, NotConfiguredErrorf(canonical, nil, "", "%s: credential=%q names a cloud identity, and this is not a cloud door", canonical, opts.Credential)
+		return AuthReport{}, namedCredentialRefusal(canonical, opts.Credential, false)
 	}
 	policy := def.CredentialPolicy()
 	if policy == "oauth" {

@@ -3,6 +3,7 @@ package lm15
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -377,6 +378,25 @@ func AuthErrorf(provider string, envKeys []string, credentialHint string, format
 	return e
 }
 
+// namedCredentialRefusal refuses a credential value this door cannot use
+// (AUTH-1 named credentials, amended 2026-10-10). A value that is not one of
+// the four names is almost always an API key put in the wrong option, so it
+// is never repeated (AUTH-5) and the message says where a key goes. One of
+// the four names on a door without a cloud chain is safe to repeat.
+func namedCredentialRefusal(provider, value string, cloudDoor bool) *Error {
+	names := strings.Join(NamedCredentials, ", ")
+	if inVocab(value, NamedCredentials) {
+		return NotConfiguredErrorf(provider, nil, "pass the key with WithAPIKey (or RouterConfig.APIKeys), or use the cloud door of this provider",
+			"%s: credential %q names a cloud identity, and %s is not a cloud door", provider, value, provider)
+	}
+	what := fmt.Sprintf("%s: credential takes the name of a cloud identity (%s), and %s is not a cloud door", provider, names, provider)
+	if cloudDoor {
+		what = fmt.Sprintf("%s: unknown named credential (one of %s)", provider, names)
+	}
+	return NotConfiguredErrorf(provider, nil, "if that value is your API key, pass it with WithAPIKey (or RouterConfig.APIKeys)",
+		"%s; the value given is not shown, because it may be a key", what)
+}
+
 // NotConfiguredErrorf builds a NotConfiguredError with guidance appended.
 func NotConfiguredErrorf(provider string, envKeys []string, credentialHint string, format string, args ...any) *Error {
 	msg := fmt.Sprintf(format, args...)
@@ -519,6 +539,58 @@ var ModelNotFoundForms = []ModelNotFoundForm{
 	{Code: "invalid-argument", Prefix: "Model not found: "},                                               // xAI (2026-09-01)
 	{Code: "validation_error", Contains: "The provided model identifier is invalid"},                      // Bedrock Chat
 	{Code: "invalid_request_error", Prefix: "Deployment ", Suffix: " doesn't exist or isn't accessible."}, // Parasail
+}
+
+// AuthFailedForm is one pinned MAP-18 form of a provider's "this key is not
+// valid" answer that arrives without HTTP 401: an exact provider code, an
+// optional Google google.rpc.ErrorInfo reason, and the text tests the
+// message must pass.
+type AuthFailedForm struct {
+	Code, Reason, Prefix, Contains, Suffix string
+}
+
+// AuthFailedForms are the pinned forms (lm15-contract spec/auth-failed.json,
+// carried verbatim; each form has a live receipt).
+var AuthFailedForms = []AuthFailedForm{
+	{Code: "INVALID_ARGUMENT", Reason: "API_KEY_INVALID"},            // Gemini (2026-10-10)
+	{Code: "invalid-argument", Prefix: "Incorrect API key provided"}, // xAI (2026-10-10)
+}
+
+// googleErrorReasons returns the reason of every google.rpc.ErrorInfo in a
+// Google error envelope's details (the inner error object), in order.
+func googleErrorReasons(e JSONObject) []string {
+	var out []string
+	for _, d := range wireList(e.Get("details")) {
+		detail := wireObj(d)
+		if detail == nil || !strings.HasSuffix(wireStr(detail.Get("@type")), "google.rpc.ErrorInfo") {
+			continue
+		}
+		if reason, ok := detail.Get("reason").(string); ok {
+			out = append(out, reason)
+		}
+	}
+	return out
+}
+
+// IsPinnedAuthFailure reports whether an error is one of the pinned MAP-18
+// forms: the code matches exactly, the message passes every text test, and
+// the form's reason, when it names one, is among reasons.
+func IsPinnedAuthFailure(providerCode, message string, reasons []string) bool {
+	if providerCode == "" {
+		return false
+	}
+	for _, f := range AuthFailedForms {
+		if f.Code != providerCode {
+			continue
+		}
+		if f.Reason != "" && !slices.Contains(reasons, f.Reason) {
+			continue
+		}
+		if strings.HasPrefix(message, f.Prefix) && strings.Contains(message, f.Contains) && strings.HasSuffix(message, f.Suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 // IsPinnedModelNotFound reports whether an error is one of the pinned MAP-15

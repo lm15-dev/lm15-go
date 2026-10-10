@@ -116,15 +116,20 @@ func (l *GeminiLM) normalizeError(status int, body string) *Error {
 	}
 	obj := wireObj(data)
 	var msg, errStatus string
+	var reasons []string
 	if obj != nil {
 		switch e := jsonView(obj.Get("error")).(type) {
 		case JSONObject:
 			msg = wireStr(e.Get("message"))
 			errStatus = wireStr(e.Get("status"))
+			reasons = googleErrorReasons(e)
 		case nil:
 		default:
 			msg = wireStr(e)
 		}
+	}
+	if IsPinnedAuthFailure(errStatus, msg, reasons) { // MAP-18
+		return l.providerError(KindAuth, msg, status, errStatus, "")
 	}
 	if geminiContextLengthMessage(msg) {
 		return l.providerError(KindContextLength, msg, status, errStatus, "")

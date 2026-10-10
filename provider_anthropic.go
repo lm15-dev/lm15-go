@@ -174,6 +174,8 @@ func (l *AnthropicLM) normalizeError(status int, body string) *Error {
 		msg = ClaudeCodeVersionGuidance(msg)
 	}
 	switch {
+	case IsPinnedAuthFailure(errType, msg, nil): // MAP-18
+		return l.providerError(KindAuth, msg, status, errType, requestID)
 	case anthropicContextLengthMessage(msg):
 		return l.providerError(KindContextLength, msg, status, errType, requestID)
 	case errType == "DeploymentNotFound" || ((errType == "not_found_error" || errType == "resource_not_found_error") && isModelErrorMessage(msg)) || IsPinnedModelNotFound(errType, msg): // MAP-15

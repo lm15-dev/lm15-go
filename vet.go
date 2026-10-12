@@ -15,7 +15,7 @@ import (
 // compares. Nothing here touches the network.
 
 // Version is this port's implementation version.
-const Version = "1.1.0-rc.6"
+const Version = "1.1.0-rc.7"
 
 const parseOnlyKey = "vet-parse-only"
 

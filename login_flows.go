@@ -1,6 +1,7 @@
 package lm15
 
 import (
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -107,11 +108,12 @@ const (
 	kimiClientID         = "17e5f671-d194-4dfb-9706-5516cb48c098"
 	kimiDefaultOAuthHost = "https://auth.kimi.com"
 
-	metaClientID    = "1031625952748946"
-	metaDeviceURL   = "https://auth.meta.com/oidc/device/authorization/"
-	metaTokenURL    = "https://auth.meta.com/oidc/device/token/"
-	metaKeyMintURL  = "https://api.meta.ai/muse-code/key"
-	metaKeyLifetime = 86400.0
+	metaClientID     = "1031625952748946"
+	metaDeviceURL    = "https://auth.meta.com/oidc/device/authorization/"
+	metaTokenURL     = "https://auth.meta.com/oidc/device/token/"
+	metaKeyMintURL   = "https://api.meta.ai/muse-code/key"
+	metaKeyLifetime  = 86400.0 // no expiry in the reply; a daily re-mint is free (the same key, live 2026-10-12)
+	metaDeviceReason = "login, mint and inference observed 2026-10-12; Meta's Model API terms (§ 3.2) reserve the Muse Code key for Muse Code; using it here is outside those terms and puts the Meta account at risk. Subscription traffic is Contributor mode by default (Meta may train on it)."
 
 	openrouterAuthorizeURL = "https://openrouter.ai/auth"
 	openrouterKeyURL       = "https://openrouter.ai/api/v1/auth/keys"
@@ -158,7 +160,7 @@ func (f accountFlow) descriptor() ProviderDescriptor {
 		}}
 	case flowMeta:
 		return ProviderDescriptor{ID: "meta", Label: "Meta", Service: "Meta", Routes: []string{"meta", "meta-chat", "meta-anthropic"}, ConsoleURL: "https://dev.meta.ai", Methods: []LoginMethod{
-			accountMethod("device", "Sign in with Meta (Muse subscription)", "device_code", "unverified", "no live receipt yet", []string{"device"}, true, "Minted Model API keys are tied to the Muse subscription; verify entitlement on your account."),
+			accountMethod("device", "Sign in with Meta (Muse subscription)", "device_code", "unverified", metaDeviceReason, []string{"device"}, true, "Billed to the Muse Code plan when it is active (muse-wonder-full-1.0 needs Power or Maximum Usage); without one, Meta bills the key pay-as-you-go."),
 		}}
 	default: // openrouter
 		return ProviderDescriptor{ID: "openrouter", Label: "OpenRouter", Service: "OpenRouter", Routes: []string{"openrouter"}, ConsoleURL: "https://openrouter.ai/keys", Methods: []LoginMethod{
@@ -211,8 +213,7 @@ func (f accountFlow) renew(c *loginContext, material JSONObject, settings map[st
 		if identity == "" {
 			return flowResult{}, denied("Meta credential has no identity token to re-mint with")
 		}
-		m, err := metaMint(c, identity)
-		return flowResult{material: m, label: "Meta (Muse subscription)", renewal: "remint"}, err
+		return metaMint(c, identity)
 	default:
 		return flowResult{material: material, label: "OpenRouter (minted key)", renewal: "none"}, nil
 	}
@@ -227,6 +228,7 @@ func (f accountFlow) requestAuth(material JSONObject, settings map[string]string
 			return auth, incomplete
 		}
 		auth.CredentialKind = "api_key"
+		auth.BaseURL = materialStr(material, "base_url")
 		return auth, nil
 	case flowOpenRouter:
 		if auth.Credential = materialStr(material, "key"); auth.Credential == "" {
@@ -837,27 +839,68 @@ func kimiRenew(c *loginContext, material JSONObject, settings map[string]string)
 
 // ─── Meta ────────────────────────────────────────────────────────────
 
-func metaMint(c *loginContext, identity string) (JSONObject, error) {
+// metaAPIBase is the mint's base_url when the key may go there: https, a
+// meta.ai host, no userinfo or query. "" when absent; anything else is
+// refused before the key is sent (changes/2026-10-12-muse-code-subscription.md D1).
+func metaAPIBase(v any, present bool) (string, error) {
+	if !present || v == nil {
+		return "", nil
+	}
+	s, _ := v.(string)
+	u, err := url.Parse(s)
+	if s == "" || err != nil || u.Scheme != "https" || u.User != nil || u.RawQuery != "" || u.ForceQuery {
+		return "", denied("Meta named an API address outside meta.ai for the minted key; refusing to send it there")
+	}
+	host := strings.ToLower(u.Hostname())
+	if host != "meta.ai" && !strings.HasSuffix(host, ".meta.ai") {
+		return "", denied("Meta named an API address outside meta.ai for the minted key; refusing to send it there")
+	}
+	return strings.TrimRight(s, "/"), nil
+}
+
+// metaPlan is display text for the account's plan; "" when the reply is silent.
+func metaPlan(body JSONObject) string {
+	switch body.Get("is_subs_active") {
+	case true:
+		if tier, _ := body.Get("subs_tier_name").(string); tier != "" {
+			return tier
+		}
+		return "Muse Code subscription"
+	case false:
+		return "no Muse Code subscription (pay-as-you-go)"
+	}
+	return ""
+}
+
+func metaMint(c *loginContext, identity string) (flowResult, error) {
 	c.notify(Notice{Type: "progress", Stage: "exchange", Message: "Enabling Meta Model API access…"})
 	reply, err := c.json(metaKeyMintURL, JSONObject{}, [][2]string{{"Authorization", "Bearer " + identity}, {"x-api-version", "1.0.0"}})
 	if err != nil {
-		return nil, err
+		return flowResult{}, err
 	}
 	if reply.status == 401 || reply.status == 403 {
-		return nil, denied("Meta session is no longer valid; sign in again")
+		return flowResult{}, denied("Meta session is no longer valid; sign in again")
 	}
 	if !reply.ok {
-		return nil, denied("Meta API key mint failed (HTTP %d)", reply.status)
+		return flowResult{}, denied("Meta API key mint failed (HTTP %d)", reply.status)
 	}
 	key := reply.str("api_key")
 	if key == "" {
 		if action := httpURL(reply.body.Get("action_url")); action != "" {
-			return nil, denied("Meta did not issue an API key; complete setup at %s", action)
+			return flowResult{}, denied("Meta did not issue an API key; complete setup at %s", action)
 		}
-		return nil, denied("Meta did not issue an API key")
+		return flowResult{}, denied("Meta did not issue an API key")
+	}
+	base, err := metaAPIBase(reply.body.Lookup("base_url"))
+	if err != nil {
+		return flowResult{}, err
 	}
 	now := c.nowMs()
-	return JSONObject{{"type", "oauth"}, {"access", key}, {"refresh", identity}, {"issued_at", now}, {"lifetime_s", floatLexeme(metaKeyLifetime)}, {"expires", int64(float64(now) + metaKeyLifetime*1000)}}, nil
+	m := JSONObject{{"type", "oauth"}, {"access", key}, {"refresh", identity}, {"issued_at", now}, {"lifetime_s", floatLexeme(metaKeyLifetime)}, {"expires", int64(float64(now) + metaKeyLifetime*1000)}}
+	if base != "" {
+		m = append(m, JSONObject{{"base_url", base}}...)
+	}
+	return flowResult{material: m, label: "Meta (Muse subscription)", renewal: "remint", accountLabel: metaPlan(reply.body)}, nil
 }
 
 func metaLogin(c *loginContext) (flowResult, error) {
@@ -901,8 +944,7 @@ func metaLogin(c *loginContext) (flowResult, error) {
 	if err != nil {
 		return flowResult{}, err
 	}
-	m, err := metaMint(c, value.(string))
-	return flowResult{material: m, label: "Meta (Muse subscription)", renewal: "remint"}, err
+	return metaMint(c, value.(string))
 }
 
 // ─── OpenRouter ──────────────────────────────────────────────────────

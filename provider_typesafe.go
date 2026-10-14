@@ -7,9 +7,12 @@ package lm15
 // properties of the json_schema become its questions (MAP-14 §2), and the
 // answers come back as one DataPart with the distribution per judgment and
 // method "provider_classification" (§3). Jev generates no text: a request
-// without judgments, with tools, with media, with a system prompt or a
-// conversation is refused before the wire, the native place named (D2/D8).
-// Wire facts: receipts/2026-09-17-judgments/, receipts/2026-09-19-typesafe/.
+// without judgments, with tools, with a system prompt or a conversation is
+// refused before the wire, the native place named (D2/D8). Images reach Jev
+// as top-level assets named by a reference string written where the image
+// belongs in the state (changes/2026-10-14-jev-images.md); audio, video and
+// documents are refused (MAP-10). Wire facts: receipts/2026-09-17-judgments/,
+// receipts/2026-09-19-typesafe/, receipts/2026-10-14-typesafe/.
 
 import (
 	"context"
@@ -50,41 +53,122 @@ func (l *TypeSafeLM) refuse(feature, format string, args ...any) *Error {
 	return UnsupportedFeature(l.provider, feature, "%s: %s", l.provider, fmt.Sprintf(format, args...))
 }
 
+// typesafeImagesHeader turns images on; each request that carries one must
+// send it (live 400 without it, 2026-10-14).
+const typesafeImagesHeader = "TypeSafe-Danger-Zone-Images"
+
+// typesafeImageFormat is the asset format systemone reads for a media type:
+// PNG and JPEG, nothing else ("" otherwise).
+func typesafeImageFormat(p ImagePart) string {
+	mediaType := p.MediaType
+	if mediaType == "" {
+		mediaType = "image/png"
+	}
+	switch strings.ToLower(mediaType) {
+	case "image/png":
+		return "png"
+	case "image/jpeg", "image/jpg":
+		return "jpg"
+	}
+	return ""
+}
+
+// typesafeImageReference is the n-th image's reference (1-based, in part
+// order); ">" closes it so <lm15-image-1> never matches inside <lm15-image-10>.
+func typesafeImageReference(n int) string {
+	return fmt.Sprintf("<lm15-image-%d>", n)
+}
+
+// checkImage: an image reaches systemone as inline PNG or JPEG bytes, or not
+// at all (MAP-10 rule 1); lm15 never fetches or converts media.
+func (l *TypeSafeLM) checkImage(p ImagePart, where string) error {
+	if p.URL != "" || p.FileID != "" {
+		how := "a URL"
+		if p.URL == "" {
+			how = "a file id"
+		}
+		return l.refuse(where, "systemone takes image bytes, not %s; fetch the image and pass its data or path (changes/2026-10-14-jev-images.md)", how)
+	}
+	if typesafeImageFormat(p) == "" {
+		return l.refuse(where, "systemone reads PNG or JPEG images, got %q; convert the image first (lm15 never converts media)", p.MediaType)
+	}
+	return nil
+}
+
 // state is changes/2026-09-19-jev-state.md D1/D2: the state is the one
 // user part, verbatim — a text's string or a data part's value. Jev has
 // no system prompt and no conversation; anything else is refused with the
 // native place named, never merged into a shape of ours. A media part is
 // refused first, as the specific fault it is (MAP-10).
-func (l *TypeSafeLM) state(req *Request) (any, error) {
+//
+// changes/2026-10-14-jev-images.md: an image part is its reference string,
+// its bytes an asset; a message holding an image and other parts is the
+// array of its parts in order. Returns the state and the assets.
+func (l *TypeSafeLM) state(req *Request) (any, JSONObject, error) {
 	for m, msg := range req.Messages {
 		for p, part := range msg.Parts {
-			switch part.(type) {
+			where := fmt.Sprintf("messages[%d].parts[%d]", m, p)
+			switch part := part.(type) {
 			case TextPart, DataPart:
+			case ImagePart:
+				if err := l.checkImage(part, where); err != nil {
+					return nil, nil, err
+				}
 			default:
-				return nil, l.refuse(fmt.Sprintf("messages[%d].parts[%d]", m, p), "a %s part has no slot on the systemone wire (MAP-10); Jev reads text or data", part.Type())
+				return nil, nil, l.refuse(where, "a %s part has no slot on the systemone wire (MAP-10); Jev reads text, data, or PNG/JPEG images", part.Type())
 			}
 		}
 	}
 	if req.System != nil {
-		return nil, l.refuse("system", "Jev has no system prompt; put context in the state as a named key (UserParts(Data(map{\"policy\": ..., \"note\": ...}))), or the framing in each question's description (changes/2026-09-19-jev-state.md D2)")
+		return nil, nil, l.refuse("system", "Jev has no system prompt; put context in the state as a named key (UserParts(Data(map{\"policy\": ..., \"note\": ...}))), or the framing in each question's description (changes/2026-09-19-jev-state.md D2)")
 	}
 	if len(req.Messages) != 1 {
-		return nil, l.refuse("messages", "Jev judges one state, got %d messages; put a transcript in the state as an array or object (UserParts(Data(map{\"messages\": [...]}))), where a question can point at a turn with a backtick path (changes/2026-09-19-jev-state.md D2)", len(req.Messages))
+		return nil, nil, l.refuse("messages", "Jev judges one state, got %d messages; put a transcript in the state as an array or object (UserParts(Data(map{\"messages\": [...]}))), where a question can point at a turn with a backtick path (changes/2026-09-19-jev-state.md D2)", len(req.Messages))
 	}
 	msg := req.Messages[0]
 	if msg.Role != RoleUser {
-		return nil, l.refuse("messages[0].role", "Jev's state is a user message, got role %q", msg.Role)
+		return nil, nil, l.refuse("messages[0].role", "Jev's state is a user message, got role %q", msg.Role)
 	}
-	if len(msg.Parts) != 1 {
-		return nil, l.refuse("messages[0].parts", "Jev's state is one text or data part, got %d parts; put several pieces in one data part as named keys", len(msg.Parts))
+	hasImage := false
+	for _, part := range msg.Parts {
+		if _, ok := part.(ImagePart); ok {
+			hasImage = true
+		}
 	}
-	switch only := msg.Parts[0].(type) {
-	case TextPart:
-		return only.Text, nil
-	case DataPart:
-		return deref(only.Value), nil
+	if len(msg.Parts) != 1 && !hasImage {
+		return nil, nil, l.refuse("messages[0].parts", "Jev's state is one text or data part, got %d parts; put several pieces in one data part as named keys", len(msg.Parts))
 	}
-	return nil, l.refuse("messages[0].parts[0]", "Jev reads text or data")
+	assets := JSONObject{}
+	element := func(part Part) (any, error) {
+		switch part := part.(type) {
+		case TextPart:
+			return part.Text, nil
+		case DataPart:
+			return deref(part.Value), nil
+		case ImagePart:
+			data, err := part.Base64()
+			if err != nil {
+				return nil, err
+			}
+			reference := typesafeImageReference(len(assets) + 1)
+			assets.Set(reference, JSONObject{{"type", "image"}, {"format", typesafeImageFormat(part)}, {"data_base64", data}})
+			return reference, nil
+		}
+		return nil, l.refuse("messages[0].parts", "Jev reads text, data, or PNG/JPEG images")
+	}
+	if len(msg.Parts) == 1 {
+		state, err := element(msg.Parts[0])
+		return state, assets, err
+	}
+	state := make([]any, 0, len(msg.Parts))
+	for _, part := range msg.Parts {
+		value, err := element(part)
+		if err != nil {
+			return nil, nil, err
+		}
+		state = append(state, value)
+	}
+	return state, assets, nil
 }
 
 func (l *TypeSafeLM) questions(req *Request, scope *adaptScope) (JSONObject, error) {
@@ -185,11 +269,15 @@ func (l *TypeSafeLM) payload(req *Request, scope *adaptScope) (JSONObject, error
 	if err != nil {
 		return nil, err
 	}
-	state, err := l.state(req)
+	state, assets, err := l.state(req)
 	if err != nil {
 		return nil, err
 	}
-	payload := JSONObject{{"model", req.Model}, {"state", state}, {"questions", questions}}
+	payload := JSONObject{{"model", req.Model}, {"state", state}}
+	if len(assets) > 0 {
+		payload.Set("assets", assets)
+	}
+	payload.Set("questions", questions)
 	for key, value := range cfg.Extensions.All() {
 		if key == "n" {
 			if n, err := jsonFloat64(value, "n"); err == nil && n > 1 {
@@ -223,7 +311,13 @@ func (l *TypeSafeLM) buildRequest(req *Request, stream bool, scope *adaptScope) 
 	if err != nil {
 		return nil, err
 	}
-	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/v1/systemone", endpoint: "systemone", model: req.Model, headers: [][2]string{{"Content-Type", "application/json"}}, payload: payload, scope: scope})
+	headers := [][2]string{{"Content-Type", "application/json"}}
+	if payload.Has("assets") {
+		// The caller put an image in the request: that is the opt-in the
+		// header exists for (changes/2026-10-14-jev-images.md D3).
+		headers = append(headers, [2]string{typesafeImagesHeader, "true"})
+	}
+	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/v1/systemone", endpoint: "systemone", model: req.Model, headers: headers, payload: payload, scope: scope})
 }
 
 // ─── Response parsing ────────────────────────────────────────────────

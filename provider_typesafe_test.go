@@ -97,3 +97,76 @@ func TestDataMeasurementsOnlyOnAssistant(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// changes/2026-10-14-jev-images.md D1-D4: an image is its reference in the
+// state, its bytes an asset, and the request carries the opt-in header.
+func TestTypeSafeImagesAreAssetsNamedInTheState(t *testing.T) {
+	lm, err := NewTypeSafeLM(WithAPIKey("offline-placeholder"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const png, jpg = "iVBORw0KGgo=", "/9j/4AAQ"
+	build := func(parts ...Part) (*TransportRequest, JSONObject, error) {
+		req := typesafeRequest(t)
+		req.Messages = []Message{UserParts(parts...)}
+		wire, err := lm.BuildRequest(req, false)
+		if err != nil {
+			return nil, nil, err
+		}
+		body, err := DecodeJSONObject(wire.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return wire, body, nil
+	}
+	wire, body, err := build(Image(WithBase64(png), WithMediaType("image/png")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := wire.Header("TypeSafe-Danger-Zone-Images"); got != "true" {
+		t.Fatalf("images header = %q", got)
+	}
+	if keys := body.Keys(); strings.Join(keys, ",") != "model,state,assets,questions" {
+		t.Fatalf("payload keys %v", keys)
+	}
+	if body.Get("state") != "<lm15-image-1>" {
+		t.Fatalf("state = %v", body.Get("state"))
+	}
+	asset := body.Get("assets").(JSONObject).Get("<lm15-image-1>").(JSONObject)
+	if asset.Get("type") != "image" || asset.Get("format") != "png" || asset.Get("data_base64") != png {
+		t.Fatalf("asset = %v", asset)
+	}
+	_, body, err = build(Text("A red ball."), Image(WithBase64(png), WithMediaType("image/png")), Data(JSONObject{{"k", 1}}), Image(WithBase64(jpg), WithMediaType("image/jpeg")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := body.Get("state").([]any)
+	if len(state) != 4 || state[0] != "A red ball." || state[1] != "<lm15-image-1>" || state[3] != "<lm15-image-2>" {
+		t.Fatalf("state = %v", state)
+	}
+	if f := body.Get("assets").(JSONObject).Get("<lm15-image-2>").(JSONObject).Get("format"); f != "jpg" {
+		t.Fatalf("second format = %v", f)
+	}
+	wire, body, err = build(Text("no picture"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wire.Header("TypeSafe-Danger-Zone-Images") != "" || body.Has("assets") {
+		t.Fatal("a request without an image must not carry the header or assets")
+	}
+	for _, c := range []struct {
+		part Part
+		why  string
+	}{
+		{Image(WithURL("https://example.com/a.png")), "not a URL"},
+		{Image(WithFileID("file_1")), "not a file id"},
+		{Image(WithBase64("UklGRg=="), WithMediaType("image/webp")), "PNG or JPEG"},
+		{Audio(WithBase64("UklGRg==")), "no slot on the systemone wire"},
+	} {
+		_, _, err := build(Text("x"), c.part)
+		e := AsError(err)
+		if e == nil || e.Feature != "messages[0].parts[1]" || !strings.Contains(e.Error(), c.why) {
+			t.Fatalf("%s: got %v", c.why, err)
+		}
+	}
+}

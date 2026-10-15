@@ -831,10 +831,15 @@ func buildManagedLM(res Resolution, config RouterConfig, def ProviderDefinition,
 	named := credentialsEntry(config, res.Provider)
 	origin := ""
 	access := def.Access
+	// AUTH-15: a selected connection's saved settings (a cloud recipe's
+	// project, location, region...) are given values; the explicit entry
+	// refines them setting by setting.
+	var saved map[string]string
 	if apiKey == nil && named == "" {
 		connection, shape, err := auth.Selection(res.Provider)
 		switch {
 		case err == nil:
+			saved = connection.Settings
 			if shape.Named != "" {
 				named = shape.Named
 			} else {
@@ -887,10 +892,15 @@ func buildManagedLM(res Resolution, config RouterConfig, def ProviderDefinition,
 	if def.Hosted() {
 		env := config.env()
 		ctx := OnlineChainContext(env)
-		var given map[string]string
+		given := map[string]string{}
+		for k, v := range saved {
+			given[k] = v
+		}
 		for key, s := range config.Settings {
 			if config.providerID(CanonicalProvider(key)) == res.Provider {
-				given = s
+				for k, v := range s {
+					given[k] = v
+				}
 			}
 		}
 		settings, err := resolveSettingsWithEndpoint(def.Access.Host, given, env, res.Provider, ProfileSettings(def.Access, ctx), baseURL)

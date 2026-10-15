@@ -302,3 +302,40 @@ func TestFileStoreSharesTheLayoutAndNeverOverwritesAnUnreadableFile(t *testing.T
 		t.Fatal("an unreadable store was overwritten")
 	}
 }
+
+func TestSavedCloudRecipeSettingsBuildTheManagedRoute(t *testing.T) {
+	ctx := context.Background()
+	auth := MemoryAuth()
+	saved := map[string]string{"project": "saved-project", "location": "us-east5"}
+	if _, err := auth.Configure(ctx, "vertex-anthropic", "cloud", map[string]string{"named": "environment"}, saved, ""); err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{"NO_GCE_CHECK": "1", "GOOGLE_CLOUD_PROJECT": "env-project"}
+	built := func(config RouterConfig) string {
+		t.Helper()
+		config.Auth, config.Env = auth, env
+		router, err := NewRouterWithConfig(config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lm, err := router.LM("vertex-anthropic:claude-test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		settings := lm.(interface{ HostSettings() map[string]string }).HostSettings()
+		return settings["project"] + " " + settings["location"]
+	}
+	if got := built(RouterConfig{}); got != "saved-project us-east5" {
+		t.Fatalf("saved recipe: %s", got)
+	}
+	explicit := RouterConfig{Settings: map[string]map[string]string{"vertex_anthropic": {"project": "explicit-project"}}}
+	if got := built(explicit); got != "explicit-project us-east5" {
+		t.Fatalf("explicit entry: %s", got)
+	}
+	// An explicit key selects no connection: its settings do not apply.
+	keyed := RouterConfig{APIKeys: map[string]CredentialLike{"vertex-anthropic": "explicit-key"},
+		Settings: map[string]map[string]string{"vertex-anthropic": {"location": "europe-west1"}}}
+	if got := built(keyed); got != "env-project europe-west1" {
+		t.Fatalf("explicit key: %s", got)
+	}
+}

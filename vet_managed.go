@@ -302,6 +302,33 @@ func vetManagedStep(ctx context.Context, auth *Auth, ui AuthUI, step JSONObject,
 			steps = append(steps, JSONObject{{"kind", s.Kind}, {"state", s.State}})
 		}
 		return JSONObject{{"configured", report.Configured}, {"steps", steps}}, nil
+	case "route":
+		config := RouterConfig{Env: env, Auth: auth}
+		if keys := wireList(step.Get("api_keys")); len(keys) > 0 {
+			config.APIKeys = map[string]CredentialLike{}
+			for _, k := range keys {
+				config.APIKeys[wireStr(k)] = sentinel + "-explicit"
+			}
+		}
+		for name, entry := range wireObj(step.Get("settings")).All() {
+			if config.Settings == nil {
+				config.Settings = map[string]map[string]string{}
+			}
+			config.Settings[name] = vetStrings(entry)
+		}
+		router, err := NewRouterWithConfig(config)
+		if err != nil {
+			return nil, err
+		}
+		lm, err := router.LM(wireStr(step.Get("model")))
+		if err != nil {
+			return nil, err
+		}
+		settings := map[string]string{}
+		if hosted, ok := lm.(interface{ HostSettings() map[string]string }); ok {
+			settings = hosted.HostSettings()
+		}
+		return JSONObject{{"settings", settings}}, nil
 	}
 	return nil, valueErrorf("unknown managed step %q", wireStr(step.Get("do")))
 }

@@ -5,11 +5,15 @@ package lm15
 // changes/2026-09-17-judgments.md. A judgment is a top-level property of a
 // json_schema response_format that declares its answer set: a boolean, a
 // string enum / anyOf-of-const, or an ordered integer enum /
-// anyOf-of-const 0..n-1. This file reads that convention off a schema
-// (§1), rewrites judgment properties for the two wires that need it (§2),
-// folds a model's JSON text into a DataPart (§3), and offers the sugar that
-// EMITS the convention (Choice, YesNo, Score, Judgments) the way tool
-// helpers emit a tool schema. Nothing here touches the network.
+// anyOf-of-const 0..n-1 — or, since changes/2026-10-15-bounding-box.md, a
+// bounding box: an object of the four numbers top, bottom, left, right
+// (fractions of the image's height and width). A box declares no keys, so
+// it is answered, never scored. This file reads that convention off a
+// schema (§1), rewrites judgment properties for the two wires that need it
+// (§2), folds a model's JSON text into a DataPart (§3), and offers the
+// sugar that EMITS the convention (Choice, YesNo, Score, BoundingBox,
+// Judgments) the way tool helpers emit a tool schema. Nothing here touches
+// the network.
 
 import (
 	"encoding/json"
@@ -18,14 +22,29 @@ import (
 	"strings"
 )
 
-// JudgmentKind is one of "boolean", "choice", "ordered".
+// JudgmentKind is one of "boolean", "choice", "ordered", "box".
 type JudgmentKind string
 
 const (
 	JudgmentBoolean JudgmentKind = "boolean"
 	JudgmentChoice  JudgmentKind = "choice"
 	JudgmentOrdered JudgmentKind = "ordered"
+	// JudgmentBox is a bounding box: four edges, no declared keys (2026-10-15).
+	JudgmentBox JudgmentKind = "box"
 )
+
+// BoxEdges are a box's edges, in Jev's order
+// (changes/2026-10-15-bounding-box.md D1): fractions of the image from its
+// top-left corner, top/bottom of its height, left/right of its width
+// (docs.typesafe.ai/primitives/box).
+var BoxEdges = [4]string{"top", "bottom", "left", "right"}
+
+var boxEdgeDescriptions = [4]string{
+	"Top edge, as a fraction of the image's height from the top, from 0 to 1",
+	"Bottom edge, as a fraction of the image's height from the top, from 0 to 1",
+	"Left edge, as a fraction of the image's width from the left, from 0 to 1",
+	"Right edge, as a fraction of the image's width from the left, from 0 to 1",
+}
 
 const (
 	// MaxOrderedLevels is Jev's Score ceiling (docs.typesafe.ai/primitives/score).
@@ -46,6 +65,11 @@ type Judgment struct {
 
 // Ordered reports whether the judgment is a level scale.
 func (j Judgment) Ordered() bool { return j.Kind == JudgmentOrdered }
+
+// Measurable reports whether a distribution over declared keys exists to
+// measure: a box declares no keys, so it is answered, never scored
+// (MAP-14 §1).
+func (j Judgment) Measurable() bool { return j.Kind != JudgmentBox }
 
 // ─── §1 reading the convention ────────────────────────────────────────
 
@@ -97,12 +121,36 @@ func jsonInteger(v any) (int, bool) {
 	return 0, false
 }
 
+// isBox: an object whose properties are exactly the four edges, each a
+// number (changes/2026-10-15-bounding-box.md D1). Other keywords are the
+// caller's and travel verbatim.
+func isBox(prop JSONObject) bool {
+	if typ, has := prop.Lookup("type"); has && typ != "object" {
+		return false
+	}
+	props, ok := asObject(prop.Get("properties"))
+	if !ok || len(props.Keys()) != len(BoxEdges) {
+		return false
+	}
+	for _, edge := range BoxEdges {
+		schema, ok := asObject(props.Get(edge))
+		if !ok || schema.Get("type") != "number" {
+			return false
+		}
+	}
+	return true
+}
+
 func judgmentOf(name string, raw any) (Judgment, bool) {
 	prop, ok := asObject(raw)
 	if !ok {
 		return Judgment{}, false
 	}
 	instruction := optDescription(prop, "description")
+	if isBox(prop) {
+		return Judgment{Name: name, Kind: JudgmentBox, Keys: []string{}, Instruction: instruction,
+			Descriptions: map[string]string{}, Titles: map[string]string{}}, true
+	}
 	typ, _ := prop.Get("type").(string)
 	if typ == "boolean" {
 		return Judgment{Name: name, Kind: JudgmentBoolean, Keys: []string{"true", "false"}, Instruction: instruction,
@@ -224,6 +272,23 @@ func RequestJudgments(req *Request) []Judgment {
 	return JudgmentsInSchema(f.Get("schema"))
 }
 
+// MeasurableJudgments keeps the judgments with declared keys: the ones a
+// distribution can be measured for (boxes are left out).
+func MeasurableJudgments(found []Judgment) []Judgment {
+	var out []Judgment
+	for _, j := range found {
+		if j.Measurable() {
+			out = append(out, j)
+		}
+	}
+	return out
+}
+
+// RequestMeasurableJudgments lists the request's judgments with declared keys.
+func RequestMeasurableJudgments(req *Request) []Judgment {
+	return MeasurableJudgments(RequestJudgments(req))
+}
+
 // nonJudgmentProperties lists the schema's properties that are not judgments.
 func nonJudgmentProperties(schema any, found []Judgment) []string {
 	obj, ok := asObject(schema)
@@ -247,10 +312,11 @@ func nonJudgmentProperties(schema any, found []Judgment) []string {
 
 // noteUnmeasurableProbabilities is MAP-14 §3 on a wire with no
 // distribution: if_available records dropped; required refuses before the
-// wire (MAP-13 b).
+// wire (MAP-13 b). A request whose judgments are all boxes asked for
+// nothing measurable: nothing is recorded and nothing refused.
 func noteUnmeasurableProbabilities(scope *adaptScope, req *Request, provider string) error {
 	policy := req.Config.Probabilities
-	if policy == "" || policy == ProbabilitiesOff || len(RequestJudgments(req)) == 0 {
+	if policy == "" || policy == ProbabilitiesOff || len(RequestMeasurableJudgments(req)) == 0 {
 		return nil
 	}
 	if policy == ProbabilitiesRequired {
@@ -328,7 +394,7 @@ func geminiSchema(schema JSONObject, found []Judgment) JSONObject {
 		if !ok {
 			continue
 		}
-		if j.Kind == JudgmentBoolean {
+		if j.Kind == JudgmentBoolean || j.Kind == JudgmentBox {
 			continue
 		}
 		if _, has := prop.Lookup("anyOf"); !has {
@@ -522,6 +588,30 @@ func Options(keys ...string) []ChoiceOption {
 		out = append(out, ChoiceOption{Key: k})
 	}
 	return out
+}
+
+// BoundingBox emits a bounding-box judgment: where in the request's image
+// is what instruction describes (changes/2026-10-15-bounding-box.md).
+//
+// The answer is {top, bottom, left, right}, each a fraction from 0 to 1 of
+// the image's height (top, bottom) or width (left, right), measured from the
+// top-left corner; multiply by the image's size in pixels to draw or crop.
+// There is no "not found" answer: ask a YesNo beside it. On typesafe this is
+// Jev's Box question and needs Jev 1.14 ("jev-preview" or "jev-1.14.0");
+// elsewhere it is ordinary structured output.
+//
+// The edges carry no minimum/maximum: Anthropic refuses both on a number
+// (HTTP 400, receipted 2026-10-15); the range is in each edge's
+// description, which every wire passes to the model.
+func BoundingBox(instruction string) JSONObject {
+	edges := JSONObject{}
+	required := make([]any, 0, len(BoxEdges))
+	for i, edge := range BoxEdges {
+		edges.Set(edge, JSONObject{{"type", "number"}, {"description", boxEdgeDescriptions[i]}})
+		required = append(required, edge)
+	}
+	return JSONObject{{"type", "object"}, {"description", instruction}, {"properties", edges},
+		{"required", required}, {"additionalProperties", false}}
 }
 
 // YesNo emits a boolean judgment property.

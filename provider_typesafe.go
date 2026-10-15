@@ -11,8 +11,11 @@ package lm15
 // refused before the wire, the native place named (D2/D8). Images reach Jev
 // as top-level assets named by a reference string written where the image
 // belongs in the state (changes/2026-10-14-jev-images.md); audio, video and
-// documents are refused (MAP-10). Wire facts: receipts/2026-09-17-judgments/,
-// receipts/2026-09-19-typesafe/, receipts/2026-10-14-typesafe/.
+// documents are refused (MAP-10). A bounding-box judgment is Jev's Box
+// question; its answer is the box verbatim, with no distribution
+// (changes/2026-10-15-bounding-box.md). Wire facts:
+// receipts/2026-09-17-judgments/, receipts/2026-09-19-typesafe/,
+// receipts/2026-10-14-typesafe/, receipts/2026-10-15-typesafe/.
 
 import (
 	"context"
@@ -53,8 +56,9 @@ func (l *TypeSafeLM) refuse(feature, format string, args ...any) *Error {
 	return UnsupportedFeature(l.provider, feature, "%s: %s", l.provider, fmt.Sprintf(format, args...))
 }
 
-// typesafeImagesHeader turns images on; each request that carries one must
-// send it (live 400 without it, 2026-10-14).
+// typesafeImagesHeader turns images and Box questions on; each request that
+// carries one must send it (live 400 without it: 2026-10-14 for an image,
+// 2026-10-15 for a Box question with no image).
 const typesafeImagesHeader = "TypeSafe-Danger-Zone-Images"
 
 // typesafeImageFormat is the asset format systemone reads for a media type:
@@ -197,6 +201,9 @@ func (l *TypeSafeLM) questions(req *Request, scope *adaptScope) (JSONObject, err
 		switch j.Kind {
 		case JudgmentBoolean:
 			questions.Set(j.Name, JSONObject{{"type", "noul"}, {"instructions", instruction}})
+		case JudgmentBox:
+			// Jev's Box takes no criteria (docs.typesafe.ai/primitives/box).
+			questions.Set(j.Name, JSONObject{{"type", "box"}, {"instructions", instruction}})
 		case JudgmentChoice:
 			if len(j.Keys) > MaxChoiceKeys {
 				return nil, l.refuse("config.response_format.schema.properties."+j.Name, "a Jev choice takes at most %d keys, got %d", MaxChoiceKeys, len(j.Keys))
@@ -312,9 +319,18 @@ func (l *TypeSafeLM) buildRequest(req *Request, stream bool, scope *adaptScope) 
 		return nil, err
 	}
 	headers := [][2]string{{"Content-Type", "application/json"}}
-	if payload.Has("assets") {
-		// The caller put an image in the request: that is the opt-in the
-		// header exists for (changes/2026-10-14-jev-images.md D3).
+	asksBox := false
+	if questions, ok := asObject(payload.Get("questions")); ok {
+		for _, name := range questions.Keys() {
+			if q, ok := asObject(questions.Get(name)); ok && q.Get("type") == "box" {
+				asksBox = true
+			}
+		}
+	}
+	if payload.Has("assets") || asksBox {
+		// The caller put an image or a box in the request: that is the
+		// opt-in the header exists for (changes/2026-10-14-jev-images.md D3;
+		// changes/2026-10-15-bounding-box.md D2).
 		headers = append(headers, [2]string{typesafeImagesHeader, "true"})
 	}
 	return l.emit(emitSpec{method: "POST", url: strings.TrimRight(l.baseURL, "/") + "/v1/systemone", endpoint: "systemone", model: req.Model, headers: headers, payload: payload, scope: scope})
@@ -365,9 +381,30 @@ func (l *TypeSafeLM) parseResponse(req *Request, resp *HTTPResponse) (*Response,
 			}
 			return nil, invalid(path, "expected an answer object")
 		}
-		expected := map[JudgmentKind]string{JudgmentBoolean: "noul", JudgmentChoice: "choice", JudgmentOrdered: "score"}[j.Kind]
+		expected := map[JudgmentKind]string{JudgmentBoolean: "noul", JudgmentChoice: "choice", JudgmentOrdered: "score", JudgmentBox: "box"}[j.Kind]
 		if answer.Get("type") != expected {
 			return nil, invalid(path+".type", "expected "+strconv.Quote(expected))
+		}
+		if j.Kind == JudgmentBox {
+			// The four edges verbatim, in Jev's order; a box has no
+			// distribution, and its confidence stays in provider_data.
+			edges, ok := asObject(answer.Get("box"))
+			if !ok || len(edges.Keys()) != len(BoxEdges) {
+				return nil, invalid(path+".box", "expected exactly top, bottom, left and right")
+			}
+			box := JSONObject{}
+			for _, edge := range BoxEdges {
+				raw, present := edges.Lookup(edge)
+				if !present {
+					return nil, invalid(path+".box", "expected exactly top, bottom, left and right")
+				}
+				if _, perr := probability(raw, path+".box."+edge); perr != nil { // a fraction: finite, in [0, 1]
+					return nil, perr
+				}
+				box.Set(edge, raw) // numbers as written (an opaque value, serde number rule 4)
+			}
+			value.Set(j.Name, box)
+			continue
 		}
 		if j.Kind == JudgmentBoolean {
 			p, perr := probability(answer.Get("noul"), path+".noul")

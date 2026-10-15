@@ -13,6 +13,12 @@ package lm15
 //  2. ONE /v1/completions call carrying every trie node as a prompt
 //     (token ids), max_tokens 1, logprob_token_ids = union of child
 //     tokens; raw log-probs sum along each path, one normalisation.
+//
+// Properties the trie does not measure — bounding boxes
+// (changes/2026-10-15-bounding-box.md) and ordinary structured output —
+// are answered by one generated structured-output call beside it, and the
+// measured judgments are laid over that answer, as in the Python,
+// TypeScript and Rust drivers. Nothing declared is dropped.
 
 import (
 	"context"
@@ -211,7 +217,7 @@ type judgmentPlanEntry struct {
 // judgmentPlan: one entry per judgment, the tokenize requests it needs. Pure.
 func (l *OpenAIChatLM) judgmentPlan(req *Request) ([]judgmentPlanEntry, error) {
 	var plan []judgmentPlanEntry
-	for _, j := range RequestJudgments(req) {
+	for _, j := range RequestMeasurableJudgments(req) {
 		msgs, err := l.judgmentMessages(req, j, judgmentPrefill)
 		if err != nil {
 			return nil, err
@@ -374,7 +380,7 @@ func (l *OpenAIChatLM) judgmentFold(req *Request, per []tokenizedJudgment, table
 
 func (l *OpenAIChatLM) judgmentsViaTokenScoring(req *Request) bool {
 	p := req.Config.Probabilities
-	return l.scoresNamedTokens() && (p == ProbabilitiesIfAvailable || p == ProbabilitiesRequired) && len(RequestJudgments(req)) > 0
+	return l.scoresNamedTokens() && (p == ProbabilitiesIfAvailable || p == ProbabilitiesRequired) && len(RequestMeasurableJudgments(req)) > 0
 }
 
 func (l *OpenAIChatLM) judgmentAdaptations() ([]Adaptation, error) {
@@ -506,7 +512,106 @@ func (l *OpenAIChatLM) judgmentScoreAndFold(ctx context.Context, req *Request, t
 		}
 		return nil, err
 	}
+	if l.judgmentMixed(req) {
+		generated, err := l.judgmentGenerate(ctx, req)
+		if err != nil {
+			return nil, err
+		}
+		out = judgmentMerge(out, generated)
+	}
 	return l.finishResponse(req, out, adaptations), nil
+}
+
+// judgmentMixed: the schema declares a property the trie does not measure
+// (a bounding box, or ordinary structured output).
+func (l *OpenAIChatLM) judgmentMixed(req *Request) bool {
+	return len(nonJudgmentProperties(req.Config.ResponseFormat.Get("schema"), RequestMeasurableJudgments(req))) > 0
+}
+
+// judgmentGenerate answers the whole schema by generated JSON
+// (probabilities off) — a strict boundary: an incomplete answer, or one
+// missing a required property the trie did not measure, is a provider
+// fault, never repaired.
+func (l *OpenAIChatLM) judgmentGenerate(ctx context.Context, req *Request) (*Response, error) {
+	generated := *req
+	generated.Config.Probabilities = ProbabilitiesOff
+	wire, _, err := l.build(&generated, false, false)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := l.sendOK(ctx, wire, nil)
+	if err != nil {
+		return nil, err
+	}
+	parsed, err := l.parseResponse(&generated, resp)
+	if err != nil {
+		return nil, err
+	}
+	fault := func(detail string) error {
+		e := l.judgmentReplyError(resp, "malformed generated judgment JSON: "+detail)
+		attachErrorMetadata(e, resp.Headers)
+		return e
+	}
+	if parsed.FinishReason != FinishStop {
+		return nil, fault("generated judgment answer did not finish completely")
+	}
+	part, ok := parsed.DataPart()
+	if !ok {
+		return nil, fault("generated judgment answer needs one JSON object")
+	}
+	value, _ := asObject(part.Value)
+	measured := map[string]bool{}
+	for _, j := range RequestMeasurableJudgments(req) {
+		measured[j.Name] = true
+	}
+	schema, _ := asObject(req.Config.ResponseFormat.Get("schema"))
+	required, _ := schema.Get("required").([]any)
+	for _, raw := range required {
+		if name, ok := raw.(string); ok && !measured[name] && !value.Has(name) {
+			return nil, fault("generated answer is missing required property " + strconv.Quote(name))
+		}
+	}
+	return parsed, nil
+}
+
+// judgmentMerge lays the measured judgments over the generated answer; the
+// usage is the sum of both calls where both reported a field, the scoring
+// call's own usage and the generated response kept in provider_data.
+func judgmentMerge(measured, generated *Response) *Response {
+	scored, _ := measured.DataPart()
+	original, _ := generated.DataPart()
+	base, _ := asObject(original.Value)
+	merged := deepCopyJSON(base).(JSONObject)
+	over, _ := asObject(scored.Value)
+	for _, name := range over.Keys() {
+		merged.Set(name, over.Get(name))
+	}
+	part := DataPart{Value: merged, Probabilities: scored.Probabilities, Method: scored.Method, Continuation: original.Continuation}
+	parts := make([]Part, 0, len(generated.Message.Parts))
+	for _, p := range generated.Message.Parts {
+		if _, isData := p.(DataPart); isData {
+			parts = append(parts, part)
+			continue
+		}
+		parts = append(parts, p)
+	}
+	sum := func(a, b *int) *int {
+		if a == nil || b == nil {
+			return nil
+		}
+		v := *a + *b
+		return &v
+	}
+	s, g := measured.Usage, generated.Usage
+	usage := Usage{InputTokens: sum(s.InputTokens, g.InputTokens), OutputTokens: sum(s.OutputTokens, g.OutputTokens),
+		TotalTokens: sum(s.TotalTokens, g.TotalTokens), CacheReadTokens: sum(s.CacheReadTokens, g.CacheReadTokens),
+		CacheWriteTokens: sum(s.CacheWriteTokens, g.CacheWriteTokens), ReasoningTokens: sum(s.ReasoningTokens, g.ReasoningTokens),
+		InputAudioTokens: sum(s.InputAudioTokens, g.InputAudioTokens), OutputAudioTokens: sum(s.OutputAudioTokens, g.OutputAudioTokens)}
+	providerData := deepCopyJSON(measured.ProviderData).(JSONObject)
+	providerData.Set("scoring_usage", UsageToDict(measured.Usage))
+	providerData.Set("generated_response", ResponseToDict(generated, true))
+	return &Response{ID: generated.ID, Model: measured.Model, Message: Message{Role: RoleAssistant, Parts: parts, Continuation: generated.Message.Continuation},
+		FinishReason: generated.FinishReason, Usage: usage, ProviderData: providerData}
 }
 
 // judgmentUnmeasured: the server answered 200 without the requested token

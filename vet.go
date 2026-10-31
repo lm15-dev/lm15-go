@@ -15,7 +15,7 @@ import (
 // compares. Nothing here touches the network.
 
 // Version is this port's implementation version.
-const Version = "1.1.0-rc.10"
+const Version = "1.1.0-rc.11"
 
 const parseOnlyKey = "vet-parse-only"
 
@@ -31,6 +31,7 @@ func init() {
 		"replay_stream":             vetReplayStream,
 		"normalize_error":           vetNormalizeError,
 		"serde_roundtrip":           vetSerdeRoundtrip,
+		"estimate_cost":             vetEstimateCost,
 		"validate":                  vetValidate,
 		"surface_dump":              func(JSONObject) (JSONObject, error) { return SurfaceDump(), nil },
 		"explain_auth":              vetExplainAuth,
@@ -495,6 +496,32 @@ func vetSerdeRoundtrip(msg JSONObject) (JSONObject, error) {
 		return nil, err
 	}
 	return JSONObject{{"value", out}}, nil
+}
+
+// vetEstimateCost is PROTOCOL.md estimate_cost: InferencePricing.Estimate;
+// cost is null when unknown.
+func vetEstimateCost(msg JSONObject) (JSONObject, error) {
+	pd, ok := asObject(msg.Get("pricing"))
+	if !ok {
+		return nil, typeErrorf("pricing must be a JSON object")
+	}
+	ud, ok := asObject(msg.Get("usage"))
+	if !ok {
+		return nil, typeErrorf("usage must be a JSON object")
+	}
+	pricing, err := PricingFromDict(pd)
+	if err != nil {
+		return nil, err
+	}
+	usage, err := UsageFromDict(ud)
+	if err != nil {
+		return nil, err
+	}
+	cost, known := pricing.Estimate(usage)
+	if !known {
+		return JSONObject{{"cost", nil}}, nil
+	}
+	return JSONObject{{"cost", cost}}, nil
 }
 
 func vetValidate(msg JSONObject) (JSONObject, error) {

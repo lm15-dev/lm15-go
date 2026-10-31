@@ -35,17 +35,22 @@ examples) · API reference:
 Requires Go 1.26.2 or newer.
 
 ```bash
-go get github.com/lm15-dev/lm15-go@v1.1.0-rc.10
+go get github.com/lm15-dev/lm15-go@v1.1.0-rc.11
 ```
 
 ```go
 import lm15 "github.com/lm15-dev/lm15-go"
 ```
 
-**v1.1.0-rc.10 is a release candidate** (v1.1.0-rc.1 was the first release of lm15 for Go),
+**v1.1.0-rc.11 is a release candidate** (v1.1.0-rc.1 was the first release of lm15 for Go),
 open for trying before v1.1.0. Python's and TypeScript's lm15 are stable;
 Rust is a release candidate too. Why Go starts at 1.1: see
-[Versions](#versions).
+[Versions](#versions). rc.11 gives every usage counter one meaning on every
+provider (`InputTokens` includes cached tokens, `OutputTokens` includes
+reasoning), so Anthropic input and Gemini and xAI output counts grow, and
+`InferencePricing.Estimate(usage)` now returns `(cost, ok)`: the exact list
+price, or `ok == false` when an unknown count could change it (lm15-contract
+`changes/2026-10-31-usage-one-meaning.md`).
 
 Set the key of the provider you call (`ANTHROPIC_API_KEY`,
 `OPENAI_API_KEY`, `GEMINI_API_KEY`, ...). The router reads it from the

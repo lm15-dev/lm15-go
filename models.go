@@ -2,7 +2,43 @@ package lm15
 
 import "sort"
 
-// InferencePricing is per-million-token pricing (advisory metadata).
+// PricingTier holds the rates of a call whose prompt is longer than
+// AboveInputTokens (spec/types.md § PricingTier). A tier reprices the WHOLE
+// call; a rate the tier leaves out is unknown at that tier, never taken from
+// the base rates.
+type PricingTier struct {
+	AboveInputTokens     int
+	InputPerMillion      *float64
+	OutputPerMillion     *float64
+	CacheReadPerMillion  *float64
+	CacheWritePerMillion *float64
+}
+
+func checkRates(rates map[string]*float64) error {
+	for name, v := range rates {
+		if v != nil && *v < 0 {
+			return valueErrorf("%s must be >= 0", name)
+		}
+	}
+	return nil
+}
+
+// Validate checks the threshold and the rates.
+func (t PricingTier) Validate() error {
+	if t.AboveInputTokens <= 0 {
+		return valueErrorf("PricingTier.above_input_tokens must be a positive integer")
+	}
+	return checkRates(map[string]*float64{
+		"input_per_million": t.InputPerMillion, "output_per_million": t.OutputPerMillion,
+		"cache_read_per_million": t.CacheReadPerMillion, "cache_write_per_million": t.CacheWritePerMillion,
+	})
+}
+
+// InferencePricing holds list prices per million tokens of each billing
+// bucket (uncached input, cache reads, cache writes, output; advisory
+// metadata). An absent rate is unknown, never zero. Tiers (strictly
+// ascending, INV-057) reprice long prompts; Dimensions is opaque catalog data
+// Estimate does not read.
 type InferencePricing struct {
 	InputPerMillion      *float64
 	OutputPerMillion     *float64
@@ -10,6 +46,7 @@ type InferencePricing struct {
 	CacheWritePerMillion *float64
 	Currency             string // "" reads as USD
 	Dimensions           JSONObject
+	Tiers                []PricingTier
 }
 
 // EffectiveCurrency returns Currency or USD.
@@ -20,32 +57,87 @@ func (p InferencePricing) EffectiveCurrency() string {
 	return p.Currency
 }
 
-// Validate checks the rates.
+// Validate checks the rates and the tiers' order.
 func (p InferencePricing) Validate() error {
-	for name, v := range map[string]*float64{
+	if err := checkRates(map[string]*float64{
 		"input_per_million": p.InputPerMillion, "output_per_million": p.OutputPerMillion,
 		"cache_read_per_million": p.CacheReadPerMillion, "cache_write_per_million": p.CacheWritePerMillion,
-	} {
-		if v != nil && *v < 0 {
-			return valueErrorf("%s must be >= 0", name)
+	}); err != nil {
+		return err
+	}
+	previous := 0
+	for _, tier := range p.Tiers {
+		if err := tier.Validate(); err != nil {
+			return err
 		}
+		if tier.AboveInputTokens <= previous {
+			return valueErrorf("InferencePricing.tiers must be in strictly ascending above_input_tokens order")
+		}
+		previous = tier.AboveInputTokens
 	}
 	return checkJSONObject(p.Dimensions, "dimensions", false)
 }
 
-// Estimate computes a cost lower bound; nil counts are unknown and skipped.
-func (p InferencePricing) Estimate(u Usage) float64 {
-	total := 0.0
-	add := func(rate *float64, count *int) {
-		if rate != nil && count != nil {
-			total += float64(*count) * *rate / 1_000_000
+// Estimate is the list-price cost of one call; ok is false when it is not
+// known (spec/types.md § InferencePricing, "estimate"). Exact or nothing: the
+// sum, in this order, of uncached input, cache reads, cache writes and
+// output, each tokens * rate / 1_000_000, at the base rates or the highest
+// tier whose threshold InputTokens exceeds. Unknown when input or output is
+// unknown; when an unreported cache count's rate differs from the input
+// rate; when a bucket with tokens has no rate; when audio tokens were used.
+// Service tiers, regional multipliers, longer cache lifetimes and tool fees
+// are outside it.
+func (p InferencePricing) Estimate(u Usage) (cost float64, ok bool) {
+	if u.InputTokens == nil || u.OutputTokens == nil {
+		return 0, false
+	}
+	if intOr0(u.InputAudioTokens) > 0 || intOr0(u.OutputAudioTokens) > 0 {
+		return 0, false
+	}
+	input, output := *u.InputTokens, *u.OutputTokens
+	rates := PricingTier{InputPerMillion: p.InputPerMillion, OutputPerMillion: p.OutputPerMillion,
+		CacheReadPerMillion: p.CacheReadPerMillion, CacheWritePerMillion: p.CacheWritePerMillion}
+	for _, tier := range p.Tiers {
+		if input > tier.AboveInputTokens {
+			rates = tier
 		}
 	}
-	add(p.InputPerMillion, u.InputTokens)
-	add(p.OutputPerMillion, u.OutputTokens)
-	add(p.CacheReadPerMillion, u.CacheReadTokens)
-	add(p.CacheWritePerMillion, u.CacheWriteTokens)
-	return total
+	// An unknown cache count is harmless only when its tokens cost the same
+	// as plain input: then the split cannot change the price.
+	known := func(count *int, rate *float64) (int, bool) {
+		if count != nil {
+			return *count, true
+		}
+		if rate != nil && rates.InputPerMillion != nil && *rate == *rates.InputPerMillion {
+			return 0, true
+		}
+		return 0, false
+	}
+	read, okRead := known(u.CacheReadTokens, rates.CacheReadPerMillion)
+	write, okWrite := known(u.CacheWriteTokens, rates.CacheWritePerMillion)
+	if !okRead || !okWrite {
+		return 0, false
+	}
+	buckets := []struct {
+		tokens int
+		rate   *float64
+	}{
+		{input - read - write, rates.InputPerMillion},
+		{read, rates.CacheReadPerMillion},
+		{write, rates.CacheWritePerMillion},
+		{output, rates.OutputPerMillion},
+	}
+	total := 0.0
+	for _, b := range buckets {
+		if b.tokens == 0 {
+			continue
+		}
+		if b.rate == nil {
+			return 0, false
+		}
+		total += float64(b.tokens) * *b.rate / 1_000_000
+	}
+	return total, true
 }
 
 // InferenceModelInfo describes a model's inference capabilities.

@@ -78,6 +78,15 @@ func (l *OpenAIChatLM) headers() [][2]string {
 	return append([][2]string{{"Content-Type", "application/json"}}, l.access.Headers...)
 }
 
+// streamReasoningUsage is the preset's reasoning_usage for a stream frame
+// (MAP-19 rule 4); the dialect's rule when no request is at hand.
+func (l *OpenAIChatLM) streamReasoningUsage(req *Request) string {
+	if req == nil {
+		return l.resolved.ReasoningUsage
+	}
+	return l.compatFor(req.Model).ReasoningUsage
+}
+
 func (l *OpenAIChatLM) compatFor(model string) ResolvedOpenAIChatCompat {
 	if len(l.compatPartial.ModelOverrides) == 0 {
 		return l.resolved
@@ -766,23 +775,43 @@ func cachedTokensFromChat(prompt, u JSONObject) *int {
 	return wireIntPtr(u.Get("cached_tokens"))
 }
 
-func usageFromChat(u JSONObject) Usage {
+// usageFromChat is MAP-19 rule 4. prompt_tokens already includes the cached
+// and written tokens. Reasoning is inside completion_tokens unless the
+// preset says reasoningUsage "separate" (xAI), where output is completion +
+// reasoning; a body without a reasoning count then still determines output
+// when its total is prompt + completion, and otherwise output is unknown.
+func usageFromChat(u JSONObject, reasoningUsage string) Usage {
 	prompt := wireObj(u.Get("prompt_tokens_details"))
 	completion := wireObj(u.Get("completion_tokens_details"))
+	promptTokens := wireIntPtr(u.Get("prompt_tokens"))
+	completionTokens := wireIntPtr(u.Get("completion_tokens"))
+	total := wireIntPtr(u.Get("total_tokens"))
+	reasoning := wireIntPtr(completion.Get("reasoning_tokens"))
+	output := completionTokens
+	if reasoningUsage == "separate" && completionTokens != nil {
+		switch {
+		case reasoning != nil:
+			output = wireSum(completionTokens, reasoning)
+		case total != nil && promptTokens != nil && *total == *promptTokens+*completionTokens:
+			output = completionTokens
+		default:
+			output = nil
+		}
+	}
 	return Usage{
-		InputTokens:       wireIntPtr(u.Get("prompt_tokens")),
-		OutputTokens:      wireIntPtr(u.Get("completion_tokens")),
-		TotalTokens:       wireIntPtr(u.Get("total_tokens")),
-		ReasoningTokens:   wireIntPtr(completion.Get("reasoning_tokens")),
+		InputTokens:       promptTokens,
+		OutputTokens:      output,
+		TotalTokens:       total,
+		ReasoningTokens:   reasoning,
 		CacheReadTokens:   cachedTokensFromChat(prompt, u),
 		CacheWriteTokens:  wireIntPtr(prompt.Get("cache_write_tokens")),
 		InputAudioTokens:  wireIntPtr(prompt.Get("audio_tokens")),
 		OutputAudioTokens: wireIntPtr(completion.Get("audio_tokens")),
-	}.Normalize()
+	}.Settle()
 }
 
 // responseFromChatBody is the one Chat Completions response reader.
-func responseFromChatBody(provider string, data JSONObject, model string, choice *int, onError func(code, message string) *Error) (*Response, error) {
+func responseFromChatBody(provider string, data JSONObject, model string, choice *int, onError func(code, message string) *Error, reasoningUsage string) (*Response, error) {
 	if e := wireObj(data.Get("error")); e != nil {
 		return nil, onError(wireStr(e.Get("code")), firstStr(e.Get("message"), mustJSONString(e)))
 	}
@@ -866,7 +895,7 @@ func responseFromChatBody(provider string, data JSONObject, model string, choice
 	if len(parts) == 0 {
 		parts = []Part{TextPart{}}
 	}
-	usage := usageFromChat(wireObj(data.Get("usage")))
+	usage := usageFromChat(wireObj(data.Get("usage")), reasoningUsage)
 	logprobs := openaiTokenLogprobs(wireObj(chosen.Get("logprobs")).Get("content"))
 	resolvedModel := wireStr(data.Get("model"))
 	if resolvedModel == "" || data.Get("model") == nil {
@@ -891,7 +920,7 @@ func (l *OpenAIChatLM) parseResponse(req *Request, resp *HTTPResponse) (*Respons
 	if err != nil {
 		return nil, err
 	}
-	out, err := responseFromChatBody(l.provider, data, req.Model, nil, func(code, message string) *Error { return openaiResponseError(&l.lmCore, code, message) })
+	out, err := responseFromChatBody(l.provider, data, req.Model, nil, func(code, message string) *Error { return openaiResponseError(&l.lmCore, code, message) }, l.compatFor(req.Model).ReasoningUsage)
 	if err != nil {
 		return nil, err
 	}
@@ -913,7 +942,7 @@ func foldJudgments(resp *Response, responseFormat JSONObject) *Response {
 }
 
 func (l *OpenAIChatLM) responseFromOpenAIChat(body JSONObject, model string, choice *int, responseFormat JSONObject) (*Response, error) {
-	out, err := responseFromChatBody(l.provider, body, model, choice, func(code, message string) *Error { return openaiResponseError(&l.lmCore, code, message) })
+	out, err := responseFromChatBody(l.provider, body, model, choice, func(code, message string) *Error { return openaiResponseError(&l.lmCore, code, message) }, l.compatFor(model).ReasoningUsage)
 	if err != nil {
 		return nil, err
 	}
@@ -948,10 +977,10 @@ func responseFromOpenAIChatBody(body JSONObject, model string, choice *int) (*Re
 		e := providerErrorf(kind, "openai-chat", nil, msg)
 		e.ProviderCode = code
 		return e
-	})
+	}, "in_completion")
 }
 
-func (l *OpenAIChatLM) parseStreamEvents(_ *Request, ev sse.Event) ([]StreamEvent, error) {
+func (l *OpenAIChatLM) parseStreamEvents(req *Request, ev sse.Event) ([]StreamEvent, error) {
 	if ev.Data == "" {
 		return nil, nil
 	}
@@ -1002,12 +1031,12 @@ func (l *OpenAIChatLM) parseStreamEvents(_ *Request, ev sse.Event) ([]StreamEven
 		}
 		var usage *Usage
 		if usageData != nil {
-			u := usageFromChat(usageData)
+			u := usageFromChat(usageData, l.streamReasoningUsage(req))
 			usage = &u
 		}
 		events = append(events, StreamEndEvent{FinishReason: finish, Usage: usage, ProviderData: payload})
 	} else if usageData != nil {
-		u := usageFromChat(usageData)
+		u := usageFromChat(usageData, l.streamReasoningUsage(req))
 		events = append(events, StreamEndEvent{Usage: &u, ProviderData: payload})
 	}
 	return events, nil

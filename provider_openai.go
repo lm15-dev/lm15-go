@@ -349,6 +349,9 @@ func citationDeltaFromAnnotation(a JSONObject, partIndex int) (CitationDelta, bo
 	return d, true
 }
 
+// openaiUsage is MAP-19 rule 7 (Responses and Realtime): input_tokens
+// already includes the cached and written tokens and output_tokens the
+// reasoning, so every counter keeps its value.
 func openaiUsage(usageData JSONObject) Usage {
 	in := wireObj(usageData.Get("input_tokens_details"))
 	if in == nil {
@@ -367,7 +370,7 @@ func openaiUsage(usageData JSONObject) Usage {
 		CacheWriteTokens:  wireIntPtr(in.Get("cache_write_tokens")),
 		InputAudioTokens:  wireIntPtr(in.Get("audio_tokens")),
 		OutputAudioTokens: wireIntPtr(out.Get("audio_tokens")),
-	}.Normalize()
+	}.Settle()
 }
 
 // OpenAI error envelope code tables (shared by the chat dialect).

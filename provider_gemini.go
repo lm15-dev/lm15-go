@@ -300,39 +300,48 @@ func modalityTokens(details any, modality string) *int {
 	return &sum
 }
 
+// geminiUsage is MAP-19 rule 6. Gemini counts the prompt, its own tool-use
+// tokens, the answer and the thoughts side by side (the total is their sum):
+// input is prompt + tool use, output is answer + thoughts, and the cached
+// count is part of the prompt. Inside a present usageMetadata an absent
+// counter is a reported 0 (proto3 JSON omits zeros); Gemini reports no
+// cache-write count.
 func geminiUsage(usage JSONObject, outputKeys ...string) Usage {
 	if len(usage) == 0 {
 		return Usage{}
 	}
-	zero := 0
-	output := &zero
+	count := func(key string) int { return intOr0(wireIntPtr(usage.Get(key))) }
+	answer := 0
 	for _, k := range outputKeys {
 		if v, ok := usage.Lookup(k); ok {
-			output = wireIntPtr(v)
-			if output == nil {
-				output = &zero
-			}
+			answer = intOr0(wireIntPtr(v))
 			break
 		}
 	}
-	input := wireIntPtr(usage.Get("promptTokenCount"))
-	if input == nil {
-		z := 0
-		input = &z
+	thoughts := count("thoughtsTokenCount")
+	input := count("promptTokenCount") + count("toolUsePromptTokenCount")
+	output := answer + thoughts
+	cached := count("cachedContentTokenCount")
+	var inputAudio *int
+	for _, key := range []string{"promptTokensDetails", "toolUsePromptTokensDetails"} {
+		if a := modalityTokens(usage.Get(key), "AUDIO"); a != nil {
+			sum := intOr0(inputAudio) + *a
+			inputAudio = &sum
+		}
 	}
 	outputDetails := usage.Get("candidatesTokensDetails")
 	if outputDetails == nil {
 		outputDetails = usage.Get("responseTokensDetails")
 	}
 	return Usage{
-		InputTokens:       input,
-		OutputTokens:      output,
+		InputTokens:       &input,
+		OutputTokens:      &output,
 		TotalTokens:       wireIntPtr(usage.Get("totalTokenCount")),
-		CacheReadTokens:   wireIntPtr(usage.Get("cachedContentTokenCount")),
-		ReasoningTokens:   wireIntPtr(usage.Get("thoughtsTokenCount")),
-		InputAudioTokens:  modalityTokens(usage.Get("promptTokensDetails"), "AUDIO"),
+		CacheReadTokens:   &cached,
+		ReasoningTokens:   &thoughts,
+		InputAudioTokens:  inputAudio,
 		OutputAudioTokens: modalityTokens(outputDetails, "AUDIO"),
-	}.Normalize()
+	}.Settle()
 }
 
 func thoughtSignatureState(part JSONObject) []ContinuationState {

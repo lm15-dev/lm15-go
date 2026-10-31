@@ -2134,11 +2134,51 @@ func VideoJobFromDict(d JSONObject) (VideoJobInfo, error) {
 
 // ─── ModelInfo ───────────────────────────────────────────────────────
 
+func pricingTierToDict(t PricingTier) JSONObject {
+	return JSONObject(dict{}.put("above_input_tokens", t.AboveInputTokens).
+		omit("input_per_million", t.InputPerMillion).omit("output_per_million", t.OutputPerMillion).
+		omit("cache_read_per_million", t.CacheReadPerMillion).omit("cache_write_per_million", t.CacheWritePerMillion))
+}
+
+func pricingTierFromDict(d JSONObject) (PricingTier, error) {
+	var t PricingTier
+	above, err := optInt(d, "above_input_tokens")
+	if err != nil {
+		return t, err
+	}
+	if above == nil {
+		return t, valueErrorf("a pricing tier requires above_input_tokens")
+	}
+	t.AboveInputTokens = *above
+	for _, f := range []struct {
+		key string
+		dst **float64
+	}{
+		{"input_per_million", &t.InputPerMillion}, {"output_per_million", &t.OutputPerMillion},
+		{"cache_read_per_million", &t.CacheReadPerMillion}, {"cache_write_per_million", &t.CacheWritePerMillion},
+	} {
+		if *f.dst, err = optFloat(d, f.key); err != nil {
+			return t, err
+		}
+	}
+	return t, t.Validate()
+}
+
+// PricingToDict serializes InferencePricing to its canonical JSON.
+func PricingToDict(p InferencePricing) JSONObject { return pricingToDict(p) }
+
+// PricingFromDict reads InferencePricing from its canonical JSON.
+func PricingFromDict(d JSONObject) (InferencePricing, error) { return pricingFromDict(d) }
+
 func pricingToDict(p InferencePricing) JSONObject {
+	var tiers []any
+	for _, t := range p.Tiers {
+		tiers = append(tiers, pricingTierToDict(t))
+	}
 	return JSONObject(dict{}.
 		omit("input_per_million", p.InputPerMillion).omit("output_per_million", p.OutputPerMillion).
 		omit("cache_read_per_million", p.CacheReadPerMillion).omit("cache_write_per_million", p.CacheWritePerMillion).
-		put("currency", p.EffectiveCurrency()).omit("dimensions", p.Dimensions))
+		put("currency", p.EffectiveCurrency()).omit("dimensions", p.Dimensions).omit("tiers", tiers))
 }
 
 func pricingFromDict(d JSONObject) (InferencePricing, error) {
@@ -2164,6 +2204,21 @@ func pricingFromDict(d JSONObject) (InferencePricing, error) {
 	}
 	if p.Dimensions, err = optObject(d, "dimensions"); err != nil {
 		return p, err
+	}
+	rawTiers, err := optList(d, "tiers")
+	if err != nil {
+		return p, err
+	}
+	for _, raw := range rawTiers {
+		td, ok := asObject(raw)
+		if !ok {
+			return p, typeErrorf("a pricing tier is a JSON object")
+		}
+		tier, err := pricingTierFromDict(td)
+		if err != nil {
+			return p, err
+		}
+		p.Tiers = append(p.Tiers, tier)
 	}
 	return p, p.Validate()
 }

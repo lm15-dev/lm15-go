@@ -162,9 +162,9 @@ func TestChatModelsBareArrayAndMalformedShape(t *testing.T) {
 }
 
 func TestChatCachedTokensNestedThenFlat(t *testing.T) {
-	flat := usageFromChat(JSONObject{KV("prompt_tokens", 9), KV("cached_tokens", 0)})
-	nested := usageFromChat(JSONObject{KV("prompt_tokens_details", JSONObject{KV("cached_tokens", 3)}), KV("cached_tokens", 9)})
-	none := usageFromChat(JSONObject{KV("prompt_tokens", 9)})
+	flat := usageFromChat(JSONObject{KV("prompt_tokens", 9), KV("cached_tokens", 0)}, "in_completion")
+	nested := usageFromChat(JSONObject{KV("prompt_tokens_details", JSONObject{KV("cached_tokens", 3)}), KV("cached_tokens", 9)}, "in_completion")
+	none := usageFromChat(JSONObject{KV("prompt_tokens", 9)}, "in_completion")
 	if flat.CacheReadTokens == nil || *flat.CacheReadTokens != 0 || nested.CacheReadTokens == nil || *nested.CacheReadTokens != 3 || none.CacheReadTokens != nil {
 		t.Fatalf("cached tokens: %v %v %v", flat.CacheReadTokens, nested.CacheReadTokens, none.CacheReadTokens)
 	}

@@ -477,19 +477,6 @@ func (l *GeminiLM) decodeLiveCompletionEvents(raw []byte) ([]StreamEvent, bool, 
 	return events, truthy(server.Get("turnComplete")), l.liveUsage(payload, server)
 }
 
-func maxInt(a, b *int) *int {
-	if a == nil {
-		return b
-	}
-	if b == nil {
-		return a
-	}
-	if *a > *b {
-		return a
-	}
-	return b
-}
-
 func (l *GeminiLM) streamViaLiveCompletion(ctx context.Context, req *Request) iter.Seq2[StreamEvent, error] {
 	return func(yield func(StreamEvent, error) bool) {
 		u, err := l.liveURL(ctx)
@@ -545,7 +532,12 @@ func (l *GeminiLM) streamViaLiveCompletion(ctx context.Context, req *Request) it
 				return
 			}
 			events, turnComplete, usage := l.decodeLiveCompletionEvents(raw)
-			acc = Usage{InputTokens: maxInt(acc.InputTokens, usage.InputTokens), OutputTokens: maxInt(acc.OutputTokens, usage.OutputTokens), TotalTokens: maxInt(acc.TotalTokens, usage.TotalTokens)}
+			// usageMetadata on Live is the turn's running count; the latest
+			// frame that carries one is the turn's usage (a field-wise
+			// maximum could mix frames and break INV-029).
+			if !usage.IsEmpty() {
+				acc = usage
+			}
 			for _, event := range events {
 				if de, ok := event.(StreamDeltaEvent); ok {
 					if _, isTool := de.Delta.(ToolCallDelta); isTool {

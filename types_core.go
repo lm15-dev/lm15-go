@@ -656,8 +656,18 @@ func (r *Request) ToolByName(name string) Tool {
 
 // ─── Usage / logprobs / Response ─────────────────────────────────────
 
-// Usage carries provider-verbatim token counters. nil = not reported,
-// distinct from a reported 0 (INV-029).
+// Usage is token usage. Every counter means the same thing on every
+// provider (MAP-19, spec/types.md § Usage): InputTokens is every token the
+// model read, cached tokens included; OutputTokens every token it
+// generated, reasoning included; CacheReadTokens, CacheWriteTokens and
+// InputAudioTokens are parts of input, ReasoningTokens and
+// OutputAudioTokens parts of output; TotalTokens is input + output. nil =
+// not reported, distinct from a reported 0 (INV-029). The provider's own
+// numbers stay in Response.ProviderData.
+//
+// Changed by MAP-19 (contract 2026-10-31): before, each counter was the provider's own, so input
+// excluded cached tokens on Anthropic and output excluded reasoning on
+// Gemini and xAI.
 type Usage struct {
 	InputTokens       *int
 	OutputTokens      *int
@@ -685,7 +695,89 @@ func (u Usage) IsEmpty() bool {
 		u.CacheWriteTokens == nil && u.ReasoningTokens == nil && u.InputAudioTokens == nil && u.OutputAudioTokens == nil
 }
 
-// Validate checks every counter is >= 0.
+func intOr0(p *int) int {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
+func (u Usage) inputProblem() string {
+	if u.InputTokens == nil {
+		return ""
+	}
+	i := *u.InputTokens
+	if cached := intOr0(u.CacheReadTokens) + intOr0(u.CacheWriteTokens); cached > i {
+		return fmt.Sprintf("cache_read_tokens + cache_write_tokens (%d) exceed input_tokens (%d)", cached, i)
+	}
+	if u.InputAudioTokens != nil && *u.InputAudioTokens > i {
+		return fmt.Sprintf("input_audio_tokens (%d) exceed input_tokens (%d)", *u.InputAudioTokens, i)
+	}
+	return ""
+}
+
+func (u Usage) outputProblem() string {
+	if u.OutputTokens == nil {
+		return ""
+	}
+	o := *u.OutputTokens
+	if u.ReasoningTokens != nil && *u.ReasoningTokens > o {
+		return fmt.Sprintf("reasoning_tokens (%d) exceed output_tokens (%d)", *u.ReasoningTokens, o)
+	}
+	if u.OutputAudioTokens != nil && *u.OutputAudioTokens > o {
+		return fmt.Sprintf("output_audio_tokens (%d) exceed output_tokens (%d)", *u.OutputAudioTokens, o)
+	}
+	return ""
+}
+
+// Inconsistency names the first INV-029 relation the counters break, or ""
+// (checked between present counters only).
+func (u Usage) Inconsistency() string {
+	if p := u.inputProblem(); p != "" {
+		return p
+	}
+	if p := u.outputProblem(); p != "" {
+		return p
+	}
+	if u.TotalTokens != nil && u.InputTokens != nil && u.OutputTokens != nil && *u.TotalTokens != *u.InputTokens+*u.OutputTokens {
+		return fmt.Sprintf("total_tokens (%d) is not input_tokens + output_tokens (%d + %d)", *u.TotalTokens, *u.InputTokens, *u.OutputTokens)
+	}
+	return ""
+}
+
+// Settle returns the counters with what the provider's numbers do not
+// determine withheld (MAP-19 rule 3), then normalized: a part larger than
+// its whole withholds the whole; a provider total that is not input +
+// output withholds both and keeps the total. Never fails for a provider's
+// inconsistency.
+func (u Usage) Settle() Usage {
+	if u.inputProblem() != "" {
+		u.InputTokens = nil
+	}
+	if u.outputProblem() != "" {
+		u.OutputTokens = nil
+	}
+	if u.TotalTokens != nil && u.InputTokens != nil && u.OutputTokens != nil && *u.TotalTokens != *u.InputTokens+*u.OutputTokens {
+		u.InputTokens, u.OutputTokens = nil, nil
+	}
+	return u.Normalize()
+}
+
+// wireSum is the exact sum of wire counters, or nil when any is unknown
+// (MAP-19 rule 2).
+func wireSum(counts ...*int) *int {
+	total := 0
+	for _, c := range counts {
+		if c == nil {
+			return nil
+		}
+		total += *c
+	}
+	return &total
+}
+
+// Validate checks every counter is >= 0 and the parts-of relations of
+// INV-029.
 func (u Usage) Validate() error {
 	for name, v := range map[string]*int{
 		"input_tokens": u.InputTokens, "output_tokens": u.OutputTokens, "total_tokens": u.TotalTokens,
@@ -695,6 +787,10 @@ func (u Usage) Validate() error {
 		if v != nil && *v < 0 {
 			return valueErrorf("%s must be >= 0", name)
 		}
+	}
+	if p := u.Inconsistency(); p != "" {
+		return valueErrorf("%s (INV-029). Since lm15-contract MAP-19 (2026-10-31) input_tokens includes cached tokens and output_tokens includes reasoning, "+
+			"on every provider; an earlier record from Anthropic, Gemini or xAI must add them (changes/2026-10-31-usage-one-meaning.md)", p)
 	}
 	return nil
 }

@@ -128,7 +128,7 @@ var chatOverridable = map[string]bool{
 	"instruction_role": true, "max_tokens_field": true, "stream_usage": true, "thinking_format": true, "thinking_replay": true,
 	"assistant_reasoning_content": true, "strict_tools": true, "cache_control": true, "user_field": true,
 	"forced_tool_choice": true, "json_schema": true, "reasoning_efforts": true, "tool_result_media": true, "token_scoring": true,
-	"reasoning_off": true,
+	"reasoning_off": true, "reasoning_usage": true,
 }
 
 // ModelOverride is a per-model-family knob override (first matching prefix wins).
@@ -167,7 +167,13 @@ type OpenAIChatCompat struct {
 	// off word and reasons anyway: the lowest level (ReasoningEfforts[0],
 	// else "low") is sent and the substitution recorded (MAP-13 §4.2).
 	// Ratified 2026-09-26 (changes/2026-09-26-inference-hosts-live.md).
-	ReasoningOff   string
+	ReasoningOff string
+	// ReasoningUsage (MAP-19) is how the server counts reasoning in its
+	// usage: auto | in_completion | separate. "in_completion" (the dialect's
+	// rule): completion_tokens already includes it. "separate": it is counted
+	// beside the completion (xAI), so canonical output is their sum. Usage
+	// only; nothing on the request changes.
+	ReasoningUsage string
 	Routing        JSONObject
 	Extensions     JSONObject
 	ModelOverrides []ModelOverride
@@ -192,6 +198,7 @@ type ResolvedOpenAIChatCompat struct {
 	JSONSchema                string
 	TokenScoring              string
 	ReasoningOff              string
+	ReasoningUsage            string
 	ReasoningEfforts          []string
 	Routing                   JSONObject
 	Extensions                JSONObject
@@ -253,6 +260,8 @@ func (c OpenAIChatCompat) ForModel(model string) OpenAIChatCompat {
 					out.TokenScoring = value
 				case "reasoning_off":
 					out.ReasoningOff = value
+				case "reasoning_usage":
+					out.ReasoningUsage = value
 				case "reasoning_efforts":
 					out.ReasoningEfforts = strings.Split(value, ",")
 				}
@@ -283,6 +292,7 @@ func ResolveOpenAIChatCompat(p OpenAIChatCompat) ResolvedOpenAIChatCompat {
 		JSONSchema:                pick(p.JSONSchema, "send"),
 		TokenScoring:              pick(p.TokenScoring, "none"),
 		ReasoningOff:              pick(p.ReasoningOff, "send"),
+		ReasoningUsage:            pick(p.ReasoningUsage, "in_completion"),
 		ReasoningEfforts:          p.ReasoningEfforts,
 		Routing:                   p.Routing,
 		Extensions:                p.Extensions,
@@ -348,6 +358,7 @@ func MergeOpenAIChatCompat(base OpenAIChatCompat, override *OpenAIChatCompat) Op
 	ov(&out.JSONSchema, override.JSONSchema)
 	ov(&out.TokenScoring, override.TokenScoring)
 	ov(&out.ReasoningOff, override.ReasoningOff)
+	ov(&out.ReasoningUsage, override.ReasoningUsage)
 	if override.ReasoningEfforts != nil {
 		out.ReasoningEfforts = override.ReasoningEfforts
 	}

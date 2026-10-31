@@ -866,14 +866,22 @@ func anthropicReasoningTokens(usage JSONObject) *int {
 	return wireIntPtr(details.Get("thinking_tokens"))
 }
 
+// anthropicUsage is MAP-19 rule 5 (every server on the Messages wire). The
+// wire's input_tokens is only the tokens after the last cache breakpoint;
+// the two cache counters are counted beside it, so canonical input is their
+// exact sum, unknown unless all three are reported. A total is read when
+// the server sends one (Moonshot does).
 func anthropicUsage(u JSONObject) Usage {
+	cacheRead := wireIntPtr(u.Get("cache_read_input_tokens"))
+	cacheWrite := wireIntPtr(u.Get("cache_creation_input_tokens"))
 	return Usage{
-		InputTokens:      wireIntPtr(u.Get("input_tokens")),
+		InputTokens:      wireSum(wireIntPtr(u.Get("input_tokens")), cacheRead, cacheWrite),
 		OutputTokens:     wireIntPtr(u.Get("output_tokens")),
-		CacheReadTokens:  wireIntPtr(u.Get("cache_read_input_tokens")),
-		CacheWriteTokens: wireIntPtr(u.Get("cache_creation_input_tokens")),
+		TotalTokens:      wireIntPtr(u.Get("total_tokens")),
+		CacheReadTokens:  cacheRead,
+		CacheWriteTokens: cacheWrite,
 		ReasoningTokens:  anthropicReasoningTokens(u),
-	}.Normalize()
+	}.Settle()
 }
 
 func citationFromAnthropic(c JSONObject) (CitationPart, bool) {

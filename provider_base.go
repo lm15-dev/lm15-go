@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lm15-dev/lm15-go/internal/sse"
+	"github.com/lm15-dev/lm15-go/v2/internal/sse"
 )
 
 // LM is a provider adapter: a dialect bound to an access policy. Every

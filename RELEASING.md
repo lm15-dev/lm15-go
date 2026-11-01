@@ -12,9 +12,14 @@ later version).
 - **`v1.0.1` (2026-09-24) is retracted too.** It exists only to carry that
   retraction: Go reads retractions from the newest version, and a retraction
   must be published by a version above the one it retracts.
-- **The first real release is `v1.1.0`,** preceded by release candidates
-  `v1.1.0-rc.1`, `-rc.2`, and so on. A version number can never be reused, so
-  `v1.0.x` is closed.
+- **The v1 releases were candidates only,** `v1.1.0-rc.1` to `-rc.10`.
+  A version number can never be reused, so `v1.0.x` is closed.
+- **Major version 2 (2026-11-01):** every lm15 language shares its major
+  version, the contract's generation (lm15-contract `playbooks/api-family.md`
+  rule 8). Generation 2 is MAP-19. The module path is
+  `github.com/lm15-dev/lm15-go/v2`; tags are `v2.0.0-rc.N`, then `v2.0.0`.
+  The v1 retractions stay with the v1 module (in `v1.0.1`); the v2 `go.mod`
+  carries none, since Go refuses a v1 version in a v2 module's `retract`.
 
 Checked on a private copy before tagging (2026-09-24): with both versions
 retracted, `go get` installs `main` as a pseudo-version; a module pinned to
@@ -30,7 +35,7 @@ retracted, `go get` installs `main` as a pseudo-version; a module pinned to
 | `v1.1.0-rc.3` | 2026-09-30 | `57e33d1` | The Claude Code release as a setting (`client_version`, `LM15_CLAUDE_CODE_VERSION`), its refusal guided; Claude's output ceiling as the default `max_tokens`; `input_audio` formats in ingest. 1,838 of 1,838 contract checks. |
 | `v1.1.0-rc.4` | 2026-10-06 | `0f3ea82` | Long streamed replies: no default SSE line or event limit (INV-056); a tool with no description is left off the wire (MAP-17). 1,901 of 1,901 contract checks. |
 | `v1.1.0-rc.5` | 2026-10-10 | `880f72c` | A refused key is `KindAuth` on Gemini and xAI, which answer it with HTTP 400 (MAP-18); a key passed as a named credential is never repeated in the refusal (AUTH-1, AUTH-5). 1,904 of 1,904 contract checks. |
-| `v1.1.0-rc.11` | 2026-10-31 | `cfc3edc` | A usage counter means one thing on every provider (MAP-19): `InputTokens` includes cached tokens, `OutputTokens` includes reasoning, parts never exceed their wholes; `InferencePricing.Estimate(usage)` returns `(cost, ok)` and is exact or unknown, with `PricingTier` for long prompts; `ReasoningUsage` compat (xAI counts reasoning beside the completion). Breaking for code that read Anthropic input or Gemini/xAI output, allowed in a release candidate. 1,968 of 1,968 contract checks. |
+| `v2.0.0-rc.1` | 2026-11-01 | `cfc3edc` | A usage counter means one thing on every provider (MAP-19): `InputTokens` includes cached tokens, `OutputTokens` includes reasoning, parts never exceed their wholes; `InferencePricing.Estimate(usage)` returns `(cost, ok)` and is exact or unknown, with `PricingTier` for long prompts; `ReasoningUsage` compat (xAI counts reasoning beside the completion). Breaking for code that read Anthropic input or Gemini/xAI output; major version 2 like every lm15 language, so the import path gains `/v2`. 1,968 of 1,968 contract checks. |
 | `v1.1.0-rc.10` | 2026-10-15 | `6dc1c5c` | Bounding boxes: `BoundingBox(...)` asks where something is in a picture, on every provider (Jev 1.14's Box question on TypeSafe). The scoring driver answers every property it does not measure with one generated call instead of dropping it. 1,921 of 1,921 contract checks. |
 | `v1.1.0-rc.9` | 2026-10-15 | `1cbdc12` | A saved cloud login's settings (project, location, region) build the managed route; an explicit settings entry changes only the settings it names. 1,912 of 1,912 contract checks. |
 | `v1.1.0-rc.8` | 2026-10-14 | `10645e5` | Jev reads pictures: a PNG or JPEG image part is a reference in the state and its bytes an asset, a message holding an image beside other parts is the ordered list of its parts, and the request carries `TypeSafe-Danger-Zone-Images: true`; a URL, file id, other format or other media is refused before the wire. 1,911 of 1,911 contract checks. |
@@ -93,7 +98,7 @@ had created; a fresh Go sign-in per flow remains to do before v1.1.0.
 ## Cutting a release
 
 1. `go vet ./... && go test ./...`, and the contract harness above: all green.
-2. Tag an annotated tag on `main` (`git tag -a v1.1.0-rc.1 -m "..."`) and push it.
+2. Tag an annotated tag on `main` (`git tag -a v2.0.0-rc.1 -m "..."`) and push it.
 3. Ask the proxy to fetch it, so the first user does not wait:
-   `GOPROXY=https://proxy.golang.org go list -m github.com/lm15-dev/lm15-go@v1.1.0-rc.1`.
-4. Check from a scratch module: `go get github.com/lm15-dev/lm15-go@latest`.
+   `GOPROXY=https://proxy.golang.org go list -m github.com/lm15-dev/lm15-go/v2@v2.0.0-rc.1`.
+4. Check from a scratch module: `go get github.com/lm15-dev/lm15-go/v2@latest`.

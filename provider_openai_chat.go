@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lm15-dev/lm15-go/internal/sse"
+	"github.com/lm15-dev/lm15-go/v2/internal/sse"
 )
 
 // OpenAIChatLM is the OpenAI Chat Completions dialect: OpenAI's legacy

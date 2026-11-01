@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"sync"
 
-	"github.com/lm15-dev/lm15-go/internal/ws"
+	"github.com/lm15-dev/lm15-go/v2/internal/ws"
 )
 
 // wsConn is the socket the live sessions speak over.

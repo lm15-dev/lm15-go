@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lm15-dev/lm15-go/internal/sigv4"
+	"github.com/lm15-dev/lm15-go/v2/internal/sigv4"
 )
 
 // A dialect reaches a cloud door through a host (AUTH-10). Three pure

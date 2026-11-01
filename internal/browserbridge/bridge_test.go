@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	lm15 "github.com/lm15-dev/lm15-go"
+	lm15 "github.com/lm15-dev/lm15-go/v2"
 )
 
 type transportFunc func(context.Context, *lm15.TransportRequest) (*lm15.TransportResponse, error)

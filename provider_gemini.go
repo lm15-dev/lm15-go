@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lm15-dev/lm15-go/internal/sse"
+	"github.com/lm15-dev/lm15-go/v2/internal/sse"
 )
 
 // GeminiLM is the Google Gemini GenerateContent dialect.

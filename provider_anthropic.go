@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/lm15-dev/lm15-go/internal/sse"
+	"github.com/lm15-dev/lm15-go/v2/internal/sse"
 )
 
 // AnthropicLM is the Anthropic Messages dialect bound to an access policy.

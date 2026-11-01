@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lm15-dev/lm15-go/internal/rs256"
-	"github.com/lm15-dev/lm15-go/internal/sigv4"
+	"github.com/lm15-dev/lm15-go/v2/internal/rs256"
+	"github.com/lm15-dev/lm15-go/v2/internal/sigv4"
 )
 
 // The three cloud credential chains as data over ten rung kinds

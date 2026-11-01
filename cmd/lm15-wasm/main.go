@@ -11,8 +11,8 @@ import (
 	"sync"
 	"syscall/js"
 
-	lm15 "github.com/lm15-dev/lm15-go"
-	"github.com/lm15-dev/lm15-go/internal/browserbridge"
+	lm15 "github.com/lm15-dev/lm15-go/v2"
+	"github.com/lm15-dev/lm15-go/v2/internal/browserbridge"
 )
 
 // Fetch decodes every HTTP content coding before exposing body bytes, including

@@ -28,24 +28,25 @@ fmt.Println(response.TextOr(""))
 
 Documentation: **[lm15.dev](https://lm15.dev/docs/)** (every guide has Go
 examples) · API reference:
-[pkg.go.dev](https://pkg.go.dev/github.com/lm15-dev/lm15-go).
+[pkg.go.dev](https://pkg.go.dev/github.com/lm15-dev/lm15-go/v2).
 
 ## Install
 
 Requires Go 1.26.2 or newer.
 
 ```bash
-go get github.com/lm15-dev/lm15-go@v1.1.0-rc.11
+go get github.com/lm15-dev/lm15-go/v2@v2.0.0-rc.1
 ```
 
 ```go
-import lm15 "github.com/lm15-dev/lm15-go"
+import lm15 "github.com/lm15-dev/lm15-go/v2"
 ```
 
-**v1.1.0-rc.11 is a release candidate** (v1.1.0-rc.1 was the first release of lm15 for Go),
-open for trying before v1.1.0. Python's and TypeScript's lm15 are stable;
-Rust is a release candidate too. Why Go starts at 1.1: see
-[Versions](#versions). rc.11 gives every usage counter one meaning on every
+**v2.0.0-rc.1 is a release candidate** (v1.1.0-rc.1 was the first release of lm15 for Go),
+open for trying before v2.0.0. Python's and TypeScript's lm15 are stable;
+Rust is a release candidate too. Every lm15 language shares its major
+version, the generation of the contract it implements; see
+[Versions](#versions). 2.0 gives every usage counter one meaning on every
 provider (`InputTokens` includes cached tokens, `OutputTokens` includes
 reasoning), so Anthropic input and Gemini and xAI output counts grow, and
 `InferencePricing.Estimate(usage)` now returns `(cost, ok)`: the exact list
@@ -225,7 +226,7 @@ code execution), files and batches, image and speech generation, video,
 realtime sessions, the model catalog, and reading an OpenAI Chat
 Completions request into a `Request` are all in the
 [guides](https://lm15.dev/docs/) and on
-[pkg.go.dev](https://pkg.go.dev/github.com/lm15-dev/lm15-go).
+[pkg.go.dev](https://pkg.go.dev/github.com/lm15-dev/lm15-go/v2).
 
 ## Stability
 
@@ -257,10 +258,17 @@ the contract lives in this module: [docs/port-notes.md](docs/port-notes.md).
 
 ## Versions
 
+Every lm15 language shares its major version: the generation of the shared
+contract it implements. Generation 2 (2026-10-31) gives every usage counter
+one meaning on every provider, so lm15 for Go moved from the v1.1.0 release
+candidates to v2, whose import path is `github.com/lm15-dev/lm15-go/v2` (Go
+puts a major version above 1 in the path). Code on a v1.1.0-rc changes that
+import line, and reads the new usage meaning.
+
 `v1.0.0` was tagged by mistake on 2026-06-11 from an early prototype, before
 the shared contract existed. Go's module proxy keeps every tag forever, so
-it is retracted (with `v1.0.1`, which only carries the retraction) and the
-first real release is v1.1.0. See [RELEASING.md](RELEASING.md).
+it is retracted (with `v1.0.1`, which only carries the retraction). See
+[RELEASING.md](RELEASING.md).
 
 ## Development
 

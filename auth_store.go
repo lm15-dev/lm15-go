@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lm15-dev/lm15-go/internal/fslock"
+	"github.com/lm15-dev/lm15-go/v2/internal/fslock"
 )
 
 // Local subscription credentials (spec/auth.md AUTH-3, AUTH-4, AUTH-8,

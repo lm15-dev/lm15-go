@@ -3,7 +3,7 @@ package lm15_test
 import (
 	"fmt"
 
-	lm15 "github.com/lm15-dev/lm15-go"
+	lm15 "github.com/lm15-dev/lm15-go/v2"
 )
 
 // A schema lists its properties in the order the model should fill them:

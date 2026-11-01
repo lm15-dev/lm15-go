@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lm15-dev/lm15-go/internal/sse"
+	"github.com/lm15-dev/lm15-go/v2/internal/sse"
 )
 
 // The vet shim (lm15-contract/harness/PROTOCOL.md): one JSON request per
@@ -15,7 +15,7 @@ import (
 // compares. Nothing here touches the network.
 
 // Version is this port's implementation version.
-const Version = "1.1.0-rc.11"
+const Version = "2.0.0-rc.1"
 
 const parseOnlyKey = "vet-parse-only"
 

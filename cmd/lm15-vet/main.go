@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	lm15 "github.com/lm15-dev/lm15-go"
+	lm15 "github.com/lm15-dev/lm15-go/v2"
 )
 
 func main() {

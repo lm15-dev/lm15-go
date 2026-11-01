@@ -44,7 +44,7 @@ import lm15 "github.com/lm15-dev/lm15-go/v2"
 
 **v2.0.0** is the first stable release of lm15 for Go (after the v1.1.0
 and v2.0.0 release candidates; no stable v1 was released); lm15 is stable
-in every published language. Every lm15 language shares its major
+in Python, TypeScript, Rust and Go. Every lm15 language shares its major
 version, the generation of the contract it implements; see
 [Versions](#versions). 2.0 gives every usage counter one meaning on every
 provider (`InputTokens` includes cached tokens, `OutputTokens` includes

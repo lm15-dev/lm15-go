@@ -35,16 +35,16 @@ examples) · API reference:
 Requires Go 1.26.2 or newer.
 
 ```bash
-go get github.com/lm15-dev/lm15-go/v2@v2.0.0-rc.1
+go get github.com/lm15-dev/lm15-go/v2
 ```
 
 ```go
 import lm15 "github.com/lm15-dev/lm15-go/v2"
 ```
 
-**v2.0.0-rc.1 is a release candidate** (v1.1.0-rc.1 was the first release of lm15 for Go),
-open for trying before v2.0.0. Python's and TypeScript's lm15 are stable;
-Rust is a release candidate too. Every lm15 language shares its major
+**v2.0.0** is the first stable release of lm15 for Go (after the v1.1.0
+and v2.0.0 release candidates; no stable v1 was released); lm15 is stable
+in every published language. Every lm15 language shares its major
 version, the generation of the contract it implements; see
 [Versions](#versions). 2.0 gives every usage counter one meaning on every
 provider (`InputTokens` includes cached tokens, `OutputTokens` includes
@@ -230,17 +230,17 @@ Completions request into a `Request` are all in the
 
 ## Stability
 
-The chat core is stable within v1.x once v1.1.0 is released: requests,
+The chat core is stable within v2.x: requests,
 responses, streaming, tools, structured output, errors, credentials and
-model listing. These ship as **provisional** and may still change in 1.x
+model listing. These ship as **provisional** and may still change in v2.x
 with a notice in the contract: files, batches, media generation, stored
 caches, realtime sessions, Chat Completions ingest and sign-in.
 
 ## Conformance
 
 This module is graded by [lm15-contract](https://github.com/lm15-dev/lm15-contract)
-at the commit in `CONTRACT_PIN`: **1,788 of 1,788 checks pass** (2026-09-26),
-as Python, TypeScript and Rust pass every check at theirs. The checks compare the exact requests
+at the commit in `CONTRACT_PIN`: **1,968 of 1,968 checks pass** (`cfc3edc`,
+2026-11-01), as every other lm15 language passes every check. The checks compare the exact requests
 lm15 builds and the responses it reads against recorded provider traffic.
 
 ```bash

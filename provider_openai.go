@@ -1122,7 +1122,11 @@ func (l *OpenAILM) parseStreamEvents(req *Request, ev sse.Event) ([]StreamEvent,
 		return nil, nil
 	case "response.function_call_arguments.delta":
 		return []StreamEvent{StreamDeltaEvent{Delta: ToolCallDelta{Input: wireStr(payload.Get("delta")), PartIndex: outputIndex, ID: firstStr(payload.Get("call_id"), payload.Get("id")), Name: wireStr(payload.Get("name"))}}}, nil
-	case "response.completed":
+	case "response.completed", "response.incomplete":
+		// A turn cut short (the output limit, a content filter) ends with
+		// response.incomplete; its finish reason reads status and
+		// incomplete_details as on the complete path (INV-051,
+		// cases/meta/streaming_incomplete.json).
 		resp := wireObj(payload.Get("response"))
 		usage := openaiUsage(wireObj(resp.Get("usage")))
 		hasTool := false
@@ -1131,11 +1135,7 @@ func (l *OpenAILM) parseStreamEvents(req *Request, ev sse.Event) ([]StreamEvent,
 				hasTool = true
 			}
 		}
-		finish := FinishStop
-		if hasTool {
-			finish = FinishToolCall
-		}
-		return []StreamEvent{StreamEndEvent{FinishReason: finish, Usage: &usage, ProviderData: resp}}, nil
+		return []StreamEvent{StreamEndEvent{FinishReason: openaiFinishFromStatus(resp, hasTool), Usage: &usage, ProviderData: resp}}, nil
 	case "response.error", "error":
 		code, message := openaiStreamErrorFields(payload)
 		return []StreamEvent{StreamErrorEvent{Error: openaiErrorDetail(code, message)}}, nil

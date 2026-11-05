@@ -876,6 +876,7 @@ func (c *lmCore) streamRaw(ctx context.Context, req *Request, wire *TransportReq
 		// proof of the quota at the later moment the error occurred.
 		handshake := httpResponseDetailOf(resp.Headers)
 		reader := sse.NewReader(resp.Body, sse.Limits{})
+		stream := c.newStreamReader(req)
 		for {
 			ev, err := reader.Next()
 			if err == io.EOF {
@@ -889,7 +890,7 @@ func (c *lmCore) streamRaw(ctx context.Context, req *Request, wire *TransportReq
 				}
 				return
 			}
-			events, err := c.self.parseStreamEvents(req, ev)
+			events, err := stream.feed(ev)
 			if err != nil {
 				if e := AsError(err); e != nil && e.Kind.IsA(KindProvider) {
 					attachErrorMetadata(e, resp.Headers)

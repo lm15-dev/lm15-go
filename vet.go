@@ -15,7 +15,7 @@ import (
 // compares. Nothing here touches the network.
 
 // Version is this port's implementation version.
-const Version = "2.0.0"
+const Version = "2.1.0"
 
 const parseOnlyKey = "vet-parse-only"
 
@@ -361,9 +361,15 @@ func ParseStreamBody(lm LM, req *Request, body []byte) ([]StreamEvent, error) {
 	}
 	var events []StreamEvent
 	var failure error
+	// The adapter's per-stream reader (MAP-20), as its streams use; an LM
+	// from outside this package maps each event on its own.
+	feed := func(raw sse.Event) ([]StreamEvent, error) { return lm.ParseStreamEvents(req, raw) }
+	if r, ok := lm.(interface{ newStreamReader(*Request) streamReader }); ok {
+		feed = r.newStreamReader(req).feed
+	}
 	CoalesceStream(func(yield func(StreamEvent, error) bool) {
 		for _, raw := range rawEvents {
-			parsed, err := lm.ParseStreamEvents(req, raw)
+			parsed, err := feed(raw)
 			if err != nil {
 				yield(nil, err)
 				return

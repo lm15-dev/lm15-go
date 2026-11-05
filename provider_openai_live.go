@@ -299,55 +299,65 @@ func (l *OpenAILM) liveMessageFramesForRequest(req *Request) ([]JSONObject, erro
 	return append(frames, create), nil
 }
 
-func (l *OpenAILM) decodeLiveCompletionEvents(raw []byte) []StreamEvent {
+func (l *OpenAILM) decodeLiveCompletionEvents(raw []byte, copies *finalCopies) ([]StreamEvent, error) {
 	decoded, err := DecodeJSON(raw)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 	payload := wireObj(decoded)
 	if payload == nil {
-		return nil
+		return nil, nil
 	}
 	et := wireStr(payload.Get("type"))
 	switch et {
 	case "response.output_text.delta", "response.text.delta", "response.output_audio_transcript.delta", "response.audio_transcript.delta":
 		if delta := firstStr(payload.Get("delta"), payload.Get("text")); delta != "" {
-			return []StreamEvent{StreamDeltaEvent{Delta: TextDelta{Text: delta}}}
+			return []StreamEvent{StreamDeltaEvent{Delta: TextDelta{Text: delta}}}, nil
 		}
 	case "response.output_audio.delta":
 		if delta := wireStr(payload.Get("delta")); delta != "" {
-			return []StreamEvent{StreamDeltaEvent{Delta: AudioDelta{Data: S(delta), MediaType: "audio/wav"}}}
+			return []StreamEvent{StreamDeltaEvent{Delta: AudioDelta{Data: S(delta), MediaType: "audio/wav"}}}, nil
 		}
-	case "response.output_item.added", "response.output_item.done", "response.function_call_arguments.delta", "response.function_call_arguments.done":
-		var callID, name, args string
-		if et == "response.output_item.added" || et == "response.output_item.done" {
-			item := wireObj(payload.Get("item"))
-			if wireStr(item.Get("type")) != "function_call" {
-				return nil
-			}
-			callID, name = firstStr(item.Get("call_id"), item.Get("id")), wireStr(item.Get("name"))
-			args = wireStr(item.Get("arguments"))
+	case "response.output_item.added", "response.output_item.done":
+		// MAP-20: output_item.done is the call's final copy; it adds what the
+		// fragments did not deliver. Before 2026-11-05 every frame added the
+		// whole input again (added + deltas + both done frames: the arguments
+		// three times over), and a frame without a name named the call "tool".
+		item := wireObj(payload.Get("item"))
+		if wireStr(item.Get("type")) != "function_call" {
+			return nil, nil
+		}
+		index := wireInt(payload.Get("output_index"), 0)
+		args := argumentsText(item.Get("arguments"))
+		if et == "response.output_item.added" {
+			copies.saw(index, "arguments", args)
 		} else {
-			callID, name = firstStr(payload.Get("call_id"), payload.Get("id")), wireStr(payload.Get("name"))
-			if strings.HasSuffix(et, "delta") {
-				args = wireStr(payload.Get("delta"))
-			} else {
-				args = wireStr(payload.Get("arguments"))
+			rest, err := copies.remainder(index, "arguments", args, true)
+			if err != nil {
+				return nil, err
 			}
+			args = rest
 		}
-		if name == "" {
-			name = "tool"
+		return []StreamEvent{StreamDeltaEvent{Delta: ToolCallDelta{Input: args, PartIndex: index, ID: firstStr(item.Get("call_id"), item.Get("id")), Name: wireStr(item.Get("name"))}}}, nil
+	case "response.function_call_arguments.delta":
+		index := wireInt(payload.Get("output_index"), 0)
+		delta := wireStr(payload.Get("delta"))
+		if delta == "" {
+			return nil, nil
 		}
-		return []StreamEvent{StreamDeltaEvent{Delta: ToolCallDelta{Input: args, ID: callID, Name: name}}}
+		copies.saw(index, "arguments", delta)
+		return []StreamEvent{StreamDeltaEvent{Delta: ToolCallDelta{Input: delta, PartIndex: index, ID: wireStr(payload.Get("call_id"))}}}, nil
+		// response.function_call_arguments.done restates output_item.done's
+		// arguments: read once, there (MAP-20).
 	case "response.done", "response.completed":
 		response := wireObj(payload.Get("response"))
 		usage := openaiUsage(wireObj(response.Get("usage")))
-		return []StreamEvent{StreamEndEvent{FinishReason: FinishStop, Usage: &usage, ProviderData: response}}
+		return []StreamEvent{StreamEndEvent{FinishReason: FinishStop, Usage: &usage, ProviderData: response}}, nil
 	case "error", "response.error":
 		code, message := openaiStreamErrorFields(payload)
-		return []StreamEvent{StreamErrorEvent{Error: openaiErrorDetail(code, message)}}
+		return []StreamEvent{StreamErrorEvent{Error: openaiErrorDetail(code, message)}}, nil
 	}
-	return nil
+	return nil, nil
 }
 
 func (l *OpenAILM) streamViaLiveCompletion(ctx context.Context, req *Request) iter.Seq2[StreamEvent, error] {
@@ -396,13 +406,19 @@ func (l *OpenAILM) streamViaLiveCompletion(ctx context.Context, req *Request) it
 		}
 		sawTool := false
 		usage := Usage{}
+		copies := newFinalCopies()
 		for {
 			raw, err := conn.Recv(ctx)
 			if err != nil {
 				yield(nil, newError(KindTransport, err.Error()).WithCause(err))
 				return
 			}
-			for _, event := range l.decodeLiveCompletionEvents(raw) {
+			decoded, err := l.decodeLiveCompletionEvents(raw, copies)
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+			for _, event := range decoded {
 				switch e := event.(type) {
 				case StreamDeltaEvent:
 					if _, ok := e.Delta.(ToolCallDelta); ok {

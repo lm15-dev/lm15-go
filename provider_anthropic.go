@@ -557,9 +557,9 @@ func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSO
 			r.Effort = nearest
 		}
 		if r.Summary == "concise" || r.Summary == "detailed" {
-			// MAP-13: a visibility level the wire lacks; thinking blocks are
-			// returned whenever thinking runs, which is "auto".
-			if err := scope.substituted("config.reasoning.summary", "the Messages API has no summary detail levels; it returns thinking blocks whenever thinking runs, which is 'auto'", r.Summary, "auto"); err != nil {
+			// MAP-13: a visibility level the wire lacks; the thinking it
+			// returns is one summary, which is "auto".
+			if err := scope.substituted("config.reasoning.summary", "the Messages API has no summary detail levels; it returns one summary of the thinking, which is 'auto'", r.Summary, "auto"); err != nil {
 				return nil, err
 			}
 			r.Summary = "auto"
@@ -757,6 +757,15 @@ func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSO
 		payload.Set("output_config", JSONObject{{"effort", reasoning.Effort}})
 	case thinkingBudget != nil:
 		payload.Set("thinking", JSONObject{{"type", "enabled"}, {"budget_tokens", *thinkingBudget}})
+	}
+	if thinking, ok := payload.Get("thinking").(JSONObject); ok && compat.ThinkingFormat == "anthropic" &&
+		reasoning != nil && reasoning.Summary != "" && (thinking.Get("type") == "adaptive" || thinking.Get("type") == "enabled") {
+		// MAP-7 rule 7 (amended 2026-11-07): the thinking is shown only when
+		// asked on Opus 4.7, 4.8 and every Claude 5 (display defaults to
+		// "omitted": a thinking block with empty text); every Claude model
+		// accepts "summarized" (live 2026-11-07, 14 models).
+		thinking.Set("display", "summarized")
+		payload.Set("thinking", thinking)
 	}
 	if len(cfg.ResponseFormat) > 0 {
 		if compat.StructuredOutput == "reject" {

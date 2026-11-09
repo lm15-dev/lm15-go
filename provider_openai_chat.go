@@ -15,6 +15,7 @@ type OpenAIChatLM struct {
 	lmCore
 	compatPartial OpenAIChatCompat
 	resolved      ResolvedOpenAIChatCompat
+	baseModels    map[string]string
 }
 
 // XaiLM is a name: OpenAIChatLM bound to lm15.Xai with the xai preset.
@@ -34,7 +35,7 @@ func NewOpenAIChatLM(opts ...Option) (*OpenAIChatLM, error) {
 	if err != nil {
 		return nil, err
 	}
-	lm := &OpenAIChatLM{}
+	lm := &OpenAIChatLM{baseModels: o.baseModels}
 	if err := lm.bindAccess(lm, OpenAIChatAPI, o, openaiChatDefaultBaseURL); err != nil {
 		return nil, err
 	}
@@ -91,7 +92,19 @@ func (l *OpenAIChatLM) compatFor(model string) ResolvedOpenAIChatCompat {
 	if len(l.compatPartial.ModelOverrides) == 0 {
 		return l.resolved
 	}
-	return ResolveOpenAIChatCompat(l.compatPartial.ForModel(model))
+	return ResolveOpenAIChatCompat(l.compatPartial.ForModelWithBase(model, l.baseModels[model]))
+}
+
+// BaseModels is the fine-tune → base model map this adapter was built with
+// (WithBaseModels; RouterConfig base models).
+func (l *OpenAIChatLM) BaseModels() map[string]string { return l.baseModels }
+
+// stopInText is the MAP-22 policy for req's model.
+func (l *OpenAIChatLM) stopInText(req *Request) string {
+	if req == nil {
+		return l.resolved.StopInText
+	}
+	return l.compatFor(l.wireModel(req.Model)).StopInText
 }
 
 func (l *OpenAIChatLM) normalizeError(status int, body string) *Error {
@@ -607,7 +620,13 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool, scope *adaptScope) (JS
 		payload.Set("parallel_tool_calls", *cfg.ToolChoice.Parallel)
 	}
 	if len(cfg.ResponseFormat) > 0 {
-		if compat.JSONSchema == "reject" && cfg.ResponseFormat.Get("type") != "json_object" {
+		if compat.JSONSchema == "none" {
+			// The server applies no response_format of either type and answers
+			// 200 with free text (Tinker, live 2026-11-09): MAP-8, never sent.
+			if err := scope.dropped("config.response_format", "this server accepts response_format type "+strconv.Quote(wireStr(cfg.ResponseFormat.Get("type")))+" and applies no response_format at all; describe the shape in the prompt", cfg.ResponseFormat); err != nil {
+				return nil, err
+			}
+		} else if compat.JSONSchema == "reject" && cfg.ResponseFormat.Get("type") != "json_object" {
 			// The server accepts response_format.type=json_schema and ignores
 			// it (Z.AI, live 2026-09-03). MAP-13: omit and record.
 			if err := scope.dropped("config.response_format", "this server accepts response_format type "+strconv.Quote(wireStr(cfg.ResponseFormat.Get("type")))+" and does not apply it; use {'type': 'json_object'} and describe the shape in the prompt", cfg.ResponseFormat); err != nil {
@@ -693,11 +712,25 @@ func (l *OpenAIChatLM) payload(req *Request, stream bool, scope *adaptScope) (JS
 				payload.Set("enable_thinking", true)
 			case "qwen_chat_template":
 				payload.Set("chat_template_kwargs", JSONObject{{"enable_thinking", true}, {"preserve_thinking", true}})
+			case "reasoning_effort_switch":
+				// An on/off switch with no levels (Tinker's Qwen, Kimi K2.6,
+				// Nemotron): a level's nearest value is "on" (MAP-13).
+				if err := scope.substituted("config.reasoning.effort", "this model's reasoning is an on/off switch with no levels; reasoning was switched on", r.Effort, "on"); err != nil {
+					return nil, err
+				}
+				payload.Set("reasoning_effort", true)
 			}
 		} else if r != nil {
 			switch compat.ThinkingFormat {
+			case "reasoning_effort_switch":
+				payload.Set("reasoning_effort", false)
 			case "reasoning_effort":
-				payload.Set("reasoning_effort", "none")
+				if compat.ReasoningOff == "switch" {
+					// The switch's off where `none` is refused.
+					payload.Set("reasoning_effort", false)
+				} else {
+					payload.Set("reasoning_effort", "none")
+				}
 			case "openrouter":
 				payload.Set("reasoning", JSONObject{{"enabled", false}})
 			case "deepseek", "kimi":
@@ -920,7 +953,7 @@ func (l *OpenAIChatLM) parseResponse(req *Request, resp *HTTPResponse) (*Respons
 	if err != nil {
 		return nil, err
 	}
-	out, err := responseFromChatBody(l.provider, data, req.Model, nil, func(code, message string) *Error { return openaiResponseError(&l.lmCore, code, message) }, l.compatFor(req.Model).ReasoningUsage)
+	out, err := responseFromChatBody(l.provider, data, req.Model, nil, func(code, message string) *Error { return openaiResponseError(&l.lmCore, code, message) }, l.compatFor(l.wireModel(req.Model)).ReasoningUsage)
 	if err != nil {
 		return nil, err
 	}

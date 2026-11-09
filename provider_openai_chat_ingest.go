@@ -825,7 +825,7 @@ func ingestReasoning(provider string, body JSONObject, compat ResolvedOpenAIChat
 	}
 	spelledBy := map[string]bool{}
 	switch compat.ThinkingFormat {
-	case "reasoning_effort":
+	case "reasoning_effort", "reasoning_effort_switch":
 		spelledBy["reasoning_effort"] = true
 	case "openrouter":
 		spelledBy["reasoning"] = true
@@ -860,10 +860,24 @@ func ingestReasoning(provider string, body JSONObject, compat ResolvedOpenAIChat
 	extensions := JSONObject{}
 	effort := ""
 	off := false
-	if present["reasoning_effort"] {
+	if flag, isBool := body.Get("reasoning_effort").(bool); present["reasoning_effort"] && isBool {
+		// The switch's spelling (reasoning_effort_switch; ReasoningOff
+		// "switch"): false is off; true has no level to read back.
+		switchSpelled := compat.ThinkingFormat == "reasoning_effort_switch" || (compat.ThinkingFormat == "reasoning_effort" && compat.ReasoningOff == "switch")
+		if !switchSpelled {
+			return nil, nil, ingestUnsupported(provider, "reasoning_effort = "+strconv.FormatBool(flag), "this server's reasoning_effort is a word, not a switch")
+		}
+		if flag {
+			return nil, nil, ingestUnsupported(provider, "reasoning_effort = true", "this switch has no effort level; lm15's dial is a level (MAP-7) — set config.reasoning yourself")
+		}
+		off = true
+	} else if present["reasoning_effort"] {
 		word, err := ingestStr(body.Get("reasoning_effort"), "reasoning_effort")
 		if err != nil {
 			return nil, nil, err
+		}
+		if compat.ThinkingFormat == "reasoning_effort_switch" {
+			return nil, nil, ingestUnsupported(provider, "reasoning_effort = "+strconv.Quote(word), "this server's reasoning_effort is an on/off switch (true or false)")
 		}
 		if word == "none" {
 			off = true

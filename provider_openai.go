@@ -486,6 +486,10 @@ func openaiNormalizeError(c *lmCore, status int, body string) *Error {
 		default:
 			msg = wireStr(e)
 		}
+		if msg == "" {
+			// MAP-21: FastAPI servers (Tinker) answer {"detail": ...} with no envelope.
+			msg = DetailMessage(obj)
+		}
 	}
 	providerCode := code
 	if providerCode == "" {

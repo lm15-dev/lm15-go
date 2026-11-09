@@ -33,10 +33,46 @@ func (r statelessReader) feed(ev sse.Event) ([]StreamEvent, error) {
 // turns raw events into canonical events goes through it (the stream and
 // the vet shim's ParseStreamBody).
 func (c *lmCore) newStreamReader(req *Request) streamReader {
+	var reader streamReader = statelessReader{d: c.self, req: req}
 	if rd, ok := c.self.(readerDialect); ok {
-		return rd.streamReader(req)
+		reader = rd.streamReader(req)
 	}
-	return statelessReader{d: c.self, req: req}
+	if c.stopReturnedInText(req) {
+		// MAP-22: a server that returns the stop sequence it stopped at.
+		return &stopCuttingReader{inner: reader, cutter: newStopCutter(req.Config.Stop)}
+	}
+	return reader
+}
+
+// stopCuttingReader is MAP-22's reader: text is cut at the first stop
+// sequence; text after the cut is dropped; every other event (usage, the
+// end) passes, because the server has already stopped.
+type stopCuttingReader struct {
+	inner  streamReader
+	cutter *stopCutter
+}
+
+func (r *stopCuttingReader) feed(ev sse.Event) ([]StreamEvent, error) {
+	events, err := r.inner.feed(ev)
+	if err != nil {
+		return nil, err
+	}
+	var out []StreamEvent
+	for _, event := range events {
+		if r.cutter.cut {
+			if _, isText := textDeltaOf(event); !isText {
+				out = append(out, event)
+			}
+			continue
+		}
+		if event.Type() == "end" || event.Type() == "error" {
+			out = append(out, r.cutter.flush()...)
+			out = append(out, event)
+			continue
+		}
+		out = append(out, r.cutter.feed(event)...)
+	}
+	return out, nil
 }
 
 // ─── Final copies (MAP-20) ──────────────────────────────────────────────

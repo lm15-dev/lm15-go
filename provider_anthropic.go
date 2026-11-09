@@ -168,6 +168,10 @@ func (l *AnthropicLM) normalizeError(status int, body string) *Error {
 			errType = firstStr(obj.Get("type"), obj.Get("code"))
 		}
 		requestID = wireStr(obj.Get("request_id"))
+		if msg == "" {
+			// MAP-21: FastAPI's {"detail": ...} (Tinker's Messages door, 401 and 404).
+			msg = DetailMessage(obj)
+		}
 	}
 	if l.access.EffectiveBackend() == "claude-code" {
 		// AUTH-10 backend settings: the minimum-version refusal names the setting to change.
@@ -902,6 +906,9 @@ func citationFromAnthropic(c JSONObject) (CitationPart, bool) {
 	}
 	return CitationPart{URL: url, Title: title, Text: text}, true
 }
+
+// stopInText is the MAP-22 policy of this binding's compat.
+func (l *AnthropicLM) stopInText(*Request) string { return l.resolved.StopInText }
 
 func (l *AnthropicLM) parseResponse(req *Request, resp *HTTPResponse) (*Response, error) {
 	data, err := l.jsonBody(resp)

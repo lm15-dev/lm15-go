@@ -128,7 +128,7 @@ var chatOverridable = map[string]bool{
 	"instruction_role": true, "max_tokens_field": true, "stream_usage": true, "thinking_format": true, "thinking_replay": true,
 	"assistant_reasoning_content": true, "strict_tools": true, "cache_control": true, "user_field": true,
 	"forced_tool_choice": true, "json_schema": true, "reasoning_efforts": true, "tool_result_media": true, "token_scoring": true,
-	"reasoning_off": true, "reasoning_usage": true,
+	"reasoning_off": true, "reasoning_usage": true, "stop_in_text": true,
 }
 
 // ModelOverride is a per-model-family knob override (first matching prefix wins).
@@ -139,12 +139,17 @@ type ModelOverride struct {
 
 // OpenAIChatCompat is a partial policy for Chat Completions servers.
 type OpenAIChatCompat struct {
-	InstructionRole           string // auto | developer | system
-	MaxTokensField            string // auto | max_completion_tokens | max_tokens
-	StreamUsage               string // auto | include | omit
-	ToolResultName            string // auto | include | omit
-	AssistantAfterToolResult  string // auto | insert | omit
-	ThinkingFormat            string // auto | none | reasoning_effort | openrouter | deepseek | kimi | qwen | qwen_chat_template
+	InstructionRole          string // auto | developer | system
+	MaxTokensField           string // auto | max_completion_tokens | max_tokens
+	StreamUsage              string // auto | include | omit
+	ToolResultName           string // auto | include | omit
+	AssistantAfterToolResult string // auto | insert | omit
+	// ThinkingFormat: auto | none | reasoning_effort | openrouter | deepseek |
+	// kimi | qwen | qwen_chat_template | reasoning_effort_switch.
+	// "reasoning_effort_switch" (2026-11-09): reasoning_effort is an on/off
+	// switch, true or false, with no levels (Tinker's Qwen 3/3.5/3.6, Kimi
+	// K2.6, Nemotron); off is false, an effort word is true, recorded.
+	ThinkingFormat            string
 	ThinkingReplay            string // auto | native | as_text | omit
 	AssistantReasoningContent string // auto | include_empty | omit
 	StrictTools               string // auto | include | omit
@@ -153,7 +158,10 @@ type OpenAIChatCompat struct {
 	CacheControl              string // auto | none | openai | openai_implicit | anthropic
 	UserField                 string // auto | user | user_id | safety_identifier
 	ForcedToolChoice          string // auto | send | reject
-	JSONSchema                string // auto | send | reject
+	// JSONSchema: auto | send | reject | none. "none" (2026-11-09): the
+	// server applies no response_format at all (Tinker); either type is
+	// dropped and recorded.
+	JSONSchema string
 	// TokenScoring (MAP-14 §4): can the server score named tokens
 	// (logprob_token_ids on the completions endpoint) so lm15 can deliver a
 	// distribution over declared keys? auto | none | logprob_token_ids.
@@ -167,6 +175,8 @@ type OpenAIChatCompat struct {
 	// off word and reasons anyway: the lowest level (ReasoningEfforts[0],
 	// else "low") is sent and the substitution recorded (MAP-13 §4.2).
 	// Ratified 2026-09-26 (changes/2026-09-26-inference-hosts-live.md).
+	// "switch" (2026-11-09): off is reasoning_effort false under the
+	// reasoning_effort format (Tinker's Qwen 3.8, DeepSeek V4.1 refuse none).
 	ReasoningOff string
 	// ReasoningUsage (MAP-19) is how the server counts reasoning in its
 	// usage: auto | in_completion | separate. "in_completion" (the dialect's
@@ -174,6 +184,9 @@ type OpenAIChatCompat struct {
 	// beside the completion (xAI), so canonical output is their sum. Usage
 	// only; nothing on the request changes.
 	ReasoningUsage string
+	// StopInText (MAP-22): auto | excluded | included. "included": the
+	// server returns the stop sequence it stopped at; lm15 cuts it.
+	StopInText     string
 	Routing        JSONObject
 	Extensions     JSONObject
 	ModelOverrides []ModelOverride
@@ -199,6 +212,7 @@ type ResolvedOpenAIChatCompat struct {
 	TokenScoring              string
 	ReasoningOff              string
 	ReasoningUsage            string
+	StopInText                string
 	ReasoningEfforts          []string
 	Routing                   JSONObject
 	Extensions                JSONObject
@@ -226,6 +240,26 @@ func (c OpenAIChatCompat) Validate() error {
 
 // ForModel applies the first matching model override.
 func (c OpenAIChatCompat) ForModel(model string) OpenAIChatCompat {
+	return c.ForModelWithBase(model, "")
+}
+
+// ForModelWithBase applies the first override matching model, else the first
+// matching its declared base model (RouterConfig base models, 2026-11-09): a
+// fine-tune whose id matches nothing follows its base model's entry.
+func (c OpenAIChatCompat) ForModelWithBase(model, baseModel string) OpenAIChatCompat {
+	names := []string{model}
+	if baseModel != "" {
+		names = append(names, baseModel)
+	}
+	for _, name := range names {
+		if out, ok := c.applyOverride(name); ok {
+			return out
+		}
+	}
+	return c
+}
+
+func (c OpenAIChatCompat) applyOverride(model string) (OpenAIChatCompat, bool) {
 	for _, o := range c.ModelOverrides {
 		if strings.HasPrefix(model, o.Prefix) {
 			out := c
@@ -264,12 +298,14 @@ func (c OpenAIChatCompat) ForModel(model string) OpenAIChatCompat {
 					out.ReasoningUsage = value
 				case "reasoning_efforts":
 					out.ReasoningEfforts = strings.Split(value, ",")
+				case "stop_in_text":
+					out.StopInText = value
 				}
 			}
-			return out
+			return out, true
 		}
 	}
-	return c
+	return c, false
 }
 
 // ResolveOpenAIChatCompat fills every knob.
@@ -293,6 +329,7 @@ func ResolveOpenAIChatCompat(p OpenAIChatCompat) ResolvedOpenAIChatCompat {
 		TokenScoring:              pick(p.TokenScoring, "none"),
 		ReasoningOff:              pick(p.ReasoningOff, "send"),
 		ReasoningUsage:            pick(p.ReasoningUsage, "in_completion"),
+		StopInText:                pick(p.StopInText, "excluded"),
 		ReasoningEfforts:          p.ReasoningEfforts,
 		Routing:                   p.Routing,
 		Extensions:                p.Extensions,
@@ -359,6 +396,7 @@ func MergeOpenAIChatCompat(base OpenAIChatCompat, override *OpenAIChatCompat) Op
 	ov(&out.TokenScoring, override.TokenScoring)
 	ov(&out.ReasoningOff, override.ReasoningOff)
 	ov(&out.ReasoningUsage, override.ReasoningUsage)
+	ov(&out.StopInText, override.StopInText)
 	if override.ReasoningEfforts != nil {
 		out.ReasoningEfforts = override.ReasoningEfforts
 	}
@@ -383,6 +421,7 @@ type AnthropicCompat struct {
 	ParallelToolCalls string // auto | send | reject
 	SamplingParams    string // auto | send | reject
 	ToolResultMedia   string // auto | native | images | reject
+	StopInText        string // auto | excluded | included (MAP-22)
 	ReasoningEfforts  []string
 	ModelPrefixes     []string
 	Extensions        JSONObject
@@ -397,6 +436,7 @@ type ResolvedAnthropicCompat struct {
 	ParallelToolCalls string
 	SamplingParams    string
 	ToolResultMedia   string
+	StopInText        string
 	ReasoningEfforts  []string
 	ModelPrefixes     []string
 	Extensions        JSONObject
@@ -412,6 +452,7 @@ func ResolveAnthropicCompat(p AnthropicCompat) ResolvedAnthropicCompat {
 		ParallelToolCalls: pick(p.ParallelToolCalls, "send"),
 		SamplingParams:    pick(p.SamplingParams, "send"),
 		ToolResultMedia:   pick(p.ToolResultMedia, "native"),
+		StopInText:        pick(p.StopInText, "excluded"),
 		ReasoningEfforts:  p.ReasoningEfforts,
 		ModelPrefixes:     p.ModelPrefixes,
 		Extensions:        p.Extensions,

@@ -174,6 +174,20 @@ type lmOptions struct {
 	codexClientVersion string
 	adaptations        string
 	namedCredential    string
+	baseModels         map[string]string
+}
+
+// WithBaseModels names what each fine-tune was trained from, by model id
+// (RouterConfig.BaseModels, 2026-11-09): a model matching no compat
+// ModelOverrides entry follows its base model's entry (a Tinker checkpoint
+// takes its base family's reasoning switch). Never sent; never discovered.
+func WithBaseModels(baseModels map[string]string) Option {
+	return func(o *lmOptions) {
+		o.baseModels = map[string]string{}
+		for k, v := range baseModels {
+			o.baseModels[k] = v
+		}
+	}
 }
 
 // WithAdaptations sets the MAP-13 policy: "note" (default: adapt and
@@ -300,10 +314,21 @@ func (c *lmCore) Provider() string { return c.provider }
 // the LM a router built); any other colon-bearing model id is opaque.
 func (c *lmCore) wireRequest(req *Request) *Request {
 	head, model, ok := strings.Cut(req.Model, ":")
-	if ok && model != "" && CanonicalProvider(head) == CanonicalProvider(c.provider) {
+	// A URI (`tinker://…`: the first ":" followed by "//") is one name, never
+	// a prefix (2026-11-09).
+	if ok && model != "" && !strings.HasPrefix(model, "//") && CanonicalProvider(head) == CanonicalProvider(c.provider) {
 		return req.WithModel(model)
 	}
 	return req
+}
+
+// wireModel is wireRequest's model for a model string.
+func (c *lmCore) wireModel(model string) string {
+	head, rest, ok := strings.Cut(model, ":")
+	if ok && rest != "" && !strings.HasPrefix(rest, "//") && CanonicalProvider(head) == CanonicalProvider(c.provider) {
+		return rest
+	}
+	return model
 }
 
 // Access returns the bound access policy.
@@ -773,7 +798,33 @@ func (c *lmCore) finishResponse(req *Request, resp *Response, records []Adaptati
 
 // ParseResponse parses a complete body.
 func (c *lmCore) ParseResponse(req *Request, resp *HTTPResponse) (*Response, error) {
-	return c.self.parseResponse(req, resp)
+	return c.parseCut(req, resp)
+}
+
+// stopInTexter is a dialect whose compat says whether the server returns the
+// stop sequence it stopped at (MAP-22).
+type stopInTexter interface {
+	stopInText(req *Request) string
+}
+
+// stopReturnedInText reports MAP-22: Config.Stop is set and the server
+// returns the matched sequence in the text (compat StopInText "included").
+func (c *lmCore) stopReturnedInText(req *Request) bool {
+	if req == nil || len(req.Config.Stop) == 0 {
+		return false
+	}
+	s, ok := c.self.(stopInTexter)
+	return ok && s.stopInText(req) == "included"
+}
+
+// parseCut is the dialect's parse, then the MAP-22 cut where the server
+// returned the stop sequence (usage kept: the server read the whole reply).
+func (c *lmCore) parseCut(req *Request, resp *HTTPResponse) (*Response, error) {
+	parsed, err := c.self.parseResponse(req, resp)
+	if err != nil || !c.stopReturnedInText(req) {
+		return parsed, err
+	}
+	return ApplyClientSideStop(parsed, req.Config.Stop), nil
 }
 
 // ParseStreamEvents parses one SSE event into canonical events.
@@ -811,7 +862,7 @@ func (c *lmCore) Complete(ctx context.Context, req *Request) (*Response, error) 
 	if resp.Status >= 400 {
 		return nil, c.httpError(resp)
 	}
-	parsed, err := c.self.parseResponse(req, resp)
+	parsed, err := c.parseCut(req, resp)
 	if err != nil {
 		if e := AsError(err); e != nil && e.Kind.IsA(KindProvider) {
 			attachErrorMetadata(e, resp.Headers)

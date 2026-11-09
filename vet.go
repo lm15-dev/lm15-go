@@ -217,6 +217,14 @@ func vetAdapter(msg JSONObject, parseOnly bool) (LM, error) {
 		// Fixture identity belongs to the vet shim, never a real SDK caller.
 		opts = append(opts, WithAccountID("test-account"))
 	}
+	if base := wireObj(msg.Get("base_models")); base != nil {
+		// PROTOCOL.md base_models (2026-11-09): a fine-tune's base model.
+		m := map[string]string{}
+		for k, v := range base.All() {
+			m[k] = wireStr(v)
+		}
+		opts = append(opts, WithBaseModels(m))
+	}
 	return AdapterForProvider(wireStr(msg.Get("provider")), cred, wireStr(msg.Get("base_url")), vetSettings(msg), clock, opts...)
 }
 

@@ -539,6 +539,76 @@ var ModelNotFoundForms = []ModelNotFoundForm{
 	{Code: "invalid-argument", Prefix: "Model not found: "},                                               // xAI (2026-09-01)
 	{Code: "validation_error", Contains: "The provided model identifier is invalid"},                      // Bedrock Chat
 	{Code: "invalid_request_error", Prefix: "Deployment ", Suffix: " doesn't exist or isn't accessible."}, // Parasail
+	// Tinker (2026-11-09). An empty code matches an error that carries none
+	// (the contract's `code: null`; MAP-21 detail bodies).
+	{Code: "", Prefix: "Sampling is not supported for "},
+	{Code: "invalid_request_error", Prefix: "Sampling is not supported for "},
+	{Code: "", Prefix: "Weights not found for model_path "},
+	{Code: "", Prefix: "model_path '", Contains: "' is not a valid tinker path."},
+}
+
+// DetailMessage is MAP-21: the message of an error body in FastAPI's shape,
+// which has no "error" envelope: {"detail": "<text>"} (optionally with
+// "errors", a list of {loc, msg}), or {"detail": [{loc, msg}]}. An entry
+// reads "<loc>: <msg>" (a list loc joined with " -> "); entries join with
+// "; " and follow the text after ": ". Empty when the body is not that shape.
+func DetailMessage(obj JSONObject) string {
+	if obj == nil || obj.Get("error") != nil {
+		return ""
+	}
+	entries := func(items any) []string {
+		list := wireList(items)
+		if list == nil {
+			return nil
+		}
+		var out []string
+		for _, item := range list {
+			it := wireObj(item)
+			if it == nil {
+				continue
+			}
+			msg, ok := it.Get("msg").(string)
+			if !ok {
+				continue
+			}
+			loc := ""
+			switch l := jsonView(it.Get("loc")).(type) {
+			case string:
+				loc = l
+			case []any:
+				parts := make([]string, 0, len(l))
+				for _, p := range l {
+					if s, ok := p.(string); ok {
+						parts = append(parts, s)
+					} else {
+						b, _ := EncodeJSON(p)
+						parts = append(parts, string(b))
+					}
+				}
+				loc = strings.Join(parts, " -> ")
+			}
+			if loc != "" {
+				out = append(out, loc+": "+msg)
+			} else {
+				out = append(out, msg)
+			}
+		}
+		return out
+	}
+	switch d := jsonView(obj.Get("detail")).(type) {
+	case string:
+		if strings.TrimSpace(d) == "" {
+			return ""
+		}
+		head := strings.TrimSpace(d)
+		if found := entries(obj.Get("errors")); len(found) > 0 {
+			return head + ": " + strings.Join(found, "; ")
+		}
+		return head
+	case []any:
+		return strings.Join(entries(d), "; ")
+	}
+	return ""
 }
 
 // AuthFailedForm is one pinned MAP-18 form of a provider's "this key is not
@@ -594,11 +664,9 @@ func IsPinnedAuthFailure(providerCode, message string, reasons []string) bool {
 }
 
 // IsPinnedModelNotFound reports whether an error is one of the pinned MAP-15
-// forms: the code matches exactly and the message passes every test given.
+// forms: the code matches exactly (a form whose code is empty matches an
+// error with none) and the message passes every test given.
 func IsPinnedModelNotFound(providerCode, message string) bool {
-	if providerCode == "" {
-		return false
-	}
 	for _, f := range ModelNotFoundForms {
 		if f.Code == providerCode &&
 			strings.HasPrefix(message, f.Prefix) &&

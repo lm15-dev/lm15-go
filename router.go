@@ -142,6 +142,12 @@ type RouterConfig struct {
 	MaxConnections int
 	Adaptations    string
 	Providers      []ProviderDefinition
+	// BaseModels maps a fine-tune's model id (a Tinker checkpoint
+	// "tinker://…") to the model it was trained from ("Qwen/Qwen3.5-4B"): a
+	// provider's per-model rules (a compat preset's ModelOverrides) match the
+	// model id first, then its base model's. Never sent; never discovered —
+	// the provider's catalog states it (ModelInfo.Origin.BaseModel).
+	BaseModels map[string]string
 	// Auth is managed authentication (AUTH-15 mode B): its saved connections
 	// supply the credential when no explicit APIKeys / Credentials entry
 	// does. With it, environment keys, other tools' login files and the
@@ -180,12 +186,34 @@ func (c RouterConfig) definitions() map[string]ProviderDefinition {
 // providerID maps a canonical input spelling to the provider it names: a
 // declared alias resolves to its provider; anything else is itself.
 func (c RouterConfig) providerID(name string) string {
+	if id := registryAlias(name); id != "" {
+		return id
+	}
 	for _, d := range c.Providers {
 		if inVocab(name, d.Aliases) {
 			return d.ID
 		}
 	}
 	return name
+}
+
+// registryAlias is the registry provider an alias names (a registry entry's
+// aliases route like its id; 2026-11-09: "thinkingmachines" names "tinker"),
+// or "".
+func registryAlias(name string) string {
+	for _, d := range Providers {
+		if inVocab(name, d.Aliases) {
+			return d.ID
+		}
+	}
+	return ""
+}
+
+// isURI reports whether a model string's first ":" is followed by "//": a
+// URI ("tinker://…") is one name, never provider:model (2026-11-09).
+func isURI(model string) bool {
+	head, rest, ok := strings.Cut(model, ":")
+	return ok && head != "" && strings.HasPrefix(rest, "//")
 }
 
 func (c RouterConfig) lookup(provider string) (ProviderDefinition, bool) {
@@ -227,6 +255,8 @@ func checkDeclared(providers []ProviderDefinition) error {
 			builtIn := ""
 			if existing, ok := Providers[spelling]; ok {
 				builtIn = existing.ID
+			} else if id := registryAlias(spelling); id != "" {
+				builtIn = id
 			} else if p, ok := LitellmProviderPrefixes[spelling]; ok {
 				builtIn = p
 			}
@@ -252,6 +282,11 @@ func (c RouterConfig) Validate() error {
 	}
 	if err := checkDeclared(c.Providers); err != nil {
 		return err
+	}
+	for model, base := range c.BaseModels {
+		if model == "" || base == "" {
+			return typeErrorf("RouterConfig.BaseModels maps a model id to its base model id, both non-empty")
+		}
 	}
 	for key, name := range c.Credentials {
 		if !inVocab(name, NamedCredentials) {
@@ -572,7 +607,7 @@ func Resolve(model string, config RouterConfig) (Resolution, error) {
 	if model == "" {
 		return Resolution{}, unknownModel(model, "model must be a non-empty string")
 	}
-	if head, rest, ok := strings.Cut(model, ":"); ok {
+	if head, rest, ok := strings.Cut(model, ":"); ok && !isURI(model) {
 		provider := config.providerID(CanonicalProvider(head))
 		if config.routable(provider) && rest != "" {
 			return resolution(model, rest, provider, "prefix", config, nil, nil)
@@ -642,7 +677,7 @@ func Resolve(model string, config RouterConfig) (Resolution, error) {
 		}
 	}
 	var hints []string
-	if head, rest, ok := strings.Cut(model, ":"); ok {
+	if head, rest, ok := strings.Cut(model, ":"); ok && !isURI(model) {
 		if close := closestMatch(CanonicalProvider(head), config.providerIDs(), 0.75); close != "" {
 			hints = append(hints, fmt.Sprintf("Did you mean %q?", close+":"+rest))
 		}
@@ -690,6 +725,9 @@ func buildLM(res Resolution, config RouterConfig, transport Transport) (LM, erro
 	}
 	if config.adaptations() != AdaptationsNote {
 		opts = append(opts, WithAdaptations(config.adaptations()))
+	}
+	if len(config.BaseModels) > 0 {
+		opts = append(opts, WithBaseModels(config.BaseModels))
 	}
 	baseURL := baseURLEntry(config, res.Provider)
 	if def.Hosted() {
@@ -986,6 +1024,9 @@ const PlanningKey = "lm15-planning"
 func buildPlanningLM(res Resolution, config RouterConfig, transport Transport) (LM, error) {
 	def, _ := config.lookup(res.Provider)
 	opts := []Option{WithAPIKey(PlanningKey), WithAdaptations(config.adaptations())}
+	if len(config.BaseModels) > 0 {
+		opts = append(opts, WithBaseModels(config.BaseModels))
+	}
 	if transport != nil {
 		opts = append(opts, WithTransport(transport))
 	} else if config.Transport != nil {
@@ -1282,6 +1323,11 @@ func OpenAIChatModelStringWith(model string, providers []ProviderDefinition) (st
 	if head, rest, ok := strings.Cut(model, "/"); ok && rest != "" {
 		provider, known := LitellmProviderPrefixes[head]
 		if !known {
+			if id := registryAlias(CanonicalProvider(head)); id != "" {
+				provider, known = id, true
+			}
+		}
+		if !known {
 			canonical := CanonicalProvider(head)
 			for _, d := range providers {
 				if inVocab(canonical, d.Spellings()) {
@@ -1294,6 +1340,9 @@ func OpenAIChatModelStringWith(model string, providers []ProviderDefinition) (st
 			keys := make([]string, 0, len(LitellmProviderPrefixes))
 			for k := range LitellmProviderPrefixes {
 				keys = append(keys, k)
+			}
+			for _, d := range Providers {
+				keys = append(keys, d.Aliases...)
 			}
 			for _, d := range providers {
 				keys = append(keys, d.Spellings()...)

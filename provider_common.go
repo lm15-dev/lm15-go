@@ -307,7 +307,13 @@ func modelInfosFromEntries(entries any, provider, apiFamily string, idOf func(JS
 		if id == "" {
 			continue
 		}
-		out = append(out, ModelInfo{ID: id, Provider: provider, APIFamily: apiFamily, Origin: ModelOrigin{Type: "provider", ProviderData: entry}})
+		// MAP-23: an entry naming the model it was trained from (Tinker's
+		// checkpoints) is a fine-tune.
+		origin := ModelOrigin{Type: "provider", ProviderData: entry}
+		if base, ok := entry.Get("base_model").(string); ok && base != "" && base != id {
+			origin = ModelOrigin{Type: "fine-tune", BaseModel: base, ProviderData: entry}
+		}
+		out = append(out, ModelInfo{ID: id, Provider: provider, APIFamily: apiFamily, Origin: origin})
 	}
 	return out
 }

@@ -37,6 +37,20 @@ func openaiFileReadinessOf(status any) string {
 
 // partsToText renders text-bearing parts for a text-only wire field. A media
 // part RAISES before any wire (MAP-10 rule 2).
+// isEmptyTextBlock reports a wire block that is text with no characters, in
+// the three typed spellings (Messages and Chat Completions "text", Responses
+// "input_text" / "output_text"). MAP-24: no wire is sent one; a part whose
+// block is this writes nothing, and a message left with nothing is not
+// written. (A Gemini part has no "type"; its builder decides.)
+func isEmptyTextBlock(block JSONObject) bool {
+	switch block.Get("type") {
+	case "text", "input_text", "output_text":
+		text, ok := block.Get("text").(string)
+		return ok && text == ""
+	}
+	return false
+}
+
 func partsToText(parts []Part, provider, where string) (string, error) {
 	if where == "" {
 		where = "a text-only wire field"
@@ -52,7 +66,11 @@ func partsToText(parts []Part, provider, where string) (string, error) {
 		}
 		switch x := p.(type) {
 		case TextPart:
-			out = append(out, x.Text)
+			// MAP-24: an empty text part writes nothing, a joining
+			// newline included.
+			if x.Text != "" {
+				out = append(out, x.Text)
+			}
 		case DataPart:
 			out = append(out, DataPartText(x))
 		case ThinkingPart:
@@ -433,6 +451,9 @@ func toolResultOutputOpenAI(provider string, part ToolResultPart, policy string)
 		block, err := partToOpenAIInput(p, provider)
 		if err != nil {
 			return nil, err
+		}
+		if isEmptyTextBlock(block) {
+			continue // MAP-24: the result is written, its empty text block is not
 		}
 		blocks = append(blocks, block)
 	}

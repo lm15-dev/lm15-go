@@ -286,16 +286,24 @@ func (l *AnthropicLM) part(p Part) (JSONObject, error) {
 		if err := checkToolResultMedia(l.provider, x, l.resolved.ToolResultMedia, "a tool_result block"); err != nil {
 			return nil, err
 		}
+		// MAP-24: an empty text block is never written, in a result
+		// either; the result itself always is, and one with no other
+		// block keeps its empty output as the string "" (INV-014).
 		var blocks []JSONObject
 		for _, c := range x.Content {
 			b, err := l.toolResultContent(c)
 			if err != nil {
 				return nil, err
 			}
+			if isEmptyTextBlock(b) {
+				continue
+			}
 			blocks = append(blocks, b)
 		}
 		out := JSONObject{{"type", "tool_result"}, {"tool_use_id", x.ID}}
-		if len(blocks) == 1 && blocks[0].Get("type") == "text" {
+		if len(blocks) == 0 && len(x.Content) > 0 {
+			out.Set("content", "")
+		} else if len(blocks) == 1 && blocks[0].Get("type") == "text" {
 			out.Set("content", blocks[0].Get("text"))
 		} else if len(blocks) > 0 {
 			out.Set("content", toAnyList(blocks, func(b JSONObject) any { return b }))
@@ -323,6 +331,13 @@ func (l *AnthropicLM) part(p Part) (JSONObject, error) {
 	return JSONObject{{"type", "text"}, {"text", partText(p)}}, nil
 }
 
+// message is one wire message, or nil when it has nothing to write (MAP-24):
+// the Messages API refuses a text block with no characters (minLength 1;
+// HTTP 400 "text content blocks must be non-empty", live 2026-11-11), so a
+// part whose block is one writes nothing (a hidden thinking part carrying
+// another dialect's state, an empty text part, a citation with no quoted
+// text), and a message left with no block is not written. Consecutive turns
+// of one role are combined by the server (messages--create.md).
 func (l *AnthropicLM) message(msg Message) (JSONObject, error) {
 	role := "user"
 	if msg.Role == RoleAssistant {
@@ -333,6 +348,9 @@ func (l *AnthropicLM) message(msg Message) (JSONObject, error) {
 		if err != nil {
 			return nil, err
 		}
+		if text == "" {
+			return nil, nil
+		}
 		return JSONObject{{"role", role}, {"content", []any{JSONObject{{"type", "text"}, {"text", "[developer]\n" + text}}}}}, nil
 	}
 	var parts []any
@@ -341,7 +359,13 @@ func (l *AnthropicLM) message(msg Message) (JSONObject, error) {
 		if err != nil {
 			return nil, err
 		}
+		if isEmptyTextBlock(block) {
+			continue
+		}
 		parts = append(parts, block)
+	}
+	if len(parts) == 0 {
+		return nil, nil
 	}
 	return JSONObject{{"role", role}, {"content", parts}}, nil
 }
@@ -482,13 +506,22 @@ func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSO
 	useCache := cacheCfg != nil && cacheCfg.EffectiveMode() != "off" && compat.CacheControl == "anthropic"
 	longCache := cacheCfg != nil && cacheCfg.Retention == "long" && compat.CacheControl == "anthropic"
 
+	// MAP-24: a message with nothing to write is left out. written keeps
+	// each wire message's place in the caller's list, so a cache mark asked
+	// for by message index lands on the message the caller meant (or the
+	// last one written before it).
 	var messages []JSONObject
-	for _, m := range req.Messages {
+	var written []int
+	for i, m := range req.Messages {
 		wm, err := l.message(m)
 		if err != nil {
 			return nil, err
 		}
+		if wm == nil {
+			continue
+		}
 		messages = append(messages, wm)
+		written = append(written, i)
 	}
 	if cacheCfg != nil && cacheCfg.Key != "" {
 		// MAP-13: a best-effort routing hint by definition; no home on this
@@ -516,9 +549,14 @@ func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSO
 		}
 		idx := -1
 		if cacheCfg.PrefixUntilIndex != nil {
-			idx = *cacheCfg.PrefixUntilIndex
-			if idx > len(messages)-1 {
-				idx = len(messages) - 1
+			until := *cacheCfg.PrefixUntilIndex
+			if until > len(req.Messages)-1 {
+				until = len(req.Messages) - 1
+			}
+			for _, i := range written {
+				if i <= until {
+					idx++
+				}
 			}
 		} else if cacheCfg.Prefix == "history" {
 			idx = len(messages) - 1
@@ -638,13 +676,16 @@ func (l *AnthropicLM) payload(req *Request, stream bool, scope *adaptScope) (JSO
 		if err != nil {
 			return nil, err
 		}
-		if useCache {
+		// MAP-24: a system prompt with no characters writes nothing.
+		switch {
+		case text == "":
+		case useCache:
 			marker := JSONObject{{"type", "ephemeral"}}
 			if longCache {
 				marker.Set("ttl", "1h")
 			}
 			payload.Set("system", []any{JSONObject{{"type", "text"}, {"text", text}, {"cache_control", marker}}})
-		} else {
+		default:
 			payload.Set("system", text)
 		}
 	}

@@ -181,9 +181,15 @@ func chatImageBlock(img ImagePart, provider string) (JSONObject, error) {
 func chatContentParts(msg Message, forceArray bool, provider string) (any, error) {
 	var parts []Part
 	for _, p := range msg.Parts {
-		switch p.(type) {
+		switch x := p.(type) {
 		case ToolCallPart, ToolResultPart:
 			continue
+		case TextPart:
+			// MAP-24: an empty text part writes nothing, so it does not
+			// turn a lone text part's string into the array form either.
+			if x.Text == "" {
+				continue
+			}
 		}
 		parts = append(parts, p)
 	}
@@ -218,7 +224,9 @@ func chatContentParts(msg Message, forceArray bool, provider string) (any, error
 			if err != nil {
 				return nil, err
 			}
-			out = append(out, JSONObject{{"type", "text"}, {"text", text}})
+			if text != "" { // MAP-24 (a citation with nothing to say)
+				out = append(out, JSONObject{{"type", "text"}, {"text", text}})
+			}
 		}
 	}
 	if out == nil {
@@ -251,7 +259,9 @@ func toolRowContent(provider string, part ToolResultPart, policy string) (any, e
 			if err != nil {
 				return nil, err
 			}
-			blocks = append(blocks, JSONObject{{"type", "text"}, {"text", text}})
+			if text != "" { // MAP-24: the row is written, its empty text block is not
+				blocks = append(blocks, JSONObject{{"type", "text"}, {"text", text}})
+			}
 		}
 	}
 	if part.IsError {
@@ -292,9 +302,12 @@ func (l *OpenAIChatLM) buildMessages(req *Request, compat ResolvedOpenAIChatComp
 		if err != nil {
 			return nil, err
 		}
-		if cacheStablePrefix(req, compat.CacheControl) {
+		// MAP-24: a system prompt with no characters writes nothing.
+		switch {
+		case text == "":
+		case cacheStablePrefix(req, compat.CacheControl):
 			messages = append(messages, JSONObject{{"role", compat.InstructionRole}, {"content", []any{JSONObject{{"type", "text"}, {"text", text}, {"prompt_cache_breakpoint", JSONObject{{"mode", "explicit"}}}}}}})
-		} else {
+		default:
 			messages = append(messages, JSONObject{{"role", compat.InstructionRole}, {"content", text}})
 		}
 	}
@@ -327,7 +340,14 @@ func (l *OpenAIChatLM) buildMessages(req *Request, compat ResolvedOpenAIChatComp
 			for _, part := range msg.Parts {
 				switch p := part.(type) {
 				case TextPart:
-					textBits = append(textBits, p.Text)
+					if p.Text != "" { // MAP-24: no empty text, and no newline joining one
+						textBits = append(textBits, p.Text)
+					}
+				case DataPart:
+					// An assistant data part is its compact JSON on a text
+					// slot, as on every wire (changes/2026-09-19-jev-state.md
+					// D3). It was dropped here until 2026-11-11.
+					textBits = append(textBits, DataPartText(p))
 				case RefusalPart:
 					if p.Text != "" {
 						textBits = append(textBits, p.Text)
@@ -358,6 +378,13 @@ func (l *OpenAIChatLM) buildMessages(req *Request, compat ResolvedOpenAIChatComp
 			if len(toolCalls) > 0 {
 				item.Set("tool_calls", toolCalls)
 			}
+			// MAP-24: a row with no content, no call and no reasoning has
+			// nothing to write and is refused where the server checks
+			// ("content or tool_calls must be set", DeepSeek; "must not be
+			// empty", Moonshot; live 2026-11-11).
+			if reasoning, _ := item.Get("reasoning_content").(string); len(textBits) == 0 && len(toolCalls) == 0 && reasoning == "" {
+				continue
+			}
 			messages = append(messages, item)
 		default:
 			role := msg.Role
@@ -379,6 +406,13 @@ func (l *OpenAIChatLM) buildMessages(req *Request, compat ResolvedOpenAIChatComp
 				}
 				last.Set("prompt_cache_breakpoint", JSONObject{{"mode", "explicit"}})
 				list[len(list)-1] = last // the adapter's own list, built above
+			}
+			// MAP-24: a message with nothing to write is not written.
+			if text, ok := content.(string); ok && text == "" {
+				continue
+			}
+			if list, ok := content.([]any); ok && len(list) == 0 {
+				continue
 			}
 			messages = append(messages, JSONObject{{"role", role}, {"content", content}})
 		}

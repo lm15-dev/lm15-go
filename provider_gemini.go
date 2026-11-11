@@ -479,6 +479,19 @@ func (l *GeminiLM) functionResponse(part ToolResultPart, names map[string]string
 			textParts = append(textParts, p)
 		}
 	}
+	if len(mediaParts) > 0 {
+		// MAP-24: beside media, an empty text part writes nothing (the
+		// media is the result); alone, it is the empty output and is
+		// written.
+		kept := textParts[:0:0]
+		for _, p := range textParts {
+			if t, ok := p.(TextPart); ok && t.Text == "" {
+				continue
+			}
+			kept = append(kept, p)
+		}
+		textParts = kept
+	}
 	name := part.Name
 	if name == "" {
 		name = names[part.ID]
@@ -569,11 +582,33 @@ func (l *GeminiLM) part(p Part, names map[string]string) (JSONObject, error) {
 	return JSONObject{{"text", partText(p)}}, nil
 }
 
+// geminiWritesNothing is MAP-24 on this wire: a part that is only
+// {"text": ""}. One that also carries a thoughtSignature is state this
+// dialect consumes and goes back as the model sent it.
+func geminiWritesNothing(wirePart JSONObject) bool {
+	if text, ok := wirePart.Get("text").(string); !ok || text != "" {
+		return false
+	}
+	for k := range wirePart.All() {
+		if k != "text" && k != "thought" {
+			return false
+		}
+	}
+	return true
+}
+
+// message is one content, or nil when it has nothing to write (MAP-24): a
+// content with no parts is refused ("must include at least one parts
+// field", live 2026-11-11), so a message whose parts all write nothing is
+// not written.
 func (l *GeminiLM) message(msg Message, names map[string]string) (JSONObject, error) {
 	if msg.Role == RoleDeveloper {
 		text, err := partsToText(msg.Parts, l.provider, "a developer turn")
 		if err != nil {
 			return nil, err
+		}
+		if text == "" {
+			return nil, nil
 		}
 		return JSONObject{{"role", "user"}, {"parts", []any{JSONObject{{"text", "[developer]\n" + text}}}}}, nil
 	}
@@ -587,7 +622,13 @@ func (l *GeminiLM) message(msg Message, names map[string]string) (JSONObject, er
 		if err != nil {
 			return nil, err
 		}
+		if geminiWritesNothing(b) {
+			continue
+		}
 		parts = append(parts, b)
+	}
+	if len(parts) == 0 {
+		return nil, nil
 	}
 	return JSONObject{{"role", role}, {"parts", parts}}, nil
 }
@@ -683,6 +724,9 @@ func (l *GeminiLM) payload(req *Request, scope *adaptScope) (JSONObject, error) 
 		if err != nil {
 			return nil, err
 		}
+		if wm == nil {
+			continue // MAP-24: nothing to write
+		}
 		contents = append(contents, wm)
 	}
 	if contents == nil {
@@ -697,7 +741,9 @@ func (l *GeminiLM) payload(req *Request, scope *adaptScope) (JSONObject, error) 
 		if err != nil {
 			return nil, err
 		}
-		payload.Set("systemInstruction", JSONObject{{"parts", []any{JSONObject{{"text", text}}}}})
+		if text != "" { // MAP-24: a system prompt with no characters writes nothing
+			payload.Set("systemInstruction", JSONObject{{"parts", []any{JSONObject{{"text", text}}}}})
+		}
 	}
 	gen := JSONObject{}
 	if cfg.Temperature != nil {
@@ -1270,7 +1316,13 @@ func (l *GeminiLM) cacheCreateRequest(prefix *Request, ttlSeconds *int, label st
 		if err != nil {
 			return nil, err
 		}
+		if wm == nil {
+			continue // MAP-24: nothing to write
+		}
 		contents = append(contents, wm)
+	}
+	if contents == nil {
+		contents = []any{}
 	}
 	body := JSONObject{{"model", l.modelPath(prefix.Model)}, {"contents", contents}}
 	if prefix.System != nil {
@@ -1278,7 +1330,9 @@ func (l *GeminiLM) cacheCreateRequest(prefix *Request, ttlSeconds *int, label st
 		if err != nil {
 			return nil, err
 		}
-		body.Set("systemInstruction", JSONObject{{"parts", []any{JSONObject{{"text", text}}}}})
+		if text != "" { // MAP-24
+			body.Set("systemInstruction", JSONObject{{"parts", []any{JSONObject{{"text", text}}}}})
+		}
 	}
 	if len(prefix.Tools) > 0 {
 		var declarations, tools []any

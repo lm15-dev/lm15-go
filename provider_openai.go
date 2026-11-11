@@ -596,7 +596,15 @@ func (l *OpenAILM) buildInput(messages []Message, compat ResolvedOpenAIResponses
 			for _, part := range msg.Parts {
 				switch p := part.(type) {
 				case TextPart:
-					content = append(content, JSONObject{{"type", "output_text"}, {"text", p.Text}})
+					if p.Text != "" { // MAP-24: an empty text block is never written
+						content = append(content, JSONObject{{"type", "output_text"}, {"text", p.Text}})
+					}
+				case DataPart:
+					// An assistant data part (a judged answer kept in the
+					// history) is its compact JSON on a text slot, as on
+					// every wire (changes/2026-09-19-jev-state.md D3). It
+					// was dropped here until 2026-11-11.
+					content = append(content, JSONObject{{"type", "output_text"}, {"text", DataPartText(p)}})
 				case RefusalPart:
 					content = append(content, JSONObject{{"type", "refusal"}, {"refusal", p.Text}})
 				case ThinkingPart:
@@ -615,6 +623,10 @@ func (l *OpenAILM) buildInput(messages []Message, compat ResolvedOpenAIResponses
 						}
 						items = append(items, item)
 					} else if p.Text != "" {
+						// No state this dialect consumes (none, or another
+						// dialect's: MAP-7 rule 8): replayed as assistant
+						// text (decision G); with no text there is nothing
+						// to write (MAP-24).
 						content = append(content, JSONObject{{"type", "output_text"}, {"text", p.Text}})
 					}
 				}
@@ -628,6 +640,9 @@ func (l *OpenAILM) buildInput(messages []Message, compat ResolvedOpenAIResponses
 				block, err := partToOpenAIInput(part, l.provider)
 				if err != nil {
 					return nil, err
+				}
+				if isEmptyTextBlock(block) {
+					continue // MAP-24
 				}
 				content = append(content, block)
 			}
@@ -725,10 +740,13 @@ func (l *OpenAILM) payload(req *Request, stream bool, scope *adaptScope) (JSONOb
 		if err != nil {
 			return nil, err
 		}
-		if cacheStablePrefix(req, compat.CacheControl) {
+		// MAP-24: a system prompt with no characters writes nothing.
+		switch {
+		case text == "":
+		case cacheStablePrefix(req, compat.CacheControl):
 			first := JSONObject{{"role", compat.DeveloperRole}, {"content", []any{JSONObject{{"type", "input_text"}, {"text", text}, {"prompt_cache_breakpoint", JSONObject{{"mode", "explicit"}}}}}}}
 			payload.Set("input", append([]any{first}, input...))
-		} else {
+		default:
 			payload.Set("instructions", text)
 		}
 	}

@@ -57,7 +57,9 @@ func (l *GeminiLM) liveSetupPayload(config *LiveConfig) (JSONObject, error) {
 		if err != nil {
 			return nil, err
 		}
-		setup.Set("systemInstruction", JSONObject{{"parts", []any{JSONObject{{"text", text}}}}})
+		if text != "" { // MAP-24: a system prompt with no characters writes nothing
+			setup.Set("systemInstruction", JSONObject{{"parts", []any{JSONObject{{"text", text}}}}})
+		}
 	}
 	var functions []any
 	for _, t := range config.Tools {
@@ -353,7 +355,13 @@ func (l *GeminiLM) liveClientContentFromRequest(req *Request) ([]JSONObject, err
 		if err != nil {
 			return nil, err
 		}
+		if wm == nil {
+			continue // MAP-24: nothing to write
+		}
 		turns = append(turns, wm)
+	}
+	if turns == nil {
+		turns = []any{}
 	}
 	return []JSONObject{{{"clientContent", JSONObject{{"turns", turns}, {"turnComplete", true}}}}}, nil
 }

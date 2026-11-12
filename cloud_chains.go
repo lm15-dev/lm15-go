@@ -1616,15 +1616,201 @@ func gcpImpersonate(ctx *ChainContext, source BearerToken, impersonationURL stri
 	return BearerToken{Value: token, ExpiresAt: expires}, nil
 }
 
+var awsEnvironmentID = regexp.MustCompile(`^aws(\d+)$`)
+
+// gcpAwsSource is the verification URL of an AWS credential_source, checked as google-auth checks it.
+func gcpAwsSource(source JSONObject, where string) (string, error) {
+	m := awsEnvironmentID.FindStringSubmatch(stringOnly(source.Get("environment_id")))
+	verify := stringOnly(source.Get("regional_cred_verification_url"))
+	if m == nil || verify == "" {
+		return "", NotConfiguredErrorf("", nil, "", "%s: an AWS credential_source needs environment_id \"aws1\" and regional_cred_verification_url", where)
+	}
+	if n, _ := strconv.Atoi(m[1]); n != 1 {
+		return "", NotConfiguredErrorf("", nil, "", "%s: AWS credential_source version %s is not supported (only aws1)", where, m[1])
+	}
+	return verify, nil
+}
+
+// gcpAwsImdsSession returns IMDSv2's session header when the source names its token URL
+// (google-auth: TTL 300), else none; asked for once.
+func gcpAwsImdsSession(ctx *ChainContext, source JSONObject, where string) func() (map[string]string, error) {
+	var got map[string]string
+	return func() (map[string]string, error) {
+		if got != nil {
+			return got, nil
+		}
+		tokenURL := stringOnly(source.Get("imdsv2_session_token_url"))
+		if tokenURL == "" || ctx.HTTP == nil {
+			got = map[string]string{}
+			return got, nil
+		}
+		status, _, raw, err := ctx.HTTP("PUT", tokenURL, map[string]string{"X-aws-ec2-metadata-token-ttl-seconds": "300"}, nil, 5*time.Second)
+		if err != nil {
+			return nil, err
+		}
+		if status != 200 {
+			return nil, chainAuthError(fmt.Sprintf("%s: AWS IMDSv2 session token: HTTP %d", where, status))
+		}
+		got = map[string]string{"X-aws-ec2-metadata-token": string(raw)}
+		return got, nil
+	}
+}
+
+func envAwsRegion(ctx *ChainContext) string {
+	if v := ctx.Env["AWS_REGION"]; v != "" {
+		return v
+	}
+	return ctx.Env["AWS_DEFAULT_REGION"]
+}
+
+// gcpAwsRegion is AWS_REGION, AWS_DEFAULT_REGION, else the source's region_url
+// (an availability zone, its last letter dropped).
+func gcpAwsRegion(ctx *ChainContext, source JSONObject, where string, imds func() (map[string]string, error)) (string, error) {
+	if v := envAwsRegion(ctx); v != "" {
+		return v, nil
+	}
+	regionURL := stringOnly(source.Get("region_url"))
+	if regionURL == "" || ctx.HTTP == nil {
+		return "", NotConfiguredErrorf("", nil, "", "%s: no AWS region: set AWS_REGION (the AWS source names no region_url)", where)
+	}
+	headers, err := imds()
+	if err != nil {
+		return "", err
+	}
+	status, _, raw, err := ctx.HTTP("GET", regionURL, headers, nil, 5*time.Second)
+	if err != nil {
+		return "", err
+	}
+	if status != 200 {
+		return "", chainAuthError(fmt.Sprintf("%s: AWS region from %s: HTTP %d", where, regionURL, status))
+	}
+	zone := strings.TrimSpace(string(raw))
+	if zone == "" {
+		return "", chainAuthError(fmt.Sprintf("%s: AWS region from %s: empty", where, regionURL))
+	}
+	return zone[:len(zone)-1], nil
+}
+
+// gcpAwsCredentials is the AWS identity an AWS source signs with: the environment's keys, then
+// (an lm15 addition, stated: Google's library reads only the other two, and so fails on ECS) the
+// container endpoint, then EC2 metadata at the source's url.
+func gcpAwsCredentials(ctx *ChainContext, source JSONObject, where string, imds func() (map[string]string, error)) (AwsCredentials, error) {
+	if env := envAws(ctx); env != nil {
+		return *env, nil
+	}
+	if u, err := containerConfig(ctx); err != nil {
+		return AwsCredentials{}, err
+	} else if u != "" {
+		got, err := containerAcquire(ctx)
+		if err != nil {
+			return AwsCredentials{}, err
+		}
+		if c, ok := got.(AwsCredentials); ok {
+			return c, nil
+		}
+	}
+	metaURL := stringOnly(source.Get("url"))
+	if metaURL == "" || ctx.HTTP == nil {
+		return AwsCredentials{}, NotConfiguredErrorf("", nil, "", "%s: no AWS credentials: neither AWS_ACCESS_KEY_ID nor a container endpoint is set, and the AWS source names no metadata url", where)
+	}
+	headers, err := imds()
+	if err != nil {
+		return AwsCredentials{}, err
+	}
+	status, _, role, err := ctx.HTTP("GET", metaURL, headers, nil, 5*time.Second)
+	if err != nil {
+		return AwsCredentials{}, err
+	}
+	name := strings.SplitN(strings.TrimSpace(string(role)), "\n", 2)[0]
+	name = strings.TrimSpace(name)
+	if status != 200 || name == "" {
+		return AwsCredentials{}, chainAuthError(fmt.Sprintf("%s: AWS role name from %s: HTTP %d", where, metaURL, status))
+	}
+	status, _, raw, err := ctx.HTTP("GET", metaURL+"/"+name, headers, nil, 5*time.Second)
+	if err != nil {
+		return AwsCredentials{}, err
+	}
+	if status != 200 {
+		return AwsCredentials{}, chainAuthError(fmt.Sprintf("%s: AWS credentials from %s/%s: HTTP %d", where, metaURL, name, status))
+	}
+	return awsFromResponse(jsonBody(raw))
+}
+
+// quoteKeepingSlash is Python's urllib.parse.quote(text, safe="/"): what google-auth
+// percent-encodes an AWS subject token with.
+func quoteKeepingSlash(text string) string {
+	var b strings.Builder
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		if c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || strings.IndexByte("_.-~/", c) >= 0 {
+			b.WriteByte(c)
+		} else {
+			fmt.Fprintf(&b, "%%%02X", c)
+		}
+	}
+	return b.String()
+}
+
+// GCPAwsSubjectToken is an AWS source's subject token: a signed AWS STS GetCallerIdentity
+// request, serialized as Google's STS reads it (google-auth aws.py: headers as [{key, value}]
+// in signing order, the pool provider's name added unsigned as x-goog-cloud-target-resource,
+// compact JSON with sorted keys, percent-encoded keeping "/").
+func GCPAwsSubjectToken(info JSONObject, template, region string, creds AwsCredentials, now time.Time) (string, error) {
+	target := strings.ReplaceAll(template, "{region}", region)
+	u, err := url.Parse(target)
+	if err != nil || u.Hostname() == "" {
+		return "", NotConfiguredErrorf("", nil, "", "regional_cred_verification_url is not a URL: %s", target)
+	}
+	sig := SigV4Sign("POST", target, map[string]string{}, nil, creds, region, strings.SplitN(u.Hostname(), ".", 2)[0], now)
+	headers := []any{
+		JSONObject{{"key", "Authorization"}, {"value", sig.Authorization}},
+		JSONObject{{"key", "host"}, {"value", sig.Headers["host"]}},
+		JSONObject{{"key", "x-amz-date"}, {"value", sig.Headers["x-amz-date"]}},
+	}
+	if creds.SessionToken != "" {
+		headers = append(headers, JSONObject{{"key", "x-amz-security-token"}, {"value", creds.SessionToken}})
+	}
+	headers = append(headers, JSONObject{{"key", "x-goog-cloud-target-resource"}, {"value", stringOnly(info.Get("audience"))}})
+	return quoteKeepingSlash(string(mustJSON(JSONObject{{"headers", headers}, {"method", "POST"}, {"url", target}}))), nil
+}
+
+// gcpSTSRequest is the STS token exchange an external_account sends: its URL and JSON body.
+func gcpSTSRequest(info JSONObject, subject string) (string, JSONObject) {
+	tokenURL := stringOnly(info.Get("token_url"))
+	if tokenURL == "" {
+		tokenURL = gcpSTSURL
+	}
+	return tokenURL, JSONObject{
+		{"grantType", "urn:ietf:params:oauth:grant-type:token-exchange"}, {"audience", wireStr(info.Get("audience"))}, {"scope", gcpScope},
+		{"requestedTokenType", "urn:ietf:params:oauth:token-type:access_token"}, {"subjectToken", subject}, {"subjectTokenType", wireStr(info.Get("subject_token_type"))},
+	}
+}
+
 func gcpExternalAccount(ctx *ChainContext, info JSONObject, where string) (Credential, error) {
 	source := wireObj(info.Get("credential_source"))
-	if _, has := source.Lookup("environment_id"); has {
-		return nil, NotConfiguredErrorf("", nil, "", "%s: external_account with an AWS credential_source is a stated gap in lm15; use a file/url/executable source or a service account", where)
-	}
 	subject := ""
 	found := false
 	format := wireObj(source.Get("format"))
+	_, aws := source.Lookup("environment_id")
 	switch {
+	case aws:
+		template, err := gcpAwsSource(source, where)
+		if err != nil {
+			return nil, err
+		}
+		imds := gcpAwsImdsSession(ctx, source, where)
+		region, err := gcpAwsRegion(ctx, source, where, imds)
+		if err != nil {
+			return nil, err
+		}
+		creds, err := gcpAwsCredentials(ctx, source, where, imds)
+		if err != nil {
+			return nil, err
+		}
+		if subject, err = GCPAwsSubjectToken(info, template, region, creds, ctx.now()); err != nil {
+			return nil, err
+		}
+		found, format = true, JSONObject{{"type", "text"}}
 	case truthy(source.Get("file")):
 		raw, ok := ctx.read(wireStr(source.Get("file")))
 		if !ok {
@@ -1665,20 +1851,13 @@ func gcpExternalAccount(ctx *ChainContext, info JSONObject, where string) (Crede
 		format = JSONObject{{"type", "text"}}
 	}
 	if !found {
-		return nil, NotConfiguredErrorf("", nil, "", "%s: external_account credential_source is not file/url/executable", where)
+		return nil, NotConfiguredErrorf("", nil, "", "%s: external_account credential_source is not file/url/executable/AWS", where)
 	}
 	if wireStr(format.Get("type")) == "json" {
 		subject = wireStr(jsonBody([]byte(subject)).Get(wireStr(format.Get("subject_token_field_name"))))
 	}
-	body := mustJSON(JSONObject{
-		{"grantType", "urn:ietf:params:oauth:grant-type:token-exchange"}, {"audience", wireStr(info.Get("audience"))}, {"scope", gcpScope},
-		{"requestedTokenType", "urn:ietf:params:oauth:token-type:access_token"}, {"subjectToken", subject}, {"subjectTokenType", wireStr(info.Get("subject_token_type"))},
-	})
-	tokenURL := stringOnly(info.Get("token_url"))
-	if tokenURL == "" {
-		tokenURL = gcpSTSURL
-	}
-	data, err := exchangeHint(ctx, "POST", tokenURL, map[string]string{"content-type": "application/json"}, body, "Google STS exchange ("+where+")",
+	tokenURL, stsBody := gcpSTSRequest(info, subject)
+	data, err := exchangeHint(ctx, "POST", tokenURL, map[string]string{"content-type": "application/json"}, mustJSON(stsBody), "Google STS exchange ("+where+")",
 		"the workload identity pool refused the external token: check the provider's issuer, allowed audience and attribute condition, and that the subject token is fresh")
 	if err != nil {
 		return nil, err
@@ -2366,6 +2545,26 @@ func ChainCacheKey(policy AccessPolicy, ctx *ChainContext) string {
 // TokenExchangeBuild is the exact token-exchange request a rung would send
 // under the fixed clock.
 func TokenExchangeBuild(policy AccessPolicy, rung string, inputs JSONObject, ctx *ChainContext) (JSONObject, error) {
+	if info := wireObj(inputs.Get("credential_file")); (rung == "adc-env" || rung == "adc-file") && stringOnly(info.Get("type")) == "external_account" {
+		source := wireObj(info.Get("credential_source"))
+		if _, aws := source.Lookup("environment_id"); !aws {
+			return nil, valueErrorf("token_exchange_build: only an AWS-sourced external_account is deterministic")
+		}
+		creds, region := envAws(ctx), envAwsRegion(ctx)
+		if creds == nil || region == "" {
+			return nil, valueErrorf("token_exchange_build: an AWS source's vector gives its keys and region in env")
+		}
+		template, err := gcpAwsSource(source, "credential_file")
+		if err != nil {
+			return nil, err
+		}
+		subject, err := GCPAwsSubjectToken(info, template, region, *creds, ctx.now())
+		if err != nil {
+			return nil, err
+		}
+		tokenURL, body := gcpSTSRequest(info, subject)
+		return JSONObject{{"method", "POST"}, {"url", tokenURL}, {"headers", JSONObject{{"content-type", "application/json"}}}, {"body_encoding", "json"}, {"body", body}}, nil
+	}
 	switch rung {
 	case "adc-env", "adc-file", "service-account":
 		info := wireObj(inputs.Get("credential_file"))
